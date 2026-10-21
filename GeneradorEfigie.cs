@@ -7,17 +7,17 @@ using Rhino.Geometry;
 
 public class ConfigEfigie
 {
-    public double RadioBaseTexto { get; set; } = 15.0;
-    public double RadioBaseAnio { get; set; } = 17.0;
-    public double RadioBaseEstaciones { get; set; } = 15.0;
+    public double RadioBaseTexto { get; set; } = 34.0;
+    public double RadioBaseAnio { get; set; } = 27.0;
+    public double RadioBaseEstaciones { get; set; } = 14.0;
     public double EscalaCopia { get; set; } = 50.0;
     public int CantidadRayos { get; set; } = 15;
     public int OffsetGrupal { get; set; } = 4;
-    public double RadioBaseCarrera { get; set; } = 45.0;
+    public double RadioBaseCarrera { get; set; } = 36.79;
     public double EscalaAnilloMinimo { get; set; } = 75.0;
-    public double RadioBaseRol { get; set; } = 18.0;
-    public double RadioBaseHistoria { get; set; } = 24.85;
-    public double MultiplicadorDistancia { get; set; } = 0.88;
+    public double RadioBaseRol { get; set; } = 25.0;
+    public double RadioBaseHistoria { get; set; } = 21.85;
+    public double MultiplicadorDistancia { get; set; } = 0.80;
     public double TamanoIcono { get; set; } = 1.70;
     public double EscalaGlobal { get; set; } = 100.0;
 }
