@@ -57,9 +57,106 @@ class Program
         RequestPath = ""
     });
 
-    app.MapGet("/", () => Results.File(Path.Combine(dirActual, "index.html"), "text/html"));
+app.MapGet("/", () => {
+    var random = new Random();
+    string[] nombres = { "Estudiante Anónimo", "Diseñador Creativo", "Explorador UCA", "Innovador Visual", "Arquitecto Digital" };
+    string[] facultades = { "Arquitectura y Diseño", "Ciencias Económicas", "Ingeniería y Ciencias Agrarias", "Psicología y Psicopedagogía" };
+    string[] etapas = { "1 (Ingresante / Primer año)", "3", "5", "Docente" };
+    string[] estaciones = { "Primavera", "Verano", "Otoño", "Invierno" };
+    string[] grupales = { "Solo", "Grupal" };
+    string[] formatos = { "Película", "Serie", "Libro", "Videojuego", "Teatro" };
+    string[] roles = { "Proponer (Generar ideas iniciales)", "Organizar (Estructurar y planificar)", "Materializar (Llevar a la práctica)", "Mejorar (Revisar y pulir detalles)" };
+
+    var datosAleatorios = new DatosRespuesta {
+        id = "random_" + random.Next(1000, 9999),
+        nombre = nombres[random.Next(nombres.Length)],
+        anio = random.Next(1995, 2007).ToString(),
+        facultad = facultades[random.Next(facultades.Length)],
+        etapa = etapas[random.Next(etapas.Length)],
+        estacion = estaciones[random.Next(estaciones.Length)],
+        grupal = grupales[random.Next(grupales.Length)],
+        formato = formatos[random.Next(formatos.Length)],
+        rol = roles[random.Next(roles.Length)]
+    };
+
+    var cfg = LeerConfig(rutaConfig);
+    string svgOriginal = GeneradorEfigie.GenerarSVG(datosAleatorios, cfg);
+    string svgAnimado = InyectarAnimacionRotacionSvg(svgOriginal);
+
+    string html = $@"<!DOCTYPE html>
+<html lang=""es"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Efigie - Bienvenida</title>
+    <style>
+        html, body {{
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #f7f9f8; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif;
+        }}
+        .contenedor-efigie {{
+            width: 85vmin; height: 85vmin;
+            display: flex; justify-content: center; align-items: center;
+        }}
+        svg {{
+            width: 100%; height: 100%;
+            overflow: visible;
+        }}
+        @keyframes girarHorario {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+        @keyframes girarAntihorario {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(-360deg); }}
+        }}
+        .rotar-capa-1 {{ transform-origin: center; animation: girarHorario 2s cubic-bezier(0.25, 1, 0.5, 1) forwards; }}
+        
+        .btn-generar {{
+            position: absolute;
+            bottom: 8vh;
+            padding: 14px 28px;
+            background-color: #111;
+            color: #fff;
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease, transform 0.6s ease, background-color 0.2s;
+            cursor: pointer;
+        }}
+        .btn-generar.visible {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
+        .btn-generar:hover {{
+            background-color: #333;
+        }}
+    </style>
+</head>
+<body>
+    <div class=""contenedor-efigie"">
+        {svgAnimado}
+    </div>
+    <a href=""/encuesta"" id=""btnGenerar"" class=""btn-generar"">Generá tu Efigie</a>
+    <script>
+        setTimeout(() => {{
+            document.getElementById('btnGenerar').classList.add('visible');
+        }}, 2000);
+    </script>
+</body>
+</html>";
+
+    return Results.Content(html, "text/html; charset=utf-8");
+});
     app.MapGet("/resultados", () => Results.File(Path.Combine(dirActual, "resultados.html"), "text/html"));
     app.MapGet("/ajustes", () => Results.File(Path.Combine(dirActual, "ajustes.html"), "text/html"));
+    app.MapGet("/encuesta", () => Results.File(Path.Combine(dirActual, "index.html"), "text/html"));
 
     // --- GUARDAR RESPUESTA Y DEVOLVER ID ÚNICO + URL DE PERMANENCIA ---
     app.MapPost("/guardar", async (HttpContext ctx) => {
@@ -178,4 +275,26 @@ static string[] AnalizarLineaCSV(string linea)
     partes.Add(actual.Trim());
     return partes.ToArray();
 }
+static string InyectarAnimacionRotacionSvg(string svgOriginal)
+{
+    int indiceG = svgOriginal.IndexOf("<g ");
+    if (indiceG == -1) return svgOriginal;
+
+    int finTagG = svgOriginal.IndexOf(">", indiceG);
+    if (finTagG == -1) return svgOriginal;
+
+    string cabeceraSvg = svgOriginal.Substring(0, finTagG + 1);
+    string contenidoYFinal = svgOriginal.Substring(finTagG + 1);
+
+    contenidoYFinal = contenidoYFinal.Replace("</g>", "").Replace("</svg>", "");
+
+    string svgModificado = $@"{cabeceraSvg}
+        <g class=""rotar-capa-1"">
+            {contenidoYFinal}
+        </g>
+    </svg>";
+
+    return svgModificado;
 }
+}
+
