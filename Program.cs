@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using Microsoft.Extensions.FileProviders;
 
@@ -80,7 +81,7 @@ app.MapGet("/", () => {
     };
 
     var cfg = LeerConfig(rutaConfig);
-    string svgOriginal = GeneradorEfigie.GenerarSVG(datosAleatorios, cfg);
+    string svgOriginal = GeneradorEfigie.GenerarSVG(datosAleatorios, cfg, incluirMarcoYNombre: false);
     string svgAnimado = InyectarAnimacionRotacionSvg(svgOriginal);
 
     string html = $@"<!DOCTYPE html>
@@ -112,7 +113,15 @@ app.MapGet("/", () => {
             0% {{ transform: rotate(0deg); }}
             100% {{ transform: rotate(-360deg); }}
         }}
-        .rotar-capa-1 {{ transform-origin: center; animation: girarHorario 2s cubic-bezier(0.25, 1, 0.5, 1) forwards; }}
+        .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 {{
+            transform-origin: 0px 0px;
+            transform-box: view-box;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }}
+        .rotar-capa-1 {{ animation-name: girarHorario; animation-duration: 18s; }}
+        .rotar-capa-2 {{ animation-name: girarAntihorario; animation-duration: 12s; }}
+        .rotar-capa-3 {{ animation-name: girarHorario; animation-duration: 8s; }}
         
         .btn-generar {{
             position: absolute;
@@ -277,24 +286,22 @@ static string[] AnalizarLineaCSV(string linea)
 }
 static string InyectarAnimacionRotacionSvg(string svgOriginal)
 {
-    int indiceG = svgOriginal.IndexOf("<g ");
-    if (indiceG == -1) return svgOriginal;
+    var capas = new Dictionary<string, int>
+    {
+        ["anio"] = 1,
+        ["estaciones"] = 2,
+        ["carrera"] = 3,
+        ["rol"] = 1,
+        ["historia"] = 2,
+        ["conexiones"] = 3
+    };
 
-    int finTagG = svgOriginal.IndexOf(">", indiceG);
-    if (finTagG == -1) return svgOriginal;
-
-    string cabeceraSvg = svgOriginal.Substring(0, finTagG + 1);
-    string contenidoYFinal = svgOriginal.Substring(finTagG + 1);
-
-    contenidoYFinal = contenidoYFinal.Replace("</g>", "").Replace("</svg>", "");
-
-    string svgModificado = $@"{cabeceraSvg}
-        <g class=""rotar-capa-1"">
-            {contenidoYFinal}
-        </g>
-    </svg>";
-
-    return svgModificado;
+    return Regex.Replace(svgOriginal, @"<g data-capa=""([^""]+)"">", match =>
+    {
+        string nombre = match.Groups[1].Value;
+        return capas.TryGetValue(nombre, out int capa)
+            ? $@"<g class=""rotar-capa-{capa} capa-{nombre}"">"
+            : match.Value;
+    });
 }
 }
-

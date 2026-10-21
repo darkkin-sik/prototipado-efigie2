@@ -37,7 +37,7 @@ public class DatosRespuesta
 
 public static class GeneradorEfigie
 {
-    public static string GenerarSVG(DatosRespuesta datos, ConfigEfigie cfg)
+    public static string GenerarSVG(DatosRespuesta datos, ConfigEfigie cfg, bool incluirMarcoYNombre = true)
     {
         int anioNum = 2000;
         int.TryParse(new string((datos.anio ?? "").Where(char.IsDigit).ToArray()), out anioNum);
@@ -89,10 +89,20 @@ public static class GeneradorEfigie
         if (cRol != null) todasLasCurvas.Add(cRol);
         todasLasCurvas.AddRange(cHist);
 
-        return ExportarASvg(marco, ptTxt, txtSalida, todasLasCurvas, conexiones);
+        return ExportarASvg(marco, ptTxt, txtSalida, anioCrv, cEst, cCarr, cRol, cHist, conexiones, incluirMarcoYNombre);
     }
 
-    private static string ExportarASvg(Curve marco, Point3d ptTxt, string texto, List<Curve> curvas, List<Line> lineas)
+    private static string ExportarASvg(
+        Curve marco,
+        Point3d ptTxt,
+        string texto,
+        Curve anio,
+        List<Curve> estaciones,
+        List<Curve> carrera,
+        Curve rol,
+        List<Curve> historia,
+        List<Line> conexiones,
+        bool incluirMarcoYNombre)
     {
         var ic = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
@@ -101,29 +111,42 @@ public static class GeneradorEfigie
         sb.AppendLine("<g fill=\"none\" stroke=\"#000000\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">");
 
         // En Rhino +Y va hacia arriba; en SVG +Y va hacia abajo, por eso invertimos Y (-p.Y)
-        if (marco != null)
+        if (incluirMarcoYNombre && marco != null)
             sb.AppendLine($"  <path d=\"{CurvaAPathSvg(marco)}\" stroke-width=\"0.3\" />");
 
-        foreach (var c in curvas)
-        {
-            if (c != null)
-                sb.AppendLine($"  <path d=\"{CurvaAPathSvg(c)}\" />");
-        }
+        AgregarGrupoCurvas(sb, "anio", anio == null ? new List<Curve>() : new List<Curve> { anio });
+        AgregarGrupoCurvas(sb, "estaciones", estaciones);
+        AgregarGrupoCurvas(sb, "carrera", carrera);
+        AgregarGrupoCurvas(sb, "rol", rol == null ? new List<Curve>() : new List<Curve> { rol });
+        AgregarGrupoCurvas(sb, "historia", historia);
 
-        foreach (var l in lineas)
+        sb.AppendLine("  <g data-capa=\"conexiones\">");
+        foreach (var l in conexiones)
         {
-            sb.AppendLine(string.Format(ic, "  <line x1=\"{0:F3}\" y1=\"{1:F3}\" x2=\"{2:F3}\" y2=\"{3:F3}\" />",
+            sb.AppendLine(string.Format(ic, "    <line x1=\"{0:F3}\" y1=\"{1:F3}\" x2=\"{2:F3}\" y2=\"{3:F3}\" />",
                 l.FromX, -l.FromY, l.ToX, -l.ToY));
         }
+        sb.AppendLine("  </g>");
 
         sb.AppendLine("</g>");
-        if (!string.IsNullOrEmpty(texto))
+        if (incluirMarcoYNombre && !string.IsNullOrEmpty(texto))
         {
             sb.AppendLine(string.Format(ic, "<text x=\"{0:F3}\" y=\"{1:F3}\" font-family=\"sans-serif\" font-size=\"3\" fill=\"#000000\">{2}</text>",
                 ptTxt.X, -ptTxt.Y, System.Net.WebUtility.HtmlEncode(texto)));
         }
         sb.AppendLine("</svg>");
         return sb.ToString();
+    }
+
+    private static void AgregarGrupoCurvas(StringBuilder sb, string nombre, IEnumerable<Curve> curvas)
+    {
+        sb.AppendLine($"  <g data-capa=\"{nombre}\">");
+        foreach (var curva in curvas)
+        {
+            if (curva != null)
+                sb.AppendLine($"    <path d=\"{CurvaAPathSvg(curva)}\" />");
+        }
+        sb.AppendLine("  </g>");
     }
 
     private static string CurvaAPathSvg(Curve crv)
