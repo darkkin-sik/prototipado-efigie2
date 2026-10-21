@@ -58,7 +58,10 @@ class Program
         RequestPath = ""
     });
 
-app.MapGet("/", () => {
+app.MapGet("/", (HttpContext ctx) => {
+    string deviceId = EnsureDeviceId(ctx);
+    EliminarRespuestasAnteriores(rutaCsv, deviceId);
+
     var random = new Random();
     string[] nombres = { "Estudiante Anónimo", "Diseñador Creativo", "Explorador UCA", "Innovador Visual", "Arquitecto Digital" };
     string[] facultades = { "Arquitectura y Diseño", "Ciencias Económicas", "Ingeniería y Ciencias Agrarias", "Psicología y Psicopedagogía" };
@@ -152,11 +155,18 @@ app.MapGet("/", () => {
     <div class=""contenedor-efigie"">
         {svgAnimado}
     </div>
-    <a href=""/encuesta"" id=""btnGenerar"" class=""btn-generar"">Generá tu Efigie</a>
+    <a href=""/encuesta?nueva=1"" id=""btnGenerar"" class=""btn-generar"">Generá tu Efigie</a>
     <script>
+        const respuestaAnterior = localStorage.getItem('mi_efigie_id');
+        if (respuestaAnterior) {{
+            fetch('/api/iniciar?id=' + encodeURIComponent(respuestaAnterior), {{
+                method: 'POST',
+                keepalive: true
+            }});
+        }}
         setTimeout(() => {{
             document.getElementById('btnGenerar').classList.add('visible');
-        }}, 2000);
+        }}, 1000);
     </script>
 </body>
 </html>";
@@ -167,27 +177,26 @@ app.MapGet("/", () => {
     app.MapGet("/ajustes", () => Results.File(Path.Combine(dirActual, "ajustes.html"), "text/html"));
     app.MapGet("/encuesta", () => Results.File(Path.Combine(dirActual, "index.html"), "text/html"));
 
+    app.MapPost("/api/iniciar", (HttpContext ctx) => {
+        string deviceId = EnsureDeviceId(ctx);
+        string previousId = ctx.Request.Query["id"].FirstOrDefault();
+        EliminarRespuestasAnteriores(rutaCsv, deviceId, previousId);
+        return Results.NoContent();
+    });
+
     // --- GUARDAR RESPUESTA Y DEVOLVER ID ÚNICO + URL DE PERMANENCIA ---
     app.MapPost("/guardar", async (HttpContext ctx) => {
         var datos = await ctx.Request.ReadFromJsonAsync<DatosRespuesta>();
         if (datos == null) return Results.BadRequest();
 
         if (string.IsNullOrWhiteSpace(datos.id))
-            datos.id = Guid.NewGuid().ToString("N").Substring(0, 8);
+            datos.id = Guid.NewGuid().ToString("N");
 
-        bool existe = File.Exists(rutaCsv);
-        using (var sw = new StreamWriter(rutaCsv, append: true, Encoding.UTF8))
-        {
-            if (!existe)
-                sw.WriteLine("id,nombre,anio,facultad,etapa,estacion,grupal,formato,rol");
-
-            string Escapar(string s) => $"\"{(s ?? "").Replace("\"", "\"\"")}\"";
-            sw.WriteLine(string.Join(",",
-                Escapar(datos.id), Escapar(datos.nombre), Escapar(datos.anio),
-                Escapar(datos.facultad), Escapar(datos.etapa), Escapar(datos.estacion),
-                Escapar(datos.grupal), Escapar(datos.formato), Escapar(datos.rol)
-            ));
-        }
+        datos.deviceId = EnsureDeviceId(ctx);
+        var respuestas = LeerUsuariosCsv(rutaCsv);
+        respuestas.RemoveAll(respuesta => respuesta.deviceId == datos.deviceId || respuesta.id == datos.id);
+        respuestas.Add(datos);
+        EscribirUsuariosCsv(rutaCsv, respuestas);
 
         return Results.Json(new {
             estado = "ok",
@@ -266,7 +275,8 @@ static List<DatosRespuesta> LeerUsuariosCsv(string ruta)
         if (d.Length < 9) continue;
         lista.Add(new DatosRespuesta {
             id = d[0], nombre = d[1], anio = d[2], facultad = d[3],
-            etapa = d[4], estacion = d[5], grupal = d[6], formato = d[7], rol = d[8]
+            etapa = d[4], estacion = d[5], grupal = d[6], formato = d[7], rol = d[8],
+            deviceId = d.Length > 9 ? d[9] : ""
         });
     }
     return lista;
@@ -284,6 +294,56 @@ static string[] AnalizarLineaCSV(string linea)
     partes.Add(actual.Trim());
     return partes.ToArray();
 }
+
+static string EnsureDeviceId(HttpContext ctx)
+{
+    const string cookieName = "efigie_device_id";
+    if (ctx.Request.Cookies.TryGetValue(cookieName, out string existingId) &&
+        Guid.TryParseExact(existingId, "N", out _))
+        return existingId;
+
+    string deviceId = Guid.NewGuid().ToString("N");
+    ctx.Response.Cookies.Append(cookieName, deviceId, new CookieOptions
+    {
+        HttpOnly = true,
+        SameSite = SameSiteMode.Lax,
+        Path = "/",
+        MaxAge = TimeSpan.FromDays(365)
+    });
+    return deviceId;
+}
+
+static void EliminarRespuestasAnteriores(string rutaCsv, string deviceId, string previousId = null)
+{
+    if (!File.Exists(rutaCsv)) return;
+
+    var respuestas = LeerUsuariosCsv(rutaCsv);
+    int cantidadAnterior = respuestas.Count;
+    respuestas.RemoveAll(respuesta =>
+        respuesta.deviceId == deviceId ||
+        (!string.IsNullOrWhiteSpace(previousId) && respuesta.id == previousId));
+
+    if (respuestas.Count != cantidadAnterior)
+        EscribirUsuariosCsv(rutaCsv, respuestas);
+}
+
+static void EscribirUsuariosCsv(string rutaCsv, IEnumerable<DatosRespuesta> respuestas)
+{
+    string Escapar(string valor) => $"\"{(valor ?? "").Replace("\"", "\"\"")}\"";
+    using var sw = new StreamWriter(rutaCsv, append: false, Encoding.UTF8);
+    sw.WriteLine("id,nombre,anio,facultad,etapa,estacion,grupal,formato,rol,device_id");
+
+    foreach (var respuesta in respuestas)
+    {
+        sw.WriteLine(string.Join(",",
+            Escapar(respuesta.id), Escapar(respuesta.nombre), Escapar(respuesta.anio),
+            Escapar(respuesta.facultad), Escapar(respuesta.etapa), Escapar(respuesta.estacion),
+            Escapar(respuesta.grupal), Escapar(respuesta.formato), Escapar(respuesta.rol),
+            Escapar(respuesta.deviceId)
+        ));
+    }
+}
+
 static string InyectarAnimacionRotacionSvg(string svgOriginal)
 {
     var capas = new Dictionary<string, int>

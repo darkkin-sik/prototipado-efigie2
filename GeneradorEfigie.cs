@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Serialization;
 using Rhino.Geometry;
 
 public class ConfigEfigie
@@ -33,6 +34,8 @@ public class DatosRespuesta
     public string grupal { get; set; } = "";
     public string formato { get; set; } = "";
     public string rol { get; set; } = "";
+    [JsonIgnore]
+    public string deviceId { get; set; } = "";
 }
 
 public static class GeneradorEfigie
