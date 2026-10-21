@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encuesta Efigie</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #111;
+            display: flex;
+            justify-content: center;
+        }
+        .contenedor {
+            width: 100%;
+            max-width: 480px;
+            background: #ffffff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+        }
+        .campo {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: #fff;
+        }
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            background-color: #111;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        button[type="submit"]:disabled {
+            background-color: #777;
+            cursor: not-allowed;
+        }
+    </style>
+    <script>
+        // Permanencia: si el celular ya tiene un ID guardado y no entra con ?nueva=1, va directo a su efigie
+        (function () {
+            const params = new URLSearchParams(window.location.search);
+            const idGuardado = localStorage.getItem('mi_efigie_id');
+            if (idGuardado && !params.has('nueva')) {
+                window.location.replace('/efigie/' + encodeURIComponent(idGuardado));
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="contenedor">
+        <h1>Generá tu Efigie</h1>
+        <form id="formEncuesta">
+            <!-- 1. Nombre -->
+            <div class="campo">
+                <label for="nombre">1. Nombre completo o apodo</label>
+                <input type="text" id="nombre" name="nombre" placeholder="Ej: José Sicardi" required>
+            </div>
+
+            <!-- 2. Año de nacimiento -->
+            <div class="campo">
+                <label for="anio">2. Año de nacimiento</label>
+                <input type="number" id="anio" name="anio" placeholder="Ej: 2004" min="1920" max="2026" required>
+            </div>
+
+            <!-- 3. Facultad -->
+            <div class="campo">
+                <label for="facultad">3. ¿A qué facultad pertenecés?</label>
+                <select id="facultad" name="facultad" required>
+                    <option value="" disabled selected>Seleccioná una opción</option>
+                    <option value="Arquitectura y Diseño">Arquitectura y Diseño</option>
+                    <option value="Ciencias Económicas">Ciencias Económicas</option>
+                    <option value="Ciencias Médicas">Ciencias Médicas</option>
+                    <option value="Ciencias Sociales">Ciencias Sociales</option>
+                    <option value="Derecho">Derecho</option>
+                    <option value="Filosofía y Letras">Filosofía y Letras</option>
+                    <option value="Ingeniería y Ciencias Agrarias">Ingeniería y Ciencias Agrarias</option>
+                    <option value="Música">Música</option>
+                    <option value="Psicología y Psicopedagogía">Psicología y Psicopedagogía</option>
+                    <option value="Teología">Teología</option>
+                    <option value="Staff / Docentes">Staff / Docentes</option>
+                </select>
+            </div>
+
+            <!-- 4. Etapa -->
+            <div class="campo">
+                <label for="etapa">4. ¿En qué etapa de tu carrera estás o cuál es tu rol?</label>
+                <select id="etapa" name="etapa" required>
+                    <option value="" disabled selected>Seleccioná una opción</option>
+                    <option value="1 (Ingresante / Primer año)">1 (Ingresante / Primer año)</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6 (Sexto año o más)">6 (Sexto año o más)</option>
+                    <option value="Docente">Docente</option>
+                    <option value="No Docente">No Docente</option>
+                </select>
+            </div>
+
+            <!-- 5. Estación -->
+            <div class="campo">
+                <label for="estacion">5. ¿Cuál es tu estación del año favorita?</label>
+                <select id="estacion" name="estacion" required>
+                    <option value="" disabled selected>Seleccioná una opción</option>
+                    <option value="Verano">Verano</option>
+                    <option value="Otoño">Otoño</option>
+                    <option value="Invierno">Invierno</option>
+                    <option value="Primavera">Primavera</option>
+                </select>
+            </div>
+
+            <!-- 6. Modo de trabajo -->
+            <div class="campo">
+                <label for="grupal">6. ¿Cómo preferís trabajar o estudiar?</label>
+                <select id="grupal" name="grupal" required>
+                    <option value="" disabled selected>Seleccioná una opción</option>
+                    <option value="Solo">Solo</option>
+                    <option value="Grupal">Grupal</option>
+                </select>
+            </div>
+
+            <!-- 7. Formato historia -->
+            <div class="campo">
+                <label for="formato">7. ¿Qué formato elegís para disfrutar una historia?</label>
+                <select id="formato" name="formato" required>
+                    <option value="" disabled selected>Seleccioná una opción</option>
+                    <option value="Película">Película</option>
+                    <option value="Serie">Serie</option>
+                    <option value="Libro">Libro</option>
+                    <option value="Videojuego">Videojuego</option>
+                    <option value="Teatro">Teatro</option>
+                </select>
+            </div>
+
+            <!-- 8. Rol grupal -->
+            <div class="campo">
+                <label for="rol">8. ¿Qué rol te resulta más cómodo en un trabajo grupal?</label>
+                <select id="rol" name="rol" required>
+                    <option value="" disabled selected>Seleccioná una opción</option>
+                    <option value="Proponer (Generar ideas iniciales)">Proponer (Generar ideas iniciales)</option>
+                    <option value="Organizar (Estructurar y planificar)">Organizar (Estructurar y planificar)</option>
+                    <option value="Materializar (Llevar a la práctica)">Materializar (Llevar a la práctica)</option>
+                    <option value="Mejorar (Revisar y pulir detalles)">Mejorar (Revisar y pulir detalles)</option>
+                </select>
+            </div>
+
+            <button type="submit" id="btnEnviar">Generar Efigie</button>
+        </form>
+    </div>
+
+    <script>
+        const form = document.getElementById('formEncuesta');
+        const btn = document.getElementById('btnEnviar');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btn.disabled = true;
+            btn.textContent = 'Generando...';
+
+            const payload = {
+                nombre: document.getElementById('nombre').value.trim(),
+                anio: document.getElementById('anio').value.trim(),
+                facultad: document.getElementById('facultad').value,
+                etapa: document.getElementById('etapa').value,
+                estacion: document.getElementById('estacion').value,
+                grupal: document.getElementById('grupal').value,
+                formato: document.getElementById('formato').value,
+                rol: document.getElementById('rol').value
+            };
+
+            try {
+                const res = await fetch('/guardar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.estado === 'ok' && data.id) {
+                    localStorage.setItem('mi_efigie_id', data.id);
+                    window.location.href = data.url;
+                } else {
+                    alert('Error al generar la efigie.');
+                    btn.disabled = false;
+                    btn.textContent = 'Generar Efigie';
+                }
+            } catch (err) {
+                console.error(err);
+                alert('No se pudo conectar con el servidor.');
+                btn.disabled = false;
+                btn.textContent = 'Generar Efigie';
+            }
+        });
+    </script>
+</body>
+</html>
