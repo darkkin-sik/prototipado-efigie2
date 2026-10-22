@@ -221,7 +221,10 @@ app.MapGet("/", (HttpContext ctx) => {
             return Results.Content("<h2>No se encontró la efigie solicitada.</h2>", "text/html; charset=utf-8");
 
         var cfg = LeerConfig(rutaConfig);
-        string svg = GeneradorEfigie.GenerarSVG(usuario, cfg);
+        string svg = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(usuario, cfg));
+        double radioBaseTexto = cfg.RadioBaseTexto > 0 ? cfg.RadioBaseTexto : 15.0;
+        double margenMarco = radioBaseTexto * 1.3;
+        double insetMarcoPercent = (75.0 - margenMarco) / 150.0 * 100.0;
 
         string html = $@"<!DOCTYPE html>
 <html lang=""es"">
@@ -233,22 +236,62 @@ app.MapGet("/", (HttpContext ctx) => {
         * {{ box-sizing: border-box; }}
         html, body {{ margin: 0; min-height: 100%; background: #ffffff; }}
         body {{ padding: 20px 16px 40px; display: flex; flex-direction: column; align-items: center; color: #111; font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; }}
-        .efigie-principal {{ width: min(92vmin, 720px); height: min(92vmin, 720px); flex: 0 0 auto; }}
+        .efigie-principal {{ position: relative; width: min(92vmin, 720px); height: min(92vmin, 720px); flex: 0 0 auto; }}
         .efigie-principal svg {{ display: block; width: 100%; height: 100%; background: #ffffff; }}
+        .animacion-efigie .rotar-capa-1, .animacion-efigie .rotar-capa-2, .animacion-efigie .rotar-capa-3, .efigie-activa .rotar-capa-1, .efigie-activa .rotar-capa-2, .efigie-activa .rotar-capa-3, .efigie-ampliada .rotar-capa-1, .efigie-ampliada .rotar-capa-2, .efigie-ampliada .rotar-capa-3 {{
+            transform-origin: 0px 0px;
+            transform-box: view-box;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }}
+        .animacion-efigie .rotar-capa-1, .efigie-activa .rotar-capa-1, .efigie-ampliada .rotar-capa-1 {{ animation: girarHorario 75s linear infinite; }}
+        .animacion-efigie .rotar-capa-2, .efigie-activa .rotar-capa-2, .efigie-ampliada .rotar-capa-2 {{ animation: girarAntihorario 95s linear infinite; }}
+        .animacion-efigie .rotar-capa-3, .efigie-activa .rotar-capa-3, .efigie-ampliada .rotar-capa-3 {{ animation: girarHorario 115s linear infinite; }}
+        @keyframes girarHorario {{ to {{ transform: rotate(360deg); }} }}
+        @keyframes girarAntihorario {{ to {{ transform: rotate(-360deg); }} }}
+        .animacion-efigie.pausada .rotar-capa-1, .animacion-efigie.pausada .rotar-capa-2, .animacion-efigie.pausada .rotar-capa-3 {{ animation: none; transform: none; }}
         .efigies-activas {{ width: min(1100px, 100%); display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 18px 0 72px; }}
         .efigie-activa {{ min-width: 0; padding: 10px; border: 1px solid #e5e5e5; border-radius: 12px; text-align: center; }}
+        .boton-efigie-activa {{ display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }}
         .efigie-activa svg {{ display: block; width: 100%; aspect-ratio: 1; background: #ffffff; }}
         .nombre-efigie {{ margin: 8px 0 0; overflow-wrap: anywhere; font-size: 0.9rem; }}
         .connected-indicator {{ position: fixed; z-index: 10; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); padding: 10px 16px; border: 1px solid #e5e5e5; border-radius: 999px; background: #ffffff; color: #111111; box-shadow: 0 4px 18px rgba(0,0,0,0.14); font-size: 0.9rem; font-weight: 600; white-space: nowrap; }}
+        .boton-animacion {{ position: absolute; z-index: 2; right: calc(var(--inset-marco) + 8px); bottom: calc(var(--inset-marco) + 8px); width: 48px; height: 48px; border: 1px solid #e5e5e5; border-radius: 50%; background: #ffffff; color: #111111; box-shadow: 0 4px 18px rgba(0,0,0,0.16); font-size: 1.1rem; cursor: pointer; }}
+        .efigie-modal {{ width: min(90vw, 760px); max-width: 90vw; padding: 18px; border: 0; border-radius: 16px; background: #ffffff; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }}
+        .efigie-modal::backdrop {{ background: rgba(0,0,0,0.6); }}
+        .modal-cerrar {{ display: block; margin: 0 0 8px auto; padding: 8px 12px; border: 0; border-radius: 8px; background: #f1f1f1; cursor: pointer; }}
+        .efigie-ampliada svg {{ display: block; width: min(80vw, 700px); height: min(80vw, 700px); margin: 0 auto; background: #ffffff; }}
         @media (min-width: 700px) {{ body {{ padding-top: 28px; }} }}
     </style>
 </head>
 <body>
-    <main class=""efigie-principal"">{svg}</main>
+    <main id=""efigiePropia"" class=""efigie-principal animacion-efigie"" style=""--inset-marco: {insetMarcoPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)}%;"">
+        {svg}
+        <button id=""toggleAnimacion"" class=""boton-animacion"" type=""button"" aria-label=""Pausar animación"" aria-pressed=""false"" title=""Pausar animación"">❚❚</button>
+    </main>
     <section id=""efigiesActivas"" class=""efigies-activas"" aria-label=""Efigies activas""></section>
     <div id=""connectedIndicator"" class=""connected-indicator"" role=""status"" aria-live=""polite"">Connected 1</div>
+    <dialog id=""modalEfigie"" class=""efigie-modal"">
+        <button id=""cerrarModal"" class=""modal-cerrar"" type=""button"">Cerrar</button>
+        <div id=""efigieAmpliada"" class=""efigie-ampliada""></div>
+    </dialog>
     <script>
         const efigieId = {JsonSerializer.Serialize(id)};
+        const efigiePropia = document.getElementById('efigiePropia');
+        const toggleAnimacion = document.getElementById('toggleAnimacion');
+        toggleAnimacion.addEventListener('click', () => {{
+            const pausada = efigiePropia.classList.toggle('pausada');
+            toggleAnimacion.textContent = pausada ? '▶' : '❚❚';
+            toggleAnimacion.setAttribute('aria-label', pausada ? 'Reproducir animación' : 'Pausar animación');
+            toggleAnimacion.setAttribute('title', pausada ? 'Reproducir animación' : 'Pausar animación');
+            toggleAnimacion.setAttribute('aria-pressed', String(pausada));
+        }});
+        const modalEfigie = document.getElementById('modalEfigie');
+        document.getElementById('cerrarModal').addEventListener('click', () => modalEfigie.close());
+        modalEfigie.addEventListener('click', event => {{
+            if (event.target === modalEfigie) modalEfigie.close();
+        }});
+
         function crearIdSesion() {{
             const bytes = new Uint8Array(16);
             if (window.crypto && window.crypto.getRandomValues) {{
@@ -276,9 +319,17 @@ app.MapGet("/", (HttpContext ctx) => {
                 for (const efigie of resultado.efigies) {{
                     const tarjeta = document.createElement('article');
                     tarjeta.className = 'efigie-activa';
-                    const imagen = document.createElement('div');
-                    imagen.innerHTML = efigie.svg;
-                    tarjeta.appendChild(imagen);
+                    const botonEfigie = document.createElement('button');
+                    botonEfigie.className = 'boton-efigie-activa';
+                    botonEfigie.type = 'button';
+                    botonEfigie.setAttribute('aria-label', 'Ampliar efigie de ' + efigie.nombre);
+                    botonEfigie.innerHTML = efigie.svg;
+                    botonEfigie.addEventListener('click', () => {{
+                        const ampliada = document.getElementById('efigieAmpliada');
+                        ampliada.replaceChildren(botonEfigie.querySelector('svg').cloneNode(true));
+                        modalEfigie.showModal();
+                    }});
+                    tarjeta.appendChild(botonEfigie);
                     const nombre = document.createElement('p');
                     nombre.className = 'nombre-efigie';
                     nombre.textContent = efigie.nombre;
@@ -351,7 +402,7 @@ app.MapGet("/", (HttpContext ctx) => {
             {
                 id = respuesta.id,
                 nombre = respuesta.nombre,
-                svg = GeneradorEfigie.GenerarSVG(respuesta, cfg)
+                svg = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(respuesta, cfg))
             });
 
         return Results.Json(new { count = SesionesActivas.Count, efigies = efigiesActivas });

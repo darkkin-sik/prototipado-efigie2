@@ -92,13 +92,14 @@ public static class GeneradorEfigie
         if (cRol != null) todasLasCurvas.Add(cRol);
         todasLasCurvas.AddRange(cHist);
 
-        return ExportarASvg(marco, ptTxt, txtSalida, anioCrv, cEst, cCarr, cRol, cHist, conexiones, incluirMarcoYNombre);
+        return ExportarASvg(marco, ptTxt, txtSalida, datos.facultad, anioCrv, cEst, cCarr, cRol, cHist, conexiones, incluirMarcoYNombre);
     }
 
     private static string ExportarASvg(
         Curve marco,
         Point3d ptTxt,
         string texto,
+        string facultad,
         Curve anio,
         List<Curve> estaciones,
         List<Curve> carrera,
@@ -119,7 +120,7 @@ public static class GeneradorEfigie
 
         AgregarGrupoCurvas(sb, "anio", anio == null ? new List<Curve>() : new List<Curve> { anio });
         AgregarGrupoCurvas(sb, "estaciones", estaciones);
-        AgregarGrupoCurvas(sb, "carrera", carrera);
+        AgregarGrupoCurvas(sb, "carrera", carrera, ObtenerColorFacultad(facultad));
         AgregarGrupoCurvas(sb, "rol", rol == null ? new List<Curve>() : new List<Curve> { rol });
         AgregarGrupoCurvas(sb, "historia", historia);
 
@@ -141,15 +142,35 @@ public static class GeneradorEfigie
         return sb.ToString();
     }
 
-    private static void AgregarGrupoCurvas(StringBuilder sb, string nombre, IEnumerable<Curve> curvas)
+    private static void AgregarGrupoCurvas(StringBuilder sb, string nombre, IEnumerable<Curve> curvas, string stroke = null)
     {
-        sb.AppendLine($"  <g data-capa=\"{nombre}\">");
+        string atributoStroke = stroke == null ? "" : $" stroke=\"{stroke}\"";
+        sb.AppendLine($"  <g data-capa=\"{nombre}\"{atributoStroke}>");
         foreach (var curva in curvas)
         {
             if (curva != null)
                 sb.AppendLine($"    <path d=\"{CurvaAPathSvg(curva)}\" />");
         }
         sb.AppendLine("  </g>");
+    }
+
+    private static string ObtenerColorFacultad(string facultad)
+    {
+        return facultad switch
+        {
+            "Ciencias Económicas" => "#6064A3",
+            "Derecho" => "#7C171F",
+            "Filosofía y Letras" => "#459BDA",
+            "Ingeniería y Ciencias Agrarias" => "#84B444",
+            "Psicología y Psicopedagogía" => "#CE2D7B",
+            "Música" => "#F9DB52",
+            "Ciencias Médicas" => "#6EB392",
+            "Ciencias Sociales" => "#E27646",
+            "Teología" => "#85A8C8",
+            "Staff / Docentes" => "#133463",
+            "Arquitectura y Diseño" => "#8B1C31",
+            _ => "#000000"
+        };
     }
 
     private static string CurvaAPathSvg(Curve crv)
