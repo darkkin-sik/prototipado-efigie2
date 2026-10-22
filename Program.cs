@@ -9,13 +9,13 @@ using Microsoft.Extensions.FileProviders;
 
 class Program
 {
-    private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
-
     private sealed class ActiveTabSession
     {
         public string ResponseId { get; init; } = "";
-        public DateTime LastSeenUtc { get; set; }
+        public DateTime LastSeenUtc { get; init; }
     }
+
+    private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
 
     [STAThread]
     static void Main(string[] args)
@@ -235,31 +235,30 @@ app.MapGet("/", (HttpContext ctx) => {
         body {{ padding: 20px 16px 40px; display: flex; flex-direction: column; align-items: center; color: #111; font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; }}
         .efigie-principal {{ width: min(92vmin, 720px); height: min(92vmin, 720px); flex: 0 0 auto; }}
         .efigie-principal svg {{ display: block; width: 100%; height: 100%; background: #ffffff; }}
-        .sesion {{ width: min(1100px, 100%); margin-top: 18px; }}
-        .sesion h1 {{ margin: 0 0 14px; font-size: 1.25rem; }}
-        .galeria-sesion {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }}
-        .tarjeta-efigie {{ min-width: 0; padding: 10px; border: 1px solid #e5e5e5; border-radius: 12px; text-align: center; }}
-        .tarjeta-efigie svg {{ display: block; width: 100%; aspect-ratio: 1; background: #ffffff; }}
+        .efigies-activas {{ width: min(1100px, 100%); display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 18px 0 72px; }}
+        .efigie-activa {{ min-width: 0; padding: 10px; border: 1px solid #e5e5e5; border-radius: 12px; text-align: center; }}
+        .efigie-activa svg {{ display: block; width: 100%; aspect-ratio: 1; background: #ffffff; }}
         .nombre-efigie {{ margin: 8px 0 0; overflow-wrap: anywhere; font-size: 0.9rem; }}
-        .sesion-vacia {{ margin: 0; color: #666; }}
+        .connected-indicator {{ position: fixed; z-index: 10; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); padding: 10px 16px; border: 1px solid #e5e5e5; border-radius: 999px; background: #ffffff; color: #111111; box-shadow: 0 4px 18px rgba(0,0,0,0.14); font-size: 0.9rem; font-weight: 600; white-space: nowrap; }}
         @media (min-width: 700px) {{ body {{ padding-top: 28px; }} }}
     </style>
 </head>
 <body>
     <main class=""efigie-principal"">{svg}</main>
-    <section class=""sesion"" aria-live=""polite"">
-        <h1>Efigies de esta sesión</h1>
-        <div id=""galeriaSesion"" class=""galeria-sesion""></div>
-        <p id=""sesionVacia"" class=""sesion-vacia"">Buscando otras efigies activas...</p>
-    </section>
+    <section id=""efigiesActivas"" class=""efigies-activas"" aria-label=""Efigies activas""></section>
+    <div id=""connectedIndicator"" class=""connected-indicator"" role=""status"" aria-live=""polite"">Connected 1</div>
     <script>
         const efigieId = {JsonSerializer.Serialize(id)};
-        const claveSesion = 'efigie_sesion_tab';
-        let sesionTab = sessionStorage.getItem(claveSesion);
-        if (!sesionTab) {{
-            sesionTab = crypto.randomUUID().replace(/-/g, '');
-            sessionStorage.setItem(claveSesion, sesionTab);
+        function crearIdSesion() {{
+            const bytes = new Uint8Array(16);
+            if (window.crypto && window.crypto.getRandomValues) {{
+                window.crypto.getRandomValues(bytes);
+            }} else {{
+                for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+            }}
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
         }}
+        const sesionTab = crearIdSesion();
 
         async function actualizarSesion() {{
             try {{
@@ -270,16 +269,13 @@ app.MapGet("/", (HttpContext ctx) => {
                 }});
                 if (!respuesta.ok) throw new Error('No se pudo actualizar la sesión.');
 
-                const efigies = await respuesta.json();
-                const galeria = document.getElementById('galeriaSesion');
-                const vacio = document.getElementById('sesionVacia');
-                galeria.replaceChildren();
-                vacio.hidden = efigies.length > 0;
-                vacio.textContent = 'Por ahora, solo está tu efigie en esta sesión.';
-
-                for (const efigie of efigies) {{
+                const resultado = await respuesta.json();
+                document.getElementById('connectedIndicator').textContent = 'Connected ' + resultado.count;
+                const contenedorEfigies = document.getElementById('efigiesActivas');
+                contenedorEfigies.replaceChildren();
+                for (const efigie of resultado.efigies) {{
                     const tarjeta = document.createElement('article');
-                    tarjeta.className = 'tarjeta-efigie';
+                    tarjeta.className = 'efigie-activa';
                     const imagen = document.createElement('div');
                     imagen.innerHTML = efigie.svg;
                     tarjeta.appendChild(imagen);
@@ -287,16 +283,28 @@ app.MapGet("/", (HttpContext ctx) => {
                     nombre.className = 'nombre-efigie';
                     nombre.textContent = efigie.nombre;
                     tarjeta.appendChild(nombre);
-                    galeria.appendChild(tarjeta);
+                    contenedorEfigies.appendChild(tarjeta);
                 }}
             }} catch (error) {{
-                document.getElementById('sesionVacia').textContent = 'No se pudieron actualizar las efigies de la sesión.';
                 console.error(error);
             }}
         }}
 
+        function abandonarSesion() {{
+            fetch('/api/sesion/desconectar', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ sessionId: sesionTab }}),
+                keepalive: true
+            }}).catch(console.error);
+        }}
+
         actualizarSesion();
-        setInterval(actualizarSesion, 10000);
+        const intervaloSesion = setInterval(actualizarSesion, 10000);
+        window.addEventListener('pagehide', () => {{
+            clearInterval(intervaloSesion);
+            abandonarSesion();
+        }});
     </script>
 </body>
 </html>";
@@ -310,6 +318,7 @@ app.MapGet("/", (HttpContext ctx) => {
             string.IsNullOrWhiteSpace(heartbeat.responseId))
             return Results.BadRequest();
 
+        DateTime ahora = DateTime.UtcNow;
         var respuestas = LeerUsuariosCsv(rutaCsv);
         var actual = respuestas.FirstOrDefault(respuesta => respuesta.id == heartbeat.responseId);
         if (actual == null)
@@ -318,7 +327,6 @@ app.MapGet("/", (HttpContext ctx) => {
             return Results.NotFound();
         }
 
-        DateTime ahora = DateTime.UtcNow;
         SesionesActivas[heartbeat.sessionId] = new ActiveTabSession
         {
             ResponseId = actual.id,
@@ -327,19 +335,18 @@ app.MapGet("/", (HttpContext ctx) => {
 
         foreach (var sesion in SesionesActivas)
         {
-            if (ahora - sesion.Value.LastSeenUtc > TimeSpan.FromSeconds(35))
+            if (ahora - sesion.Value.LastSeenUtc > TimeSpan.FromSeconds(90))
                 SesionesActivas.TryRemove(sesion.Key, out _);
         }
 
-        var idsActivos = SesionesActivas.Values
+        var idsEfigiesActivas = SesionesActivas.Values
             .Select(sesion => sesion.ResponseId)
-            .Where(responseId => responseId != heartbeat.responseId)
-            .Distinct()
+            .Where(responseId => responseId != actual.id)
+            .Distinct(StringComparer.Ordinal)
             .ToHashSet(StringComparer.Ordinal);
-
         var cfg = LeerConfig(rutaConfig);
         var efigiesActivas = respuestas
-            .Where(respuesta => idsActivos.Contains(respuesta.id))
+            .Where(respuesta => idsEfigiesActivas.Contains(respuesta.id))
             .Select(respuesta => new
             {
                 id = respuesta.id,
@@ -347,7 +354,15 @@ app.MapGet("/", (HttpContext ctx) => {
                 svg = GeneradorEfigie.GenerarSVG(respuesta, cfg)
             });
 
-        return Results.Json(efigiesActivas);
+        return Results.Json(new { count = SesionesActivas.Count, efigies = efigiesActivas });
+    });
+
+    app.MapPost("/api/sesion/desconectar", (SessionHeartbeat heartbeat) => {
+        if (heartbeat == null || !Guid.TryParseExact(heartbeat.sessionId, "N", out _))
+            return Results.BadRequest();
+
+        SesionesActivas.TryRemove(heartbeat.sessionId, out _);
+        return Results.NoContent();
     });
 
     // --- API DATOS Y CONFIGURACIÓN ---
