@@ -134,6 +134,21 @@ app.MapGet("/", (HttpContext ctx) => {
         .rotar-capa-1 {{ animation-name: girarHorario; animation-duration: 18s; }}
         .rotar-capa-2 {{ animation-name: girarAntihorario; animation-duration: 12s; }}
         .rotar-capa-3 {{ animation-name: girarHorario; animation-duration: 8s; }}
+
+        .logo-bienvenida {{
+            position: absolute;
+            top: 6vh;
+            left: 50%;
+            width: min(177px, 54vw);
+            height: auto;
+            opacity: 0;
+            transform: translate(-50%, 10px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }}
+        .logo-bienvenida.visible {{
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }}
         
         .btn-generar {{
             position: absolute;
@@ -161,6 +176,7 @@ app.MapGet("/", (HttpContext ctx) => {
     </style>
 </head>
 <body>
+    <img src=""/efigie-logo.svg"" alt=""Efigie"" id=""logoBienvenida"" class=""logo-bienvenida"">
     <div class=""contenedor-efigie"">
         {svgAnimado}
     </div>
@@ -174,6 +190,7 @@ app.MapGet("/", (HttpContext ctx) => {
             }});
         }}
         setTimeout(() => {{
+            document.getElementById('logoBienvenida').classList.add('visible');
             document.getElementById('btnGenerar').classList.add('visible');
         }}, 1000);
     </script>

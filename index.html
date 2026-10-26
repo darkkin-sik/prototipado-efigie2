@@ -5,65 +5,151 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Encuesta Efigie</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        :root {
+            color-scheme: light;
+            --accent: #6EB392;
+            --accent-ink: #101a15;
+            --accent-selected: #54886f;
+            --accent-selected-ink: #101a15;
+            --paper: #f3f6f3;
+            --ink: #101a15;
+            --muted: #53615b;
         }
+        * { box-sizing: border-box; }
         body {
+            min-height: 100vh;
             margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            color: #111;
-            display: flex;
-            justify-content: center;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+            transition: background-color 350ms ease;
         }
         .contenedor {
-            width: 100%;
-            max-width: 480px;
-            background: #ffffff;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            width: min(100%, 620px);
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 28px clamp(22px, 7vw, 48px) 30px;
+            display: flex;
+            flex-direction: column;
         }
-        h1 {
-            margin-top: 0;
-            font-size: 1.4rem;
-            margin-bottom: 20px;
+        .marca {
+            display: flex;
+            justify-content: center;
+            padding: 12px 0 38px;
         }
-        .campo {
-            margin-bottom: 18px;
+        .marca img { width: min(177px, 54vw); height: auto; display: block; }
+        .progreso { color: var(--muted); font-size: 0.8rem; }
+        .progreso-texto { margin: 0 0 7px; }
+        .progreso-barra {
+            height: 9px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--accent) 25%, white);
         }
-        label {
+        .progreso-valor {
             display: block;
-            font-weight: 600;
-            font-size: 0.95rem;
-            margin-bottom: 6px;
+            width: 12.5%;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--accent);
+            transition: width 300ms ease, background-color 300ms ease;
         }
-        input[type="text"],
-        input[type="number"],
-        select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 1rem;
-            background: #fff;
+        form { flex: 1; display: flex; flex-direction: column; }
+        .paso {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            padding: clamp(48px, 11vh, 90px) 0 36px;
+            animation: aparecer 280ms ease both;
         }
-        button[type="submit"] {
+        .paso.activo { display: flex; }
+        .paso h1 {
+            margin: 0 0 32px;
+            text-align: center;
+            font-size: clamp(1.25rem, 5vw, 1.55rem);
+            line-height: 1.25;
+            font-weight: 700;
+        }
+        .respuesta-texto {
             width: 100%;
-            padding: 14px;
-            background-color: #111;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
+            min-height: 54px;
+            padding: 13px 16px;
+            border: 1px solid color-mix(in srgb, var(--accent) 48%, white);
+            border-radius: 5px;
+            background: color-mix(in srgb, var(--accent) 24%, white);
+            color: var(--ink);
+            font: inherit;
             font-size: 1rem;
-            font-weight: 600;
+            outline: none;
+        }
+        .respuesta-texto:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+        .opciones { display: grid; gap: 14px; }
+        .opciones.dos-columnas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+        .opcion { position: relative; min-width: 0; }
+        .opcion input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+        .opcion span {
+            min-height: 54px;
+            height: 100%;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            border: 0;
+            border-radius: 5px;
+            background: var(--accent);
+            color: var(--accent-ink);
+            font-size: 1rem;
+            line-height: 1.2;
             cursor: pointer;
-            margin-top: 8px;
+            transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
         }
-        button[type="submit"]:disabled {
-            background-color: #777;
-            cursor: not-allowed;
+        .opcion input:checked + span { background: var(--accent-selected); color: var(--accent-selected-ink); }
+        .opcion input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .opcion span:hover { transform: translateY(-1px); }
+        .navegacion {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            padding-top: 10px;
+        }
+        .navegacion button {
+            min-height: 52px;
+            border: 0;
+            border-radius: 5px;
+            background: var(--accent);
+            color: var(--accent-ink);
+            font: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: filter 150ms ease, opacity 150ms ease;
+        }
+        .navegacion button:hover:not(:disabled) { filter: brightness(0.94); }
+        .navegacion button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .navegacion button:disabled { opacity: 0.48; cursor: not-allowed; }
+        @keyframes aparecer {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-height: 700px) {
+            .marca { padding-bottom: 22px; }
+            .paso { padding-top: 42px; padding-bottom: 24px; }
+        }
+        @media (max-width: 520px) {
+            .marca { padding: 8px 0 22px; }
+            .paso { padding: 32px 0 18px; }
+            .paso h1 { margin-bottom: 22px; font-size: 1.25rem; }
+            .opciones { gap: 9px; }
+            .opciones.dos-columnas { gap: 9px 12px; }
+            .opcion span { min-height: 46px; padding: 9px 11px; font-size: 0.92rem; }
+            .navegacion { gap: 12px; }
+            .navegacion button { min-height: 48px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
     </style>
     <script>
@@ -78,125 +164,182 @@
     </script>
 </head>
 <body>
-    <div class="contenedor">
-        <h1>Generá tu Efigie</h1>
-        <form id="formEncuesta">
-            <!-- 1. Nombre -->
-            <div class="campo">
-                <label for="nombre">1. Nombre completo o apodo</label>
-                <input type="text" id="nombre" name="nombre" placeholder="Ej: José Sicardi" required>
+    <main class="contenedor">
+        <header>
+            <div class="marca"><img src="/efigie-logo.svg" alt="Efigie"></div>
+            <div class="progreso" aria-label="Progreso de la encuesta">
+                <p class="progreso-texto">Avance de la encuesta:</p>
+                <div class="progreso-barra" role="progressbar" aria-valuemin="1" aria-valuemax="8" aria-valuenow="1">
+                    <span class="progreso-valor"></span>
+                </div>
             </div>
-
-            <!-- 2. Año de nacimiento -->
-            <div class="campo">
-                <label for="anio">2. Año de nacimiento</label>
-                <input type="number" id="anio" name="anio" placeholder="Ej: 2004" min="1920" max="2026" required>
-            </div>
-
-            <!-- 3. Facultad -->
-            <div class="campo">
-                <label for="facultad">3. ¿A qué facultad pertenecés?</label>
-                <select id="facultad" name="facultad" required>
-                    <option value="" disabled selected>Seleccioná una opción</option>
-                    <option value="Arquitectura y Diseño">Arquitectura y Diseño</option>
-                    <option value="Ciencias Económicas">Ciencias Económicas</option>
-                    <option value="Ciencias Médicas">Ciencias Médicas</option>
-                    <option value="Ciencias Sociales">Ciencias Sociales</option>
-                    <option value="Derecho">Derecho</option>
-                    <option value="Filosofía y Letras">Filosofía y Letras</option>
-                    <option value="Ingeniería y Ciencias Agrarias">Ingeniería y Ciencias Agrarias</option>
-                    <option value="Música">Música</option>
-                    <option value="Psicología y Psicopedagogía">Psicología y Psicopedagogía</option>
-                    <option value="Teología">Teología</option>
-                    <option value="Staff / Docentes">Staff / Docentes</option>
-                </select>
-            </div>
-
-            <!-- 4. Etapa -->
-            <div class="campo">
-                <label for="etapa">4. ¿En qué etapa de tu carrera estás o cuál es tu rol?</label>
-                <select id="etapa" name="etapa" required>
-                    <option value="" disabled selected>Seleccioná una opción</option>
-                    <option value="1 (Ingresante / Primer año)">1 (Ingresante / Primer año)</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6 (Sexto año o más)">6 (Sexto año o más)</option>
-                    <option value="Docente">Docente</option>
-                    <option value="No Docente">No Docente</option>
-                </select>
-            </div>
-
-            <!-- 5. Estación -->
-            <div class="campo">
-                <label for="estacion">5. ¿Cuál es tu estación del año favorita?</label>
-                <select id="estacion" name="estacion" required>
-                    <option value="" disabled selected>Seleccioná una opción</option>
-                    <option value="Verano">Verano</option>
-                    <option value="Otoño">Otoño</option>
-                    <option value="Invierno">Invierno</option>
-                    <option value="Primavera">Primavera</option>
-                </select>
-            </div>
-
-            <!-- 6. Modo de trabajo -->
-            <div class="campo">
-                <label for="grupal">6. ¿Cómo preferís trabajar o estudiar?</label>
-                <select id="grupal" name="grupal" required>
-                    <option value="" disabled selected>Seleccioná una opción</option>
-                    <option value="Solo">Solo</option>
-                    <option value="Grupal">Grupal</option>
-                </select>
-            </div>
-
-            <!-- 7. Formato historia -->
-            <div class="campo">
-                <label for="formato">7. ¿Qué formato elegís para disfrutar una historia?</label>
-                <select id="formato" name="formato" required>
-                    <option value="" disabled selected>Seleccioná una opción</option>
-                    <option value="Película">Película</option>
-                    <option value="Serie">Serie</option>
-                    <option value="Libro">Libro</option>
-                    <option value="Videojuego">Videojuego</option>
-                    <option value="Teatro">Teatro</option>
-                </select>
-            </div>
-
-            <!-- 8. Rol grupal -->
-            <div class="campo">
-                <label for="rol">8. ¿Qué rol te resulta más cómodo en un trabajo grupal?</label>
-                <select id="rol" name="rol" required>
-                    <option value="" disabled selected>Seleccioná una opción</option>
-                    <option value="Proponer (Generar ideas iniciales)">Proponer (Generar ideas iniciales)</option>
-                    <option value="Organizar (Estructurar y planificar)">Organizar (Estructurar y planificar)</option>
-                    <option value="Materializar (Llevar a la práctica)">Materializar (Llevar a la práctica)</option>
-                    <option value="Mejorar (Revisar y pulir detalles)">Mejorar (Revisar y pulir detalles)</option>
-                </select>
-            </div>
-
-            <button type="submit" id="btnEnviar">Generar Efigie</button>
+        </header>
+        <form id="formEncuesta" novalidate>
+            <section class="paso activo" data-campo="nombre">
+                <h1 id="pregunta-nombre">1. Nombre completo o apodo</h1>
+                <input class="respuesta-texto" type="text" id="nombre" name="nombre" placeholder="Ej: José Sicardi" aria-labelledby="pregunta-nombre" autocomplete="name" required>
+            </section>
+            <section class="paso" data-campo="anio">
+                <h1 id="pregunta-anio">2. Año de nacimiento</h1>
+                <input class="respuesta-texto" type="number" id="anio" name="anio" placeholder="Ej: 2004" min="1920" max="2026" aria-labelledby="pregunta-anio" required>
+            </section>
+            <section class="paso" data-campo="facultad">
+                <h1 id="pregunta-facultad">3. ¿A qué facultad pertenecés?</h1>
+                <div class="opciones dos-columnas" role="radiogroup" aria-labelledby="pregunta-facultad">
+                    <label class="opcion"><input type="radio" name="facultad" value="Arquitectura y Diseño" required><span>Arquitectura y Diseño</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Ciencias Económicas"><span>Ciencias Económicas</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Ciencias Médicas"><span>Ciencias Médicas</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Ciencias Sociales"><span>Ciencias Sociales</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Derecho"><span>Derecho</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Filosofía y Letras"><span>Filosofía y Letras</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Ingeniería y Ciencias Agrarias"><span>Ingeniería y Ciencias Agrarias</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Música"><span>Música</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Psicología y Psicopedagogía"><span>Psicología y Psicopedagogía</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Teología"><span>Teología</span></label>
+                    <label class="opcion"><input type="radio" name="facultad" value="Staff / Docentes"><span>Staff / Docentes</span></label>
+                </div>
+            </section>
+            <section class="paso" data-campo="etapa">
+                <h1 id="pregunta-etapa">4. ¿En qué etapa de tu carrera estás o cuál es tu rol?</h1>
+                <div class="opciones" role="radiogroup" aria-labelledby="pregunta-etapa">
+                    <label class="opcion"><input type="radio" name="etapa" value="1 (Ingresante / Primer año)" required><span>1 (Ingresante / Primer año)</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="2"><span>2</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="3"><span>3</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="4"><span>4</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="5"><span>5</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="6 (Sexto año o más)"><span>6 (Sexto año o más)</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="Docente"><span>Docente</span></label>
+                    <label class="opcion"><input type="radio" name="etapa" value="No Docente"><span>No Docente</span></label>
+                </div>
+            </section>
+            <section class="paso" data-campo="estacion">
+                <h1 id="pregunta-estacion">5. ¿Cuál es tu estación del año favorita?</h1>
+                <div class="opciones" role="radiogroup" aria-labelledby="pregunta-estacion">
+                    <label class="opcion"><input type="radio" name="estacion" value="Verano" required><span>Verano</span></label>
+                    <label class="opcion"><input type="radio" name="estacion" value="Otoño"><span>Otoño</span></label>
+                    <label class="opcion"><input type="radio" name="estacion" value="Invierno"><span>Invierno</span></label>
+                    <label class="opcion"><input type="radio" name="estacion" value="Primavera"><span>Primavera</span></label>
+                </div>
+            </section>
+            <section class="paso" data-campo="grupal">
+                <h1 id="pregunta-grupal">6. ¿Cómo preferís trabajar o estudiar?</h1>
+                <div class="opciones" role="radiogroup" aria-labelledby="pregunta-grupal">
+                    <label class="opcion"><input type="radio" name="grupal" value="Solo" required><span>Solo</span></label>
+                    <label class="opcion"><input type="radio" name="grupal" value="Grupal"><span>Grupal</span></label>
+                </div>
+            </section>
+            <section class="paso" data-campo="formato">
+                <h1 id="pregunta-formato">7. ¿Qué formato elegís para disfrutar una historia?</h1>
+                <div class="opciones" role="radiogroup" aria-labelledby="pregunta-formato">
+                    <label class="opcion"><input type="radio" name="formato" value="Película" required><span>Película</span></label>
+                    <label class="opcion"><input type="radio" name="formato" value="Serie"><span>Serie</span></label>
+                    <label class="opcion"><input type="radio" name="formato" value="Libro"><span>Libro</span></label>
+                    <label class="opcion"><input type="radio" name="formato" value="Videojuego"><span>Videojuego</span></label>
+                    <label class="opcion"><input type="radio" name="formato" value="Teatro"><span>Teatro</span></label>
+                </div>
+            </section>
+            <section class="paso" data-campo="rol">
+                <h1 id="pregunta-rol">8. ¿Qué rol te resulta más cómodo en un trabajo grupal?</h1>
+                <div class="opciones" role="radiogroup" aria-labelledby="pregunta-rol">
+                    <label class="opcion"><input type="radio" name="rol" value="Proponer (Generar ideas iniciales)" required><span>Proponer (Generar ideas iniciales)</span></label>
+                    <label class="opcion"><input type="radio" name="rol" value="Organizar (Estructurar y planificar)"><span>Organizar (Estructurar y planificar)</span></label>
+                    <label class="opcion"><input type="radio" name="rol" value="Materializar (Llevar a la práctica)"><span>Materializar (Llevar a la práctica)</span></label>
+                    <label class="opcion"><input type="radio" name="rol" value="Mejorar (Revisar y pulir detalles)"><span>Mejorar (Revisar y pulir detalles)</span></label>
+                </div>
+            </section>
+            <nav class="navegacion" aria-label="Navegación de la encuesta">
+                <button type="button" id="btnAtras" disabled>Atrás</button>
+                <button type="button" id="btnSiguiente">Siguiente</button>
+                <button type="submit" id="btnEnviar" hidden>Generar Efigie</button>
+            </nav>
         </form>
-    </div>
+    </main>
 
     <script>
         const form = document.getElementById('formEncuesta');
-        const btn = document.getElementById('btnEnviar');
+        const pasos = Array.from(document.querySelectorAll('.paso'));
+        const btnAtras = document.getElementById('btnAtras');
+        const btnSiguiente = document.getElementById('btnSiguiente');
+        const btnEnviar = document.getElementById('btnEnviar');
+        const barraProgreso = document.querySelector('.progreso-valor');
+        const barraAccesible = document.querySelector('.progreso-barra');
+        const colores = ['#6064A3', '#7C171F', '#459BDA', '#84B444', '#CE2D7B', '#F9DB52', '#6EB392', '#E27646', '#85A8C8', '#133463', '#8B1C31'];
+        const indicesColor = colores.map((_, index) => index);
+        for (let index = indicesColor.length - 1; index > 0; index--) {
+            const aleatorio = Math.floor(Math.random() * (index + 1));
+            [indicesColor[index], indicesColor[aleatorio]] = [indicesColor[aleatorio], indicesColor[index]];
+        }
+        let pasoActual = 0;
+
+        function aplicarColor() {
+            const color = colores[indicesColor[pasoActual]];
+            const rgb = color.match(/[\da-f]{2}/gi).map(segmento => parseInt(segmento, 16) / 255);
+            const luminancia = rgb.map(valor => valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4);
+            const brillo = 0.2126 * luminancia[0] + 0.7152 * luminancia[1] + 0.0722 * luminancia[2];
+            const rgbOscuro = rgb.map(valor => Math.round(valor * 0.78 * 255));
+            const colorOscuro = `#${rgbOscuro.map(valor => valor.toString(16).padStart(2, '0')).join('')}`;
+            const linealOscuro = rgbOscuro.map(valor => {
+                const normalizado = valor / 255;
+                return normalizado <= 0.04045 ? normalizado / 12.92 : ((normalizado + 0.055) / 1.055) ** 2.4;
+            });
+            const brilloOscuro = 0.2126 * linealOscuro[0] + 0.7152 * linealOscuro[1] + 0.0722 * linealOscuro[2];
+            document.documentElement.style.setProperty('--accent', color);
+            document.documentElement.style.setProperty('--accent-ink', brillo > 0.179 ? '#101a15' : '#ffffff');
+            document.documentElement.style.setProperty('--accent-selected', colorOscuro);
+            document.documentElement.style.setProperty('--accent-selected-ink', brilloOscuro > 0.179 ? '#101a15' : '#ffffff');
+            document.documentElement.style.setProperty('--paper', `color-mix(in srgb, ${color} 10%, #f3f6f3)`);
+        }
+
+        function mostrarPaso(indice) {
+            pasoActual = indice;
+            pasos.forEach((paso, i) => {
+                paso.classList.toggle('activo', i === pasoActual);
+                paso.setAttribute('aria-hidden', i !== pasoActual);
+            });
+            const porcentaje = ((pasoActual + 1) / pasos.length) * 100;
+            barraProgreso.style.width = `${porcentaje}%`;
+            barraAccesible.setAttribute('aria-valuenow', String(pasoActual + 1));
+            btnAtras.disabled = pasoActual === 0;
+            btnSiguiente.hidden = pasoActual === pasos.length - 1;
+            btnEnviar.hidden = pasoActual !== pasos.length - 1;
+            aplicarColor();
+        }
+
+        function validarPasoActual() {
+            const controles = Array.from(pasos[pasoActual].querySelectorAll('input'));
+            const invalido = controles.find(control => !control.checkValidity());
+            if (invalido) {
+                invalido.reportValidity();
+                return false;
+            }
+            return true;
+        }
+
+        btnAtras.addEventListener('click', () => mostrarPaso(pasoActual - 1));
+        btnSiguiente.addEventListener('click', () => {
+            if (validarPasoActual()) mostrarPaso(pasoActual + 1);
+        });
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            btn.disabled = true;
-            btn.textContent = 'Generando...';
+            if (pasoActual < pasos.length - 1) {
+                if (validarPasoActual()) mostrarPaso(pasoActual + 1);
+                return;
+            }
+            if (!validarPasoActual()) return;
+            btnEnviar.disabled = true;
+            btnEnviar.textContent = 'Generando...';
 
+            const respuestas = new FormData(form);
             const payload = {
                 nombre: document.getElementById('nombre').value.trim(),
                 anio: document.getElementById('anio').value.trim(),
-                facultad: document.getElementById('facultad').value,
-                etapa: document.getElementById('etapa').value,
-                estacion: document.getElementById('estacion').value,
-                grupal: document.getElementById('grupal').value,
-                formato: document.getElementById('formato').value,
-                rol: document.getElementById('rol').value
+                facultad: respuestas.get('facultad'),
+                etapa: respuestas.get('etapa'),
+                estacion: respuestas.get('estacion'),
+                grupal: respuestas.get('grupal'),
+                formato: respuestas.get('formato'),
+                rol: respuestas.get('rol')
             };
 
             try {
@@ -212,16 +355,18 @@
                     window.location.href = data.url;
                 } else {
                     alert('Error al generar la efigie.');
-                    btn.disabled = false;
-                    btn.textContent = 'Generar Efigie';
+                    btnEnviar.disabled = false;
+                    btnEnviar.textContent = 'Generar Efigie';
                 }
             } catch (err) {
                 console.error(err);
                 alert('No se pudo conectar con el servidor.');
-                btn.disabled = false;
-                btn.textContent = 'Generar Efigie';
+                btnEnviar.disabled = false;
+                btnEnviar.textContent = 'Generar Efigie';
             }
         });
+
+        mostrarPaso(0);
     </script>
 </body>
 </html>
