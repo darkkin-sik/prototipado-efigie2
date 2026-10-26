@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de sesión - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #f3f6f3; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --green: #6EB392; --green-dark: #4a896b; }
+        * { box-sizing: border-box; }
+        body { min-height: 100vh; margin: 0; padding: 22px 24px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        .contenedor { width: min(100%, 760px); min-height: calc(100vh - 46px); margin: 0 auto; display: flex; flex-direction: column; }
+        header { display: flex; flex-direction: column; align-items: center; padding-bottom: 34px; }
+        .logo { width: min(177px, 54vw); height: auto; margin: 4px 0 30px; }
+        h1 { margin: 0; text-align: center; font-size: clamp(1.35rem, 4vw, 1.8rem); }
+        .estado { margin: 10px 0 0; color: var(--muted); font-size: 1rem; }
+        .lista { flex: 1; margin: 0; padding: 0; list-style: none; }
+        .participante { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+        .identidad { display: flex; align-items: center; gap: 10px; min-width: 0; overflow-wrap: anywhere; }
+        .marca-bot { padding: 3px 7px; background: #dcebe2; color: #355a46; font-size: 0.75rem; }
+        .expulsar { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+        .expulsar:hover { background: #e6ece8; }
+        .acciones { display: flex; justify-content: space-between; gap: 14px; padding-top: 30px; }
+        .accion { min-height: 48px; padding: 11px 17px; border: 0; border-radius: 4px; background: var(--green); color: #101a15; font: inherit; font-weight: 600; cursor: pointer; }
+        .accion:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
+        .accion:disabled, .expulsar:disabled { opacity: 0.55; cursor: not-allowed; }
+        .accion:focus-visible, .expulsar:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .mensaje { min-height: 1.5em; margin: 12px 0 0; text-align: center; color: var(--muted); }
+        @media (max-width: 480px) { body { padding-inline: 18px; } .acciones { gap: 10px; } .accion { padding-inline: 12px; font-size: 0.9rem; } }
+    </style>
+</head>
+<body>
+    <main class="contenedor">
+        <header>
+            <img class="logo" src="/efigie-logo.svg" alt="Efigie">
+            <h1>Administración de sesión</h1>
+            <p class="estado" id="estadoSesion" aria-live="polite">Esperando participantes... 0/15</p>
+        </header>
+        <ul class="lista" id="participantes" aria-label="Participantes en espera"></ul>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+        <footer class="acciones">
+            <button type="button" class="accion" id="simular">Simular ronda</button>
+            <button type="button" class="accion" id="iniciar">Forzar comienzo ronda</button>
+        </footer>
+    </main>
+    <script>
+        const lista = document.getElementById('participantes');
+        const estado = document.getElementById('estadoSesion');
+        const mensaje = document.getElementById('mensaje');
+        const botonSimular = document.getElementById('simular');
+        const botonIniciar = document.getElementById('iniciar');
+        let rondaIniciada = false;
+
+        async function cargarEstado() {
+            try {
+                const respuesta = await fetch('/api/admin/sesion', { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo consultar la sesión.');
+                const sesion = await respuesta.json();
+                rondaIniciada = sesion.rondaIniciada;
+                estado.textContent = rondaIniciada ? 'Ronda en curso' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
+                botonSimular.disabled = rondaIniciada;
+                botonIniciar.disabled = rondaIniciada;
+                lista.replaceChildren();
+                for (const participante of sesion.participantes) {
+                    const elemento = document.createElement('li');
+                    elemento.className = 'participante';
+                    const identidad = document.createElement('span');
+                    identidad.className = 'identidad';
+                    identidad.append(document.createTextNode(participante.nombre));
+                    if (participante.esBot) {
+                        const marca = document.createElement('span');
+                        marca.className = 'marca-bot';
+                        marca.textContent = 'SIMULADO';
+                        identidad.append(marca);
+                    }
+                    const expulsar = document.createElement('button');
+                    expulsar.type = 'button';
+                    expulsar.className = 'expulsar';
+                    expulsar.textContent = 'Expulsar';
+                    expulsar.setAttribute('aria-label', `Expulsar a ${participante.nombre}`);
+                    expulsar.disabled = rondaIniciada;
+                    expulsar.addEventListener('click', () => expulsarParticipante(participante.id));
+                    elemento.append(identidad, expulsar);
+                    lista.append(elemento);
+                }
+            } catch (error) {
+                mensaje.textContent = 'No se pudo actualizar el estado de la sesión.';
+                console.error(error);
+            }
+        }
+
+        async function expulsarParticipante(responseId) {
+            const respuesta = await fetch('/api/admin/sesion/expulsar', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ responseId })
+            });
+            mensaje.textContent = respuesta.ok ? 'Participante expulsado.' : 'No se pudo expulsar al participante.';
+            await cargarEstado();
+        }
+
+        botonSimular.addEventListener('click', async () => {
+            botonSimular.disabled = true;
+            const respuesta = await fetch('/api/admin/sesion/simular', { method: 'POST' });
+            mensaje.textContent = respuesta.ok ? 'Ronda completada con participantes simulados.' : 'No se pudo simular la ronda.';
+            await cargarEstado();
+        });
+
+        botonIniciar.addEventListener('click', async () => {
+            if (!window.confirm('¿Forzar el comienzo de la ronda para todos los participantes?')) return;
+            botonIniciar.disabled = true;
+            const respuesta = await fetch('/api/admin/sesion/iniciar', { method: 'POST' });
+            mensaje.textContent = respuesta.ok ? 'La ronda comenzó.' : 'No se pudo iniciar la ronda.';
+            await cargarEstado();
+        });
+
+        cargarEstado();
+        const intervalo = setInterval(cargarEstado, 2500);
+        window.addEventListener('pagehide', () => clearInterval(intervalo));
+    </script>
+</body>
+</html>

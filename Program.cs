@@ -15,7 +15,13 @@ class Program
         public DateTime LastSeenUtc { get; init; }
     }
 
+    private sealed record LobbyParticipant(string ResponseId, string SessionId, string Nombre, string Svg, DateTime LastSeenUtc, bool EsBot);
+
     private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
+    private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesLobby = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, DateTime> ExpulsadosLobby = new(StringComparer.Ordinal);
+    private static readonly object CandadoLobby = new();
+    private static volatile bool RondaIniciada;
 
     [STAThread]
     static void Main(string[] args)
@@ -227,8 +233,166 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Json(new {
             estado = "ok",
             id = datos.id,
-            url = $"/efigie/{datos.id}"
+            url = $"/lobby/{datos.id}"
         });
+    });
+
+    app.MapGet("/lobby/{id}", (string id) => {
+        var usuario = LeerUsuariosCsv(rutaCsv).FirstOrDefault(respuesta => respuesta.id == id);
+        if (usuario == null)
+            return Results.Content("<h2>No se encontró la efigie solicitada.</h2>", "text/html; charset=utf-8");
+
+        var cfg = LeerConfig(rutaConfig);
+        string svg = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(usuario, cfg, incluirMarcoYNombre: false));
+        string nombre = System.Net.WebUtility.HtmlEncode(usuario.nombre);
+        string efigieId = JsonSerializer.Serialize(id);
+        string html = $@"<!DOCTYPE html>
+<html lang=""es"">
+<head>
+    <meta charset=""UTF-8""><meta name=""viewport"" content=""width=device-width, initial-scale=1.0""><title>Sala de espera - {nombre}</title>
+    <style>
+        * {{ box-sizing: border-box; }}
+        html, body {{ width: 100%; min-height: 100%; margin: 0; background: #ffffff; color: #111111; font-family: ""Avenir Next"", Avenir, ""Segoe UI"", sans-serif; }}
+        body {{ min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 22px 18px max(24px, env(safe-area-inset-bottom)); }}
+        .marca {{ width: min(177px, 54vw); height: auto; margin: 4px 0 25px; }}
+        h1 {{ margin: 0 0 12px; text-align: center; font-size: clamp(1.15rem, 4vw, 1.6rem); font-weight: 650; }}
+        .nombre {{ margin: 0 0 14px; text-align: center; font-size: 1rem; color: #53615b; overflow-wrap: anywhere; }}
+        .efigie {{ width: min(72vmin, 560px); height: min(72vmin, 560px); flex: 0 0 auto; }}
+        .efigie svg {{ width: 100%; height: 100%; display: block; }}
+        .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 {{ transform-origin: 0px 0px; transform-box: view-box; animation-timing-function: linear; animation-iteration-count: infinite; }}
+        .rotar-capa-1 {{ animation-name: girarHorario; animation-duration: 18s; }}
+        .rotar-capa-2 {{ animation-name: girarAntihorario; animation-duration: 12s; }}
+        .rotar-capa-3 {{ animation-name: girarHorario; animation-duration: 8s; }}
+        @keyframes girarHorario {{ to {{ transform: rotate(360deg); }} }}
+        @keyframes girarAntihorario {{ to {{ transform: rotate(-360deg); }} }}
+        @media (max-height: 680px) {{ .marca {{ margin-bottom: 12px; }} .efigie {{ width: min(58vmin, 460px); height: min(58vmin, 460px); }} }}
+        @media (prefers-reduced-motion: reduce) {{ .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 {{ animation-duration: 0.01ms; }} }}
+    </style>
+</head>
+<body>
+    <img class=""marca"" src=""/efigie-logo.svg"" alt=""Efigie"">
+    <h1 id=""estadoLobby"">Esperando participantes... 0/15</h1>
+    <p class=""nombre"">{nombre}</p>
+    <main class=""efigie"" aria-label=""Efigie de {nombre}"">{svg}</main>
+    <script>
+        const responseId = {efigieId};
+        const sessionId = (() => {{
+            const bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        }})();
+        async function actualizarLobby() {{
+            try {{
+                const respuesta = await fetch('/api/lobby/heartbeat', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({{ sessionId, responseId }}) }});
+                if (!respuesta.ok) return;
+                const estado = await respuesta.json();
+                if (estado.expulsado) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/'); return; }}
+                if (estado.rondaIniciada) {{ window.location.replace('/ronda-en-curso'); return; }}
+                document.getElementById('estadoLobby').textContent = `Esperando participantes... ${{estado.cantidad}}/15`;
+            }} catch (error) {{ console.error(error); }}
+        }}
+        function abandonarLobby() {{
+            fetch('/api/lobby/desconectar', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({{ sessionId, responseId }}), keepalive: true }}).catch(console.error);
+        }}
+        actualizarLobby();
+        const intervaloLobby = setInterval(actualizarLobby, 3000);
+        window.addEventListener('pagehide', () => {{ clearInterval(intervaloLobby); abandonarLobby(); }});
+    </script>
+</body>
+</html>";
+        return Results.Content(html, "text/html; charset=utf-8");
+    });
+
+    app.MapGet("/admin-sesion", () => Results.File(Path.Combine(dirActual, "admin-sesion.html"), "text/html; charset=utf-8"));
+    app.MapGet("/ronda-en-curso", () => Results.File(Path.Combine(dirActual, "ronda-en-curso.html"), "text/html; charset=utf-8"));
+
+    app.MapGet("/api/admin/sesion", () => {
+        LimpiarParticipantesLobby();
+        var participantes = ParticipantesLobby.Values
+            .OrderBy(participante => participante.Nombre, StringComparer.OrdinalIgnoreCase)
+            .Select(participante => new { id = participante.ResponseId, nombre = participante.Nombre, esBot = participante.EsBot });
+        return Results.Json(new { cantidad = ParticipantesLobby.Count, capacidad = 15, rondaIniciada = RondaIniciada, participantes });
+    });
+
+    app.MapPost("/api/admin/sesion/expulsar", async (HttpContext ctx) => {
+        var solicitud = await ctx.Request.ReadFromJsonAsync<ExpulsionLobbyRequest>();
+        if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId)) return Results.BadRequest();
+        if (RondaIniciada) return Results.Conflict();
+
+        if (ParticipantesLobby.TryGetValue(solicitud.responseId, out var participante) && !participante.EsBot)
+        {
+            ParticipantesLobby.TryRemove(solicitud.responseId, out _);
+            ExpulsadosLobby[solicitud.responseId] = DateTime.UtcNow.AddMinutes(30);
+        }
+        else if (participante?.EsBot == true)
+        {
+            ParticipantesLobby.TryRemove(solicitud.responseId, out _);
+        }
+        return Results.Json(new { estado = "ok" });
+    });
+
+    app.MapPost("/api/admin/sesion/simular", () => {
+        LimpiarParticipantesLobby();
+        if (RondaIniciada) return Results.Conflict();
+
+        lock (CandadoLobby)
+        {
+            int faltantes = Math.Max(0, 15 - ParticipantesLobby.Count);
+            int numero = 1;
+            while (faltantes > 0)
+            {
+                string nombre = $"bot{numero++}";
+                string idBot = $"bot:{nombre}";
+                if (ParticipantesLobby.ContainsKey(idBot)) continue;
+                var datosBot = CrearDatosBot(nombre);
+                string svgBot = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(datosBot, LeerConfig(rutaConfig), incluirMarcoYNombre: false));
+                ParticipantesLobby[idBot] = new LobbyParticipant(idBot, "", nombre, svgBot, DateTime.UtcNow, true);
+                faltantes--;
+            }
+        }
+        return Results.Json(new { estado = "ok", cantidad = ParticipantesLobby.Count });
+    });
+
+    app.MapPost("/api/admin/sesion/iniciar", () => {
+        RondaIniciada = true;
+        return Results.Json(new { estado = "ok", rondaIniciada = true });
+    });
+
+    app.MapPost("/api/lobby/heartbeat", (SessionHeartbeat heartbeat) => {
+        if (heartbeat == null || !Guid.TryParseExact(heartbeat.sessionId, "N", out _) || string.IsNullOrWhiteSpace(heartbeat.responseId))
+            return Results.BadRequest();
+
+        DateTime ahora = DateTime.UtcNow;
+        if (ExpulsadosLobby.TryGetValue(heartbeat.responseId, out DateTime expulsionHasta))
+        {
+            if (expulsionHasta > ahora) return Results.Json(new { expulsado = true, cantidad = ParticipantesLobby.Count });
+            ExpulsadosLobby.TryRemove(heartbeat.responseId, out _);
+        }
+        if (RondaIniciada) return Results.Json(new { rondaIniciada = true, cantidad = ParticipantesLobby.Count });
+
+        var usuario = LeerUsuariosCsv(rutaCsv).FirstOrDefault(respuesta => respuesta.id == heartbeat.responseId);
+        if (usuario == null) return Results.NotFound();
+        LimpiarParticipantesLobby();
+
+        lock (CandadoLobby)
+        {
+            if (!ParticipantesLobby.ContainsKey(usuario.id) && ParticipantesLobby.Count >= 15)
+                return Results.Json(new { salaCompleta = true, cantidad = ParticipantesLobby.Count, rondaIniciada = false, expulsado = false });
+
+            ParticipantesLobby.AddOrUpdate(
+                usuario.id,
+                _ => new LobbyParticipant(usuario.id, heartbeat.sessionId, usuario.nombre, InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(usuario, LeerConfig(rutaConfig), incluirMarcoYNombre: false)), ahora, false),
+                (_, existente) => existente with { SessionId = heartbeat.sessionId, LastSeenUtc = ahora });
+        }
+
+        return Results.Json(new { cantidad = ParticipantesLobby.Count, rondaIniciada = false, expulsado = false, salaCompleta = false });
+    });
+
+    app.MapPost("/api/lobby/desconectar", (SessionHeartbeat heartbeat) => {
+        if (heartbeat == null || !Guid.TryParseExact(heartbeat.sessionId, "N", out _)) return Results.BadRequest();
+        if (ParticipantesLobby.TryGetValue(heartbeat.responseId, out var participante) && participante.SessionId == heartbeat.sessionId)
+            ParticipantesLobby.TryRemove(heartbeat.responseId, out _);
+        return Results.NoContent();
     });
 
     // --- VER EFIGIE INDIVIDUAL EN PESTAÑA EN BLANCO (PERMANENTE POR ID) ---
@@ -450,6 +614,38 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Json(new { estado = "ok" });
     });
 
+    void LimpiarParticipantesLobby()
+    {
+        DateTime ahora = DateTime.UtcNow;
+        foreach (var participante in ParticipantesLobby)
+        {
+            if (!participante.Value.EsBot && ahora - participante.Value.LastSeenUtc > TimeSpan.FromSeconds(90))
+                ParticipantesLobby.TryRemove(participante.Key, out _);
+        }
+        foreach (var expulsion in ExpulsadosLobby)
+        {
+            if (expulsion.Value <= ahora)
+                ExpulsadosLobby.TryRemove(expulsion.Key, out _);
+        }
+    }
+
+    DatosRespuesta CrearDatosBot(string nombreBot)
+    {
+        string[] facultades = { "Arquitectura y Diseño", "Ciencias Económicas", "Ciencias Médicas", "Ciencias Sociales", "Derecho", "Filosofía y Letras", "Ingeniería y Ciencias Agrarias", "Música", "Psicología y Psicopedagogía", "Teología", "Staff / Docentes" };
+        string[] etapas = { "1 (Ingresante / Primer año)", "2", "3", "4", "5", "6 (Sexto año o más)", "Docente", "No Docente" };
+        string[] estaciones = { "Verano", "Otoño", "Invierno", "Primavera" };
+        string[] grupales = { "Solo", "Grupal" };
+        string[] formatos = { "Película", "Serie", "Libro", "Videojuego", "Teatro" };
+        string[] roles = { "Proponer (Generar ideas iniciales)", "Organizar (Estructurar y planificar)", "Materializar (Llevar a la práctica)", "Mejorar (Revisar y pulir detalles)" };
+        return new DatosRespuesta
+        {
+            id = $"bot:{nombreBot}", nombre = nombreBot, anio = Random.Shared.Next(1990, 2009).ToString(),
+            facultad = facultades[Random.Shared.Next(facultades.Length)], etapa = etapas[Random.Shared.Next(etapas.Length)],
+            estacion = estaciones[Random.Shared.Next(estaciones.Length)], grupal = grupales[Random.Shared.Next(grupales.Length)],
+            formato = formatos[Random.Shared.Next(formatos.Length)], rol = roles[Random.Shared.Next(roles.Length)]
+        };
+    }
+
     app.Run();
 }
 
@@ -569,5 +765,10 @@ static string InyectarAnimacionRotacionSvg(string svgOriginal)
 public class SessionHeartbeat
 {
     public string sessionId { get; set; } = "";
+    public string responseId { get; set; } = "";
+}
+
+public class ExpulsionLobbyRequest
+{
     public string responseId { get; set; } = "";
 }

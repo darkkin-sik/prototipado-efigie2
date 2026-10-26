@@ -315,15 +315,22 @@
             return true;
         }
 
+        function avanzarPaso() {
+            if (!validarPasoActual()) return;
+            if (pasoActual === 0 && document.getElementById('nombre').value.trim().toLowerCase() === 'admin') {
+                window.location.href = '/admin-sesion';
+                return;
+            }
+            mostrarPaso(pasoActual + 1);
+        }
+
         btnAtras.addEventListener('click', () => mostrarPaso(pasoActual - 1));
-        btnSiguiente.addEventListener('click', () => {
-            if (validarPasoActual()) mostrarPaso(pasoActual + 1);
-        });
+        btnSiguiente.addEventListener('click', avanzarPaso);
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (pasoActual < pasos.length - 1) {
-                if (validarPasoActual()) mostrarPaso(pasoActual + 1);
+                avanzarPaso();
                 return;
             }
             if (!validarPasoActual()) return;
