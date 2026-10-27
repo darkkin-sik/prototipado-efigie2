@@ -50,6 +50,7 @@
             <img class="logo" src="/efigie-logo.svg" alt="Efigie">
             <h1>Administración de sesión</h1>
             <p class="estado" id="estadoSesion" aria-live="polite">Esperando participantes... 0/15</p>
+            <p class="estado" id="tiempoRonda" hidden></p>
         </header>
         <ul class="lista" id="participantes" aria-label="Participantes en espera"></ul>
         <div class="equipos" id="equipos" aria-label="Equipos de la pre-ronda" hidden></div>
@@ -59,6 +60,7 @@
             <button type="button" class="accion" id="comenzar" disabled>Comenzar ronda</button>
             <button type="button" class="accion" id="forzar">Forzar comienzo ronda</button>
             <button type="button" class="accion" id="forzarListo" hidden>Forzar listo</button>
+            <button type="button" class="accion" id="agregarTiempo" hidden>Agregar 20 seg</button>
             <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
         </footer>
     </main>
@@ -66,11 +68,13 @@
         const lista = document.getElementById('participantes');
         const listaEquipos = document.getElementById('equipos');
         const estado = document.getElementById('estadoSesion');
+        const tiempoRonda = document.getElementById('tiempoRonda');
         const mensaje = document.getElementById('mensaje');
         const botonSimular = document.getElementById('simular');
         const botonComenzar = document.getElementById('comenzar');
         const botonForzar = document.getElementById('forzar');
         const botonForzarListo = document.getElementById('forzarListo');
+        const botonAgregarTiempo = document.getElementById('agregarTiempo');
         const botonVolver = document.getElementById('volver');
         let rondaIniciada = false;
 
@@ -81,7 +85,12 @@
                 const sesion = await respuesta.json();
                 rondaIniciada = sesion.rondaIniciada;
                 const preRondaActiva = sesion.preRondaActiva;
-                estado.textContent = sesion.previewIniciada ? 'Ronda 1 preview' : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
+                estado.textContent = sesion.previewIniciada ? 'Ronda 1' : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
+                tiempoRonda.hidden = !sesion.previewIniciada;
+                if (sesion.previewIniciada) {
+                    const restantes = sesion.segundosRestantesRondaUno;
+                    tiempoRonda.textContent = `Tiempo restante ${Math.floor(restantes / 60)}:${String(restantes % 60).padStart(2, '0')}`;
+                }
                 lista.hidden = preRondaActiva;
                 listaEquipos.hidden = !preRondaActiva;
                 botonSimular.hidden = rondaIniciada;
@@ -89,6 +98,7 @@
                 botonForzar.hidden = rondaIniciada;
                 botonComenzar.disabled = sesion.cantidad !== sesion.capacidad;
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
+                botonAgregarTiempo.hidden = !sesion.previewIniciada;
                 lista.replaceChildren();
                 listaEquipos.replaceChildren();
 
@@ -181,6 +191,20 @@
             const respuesta = await fetch('/api/admin/preronda/forzar-listo', { method: 'POST' });
             mensaje.textContent = respuesta.ok ? 'Avance forzado a Ronda 1 preview.' : 'No se pudo forzar el avance.';
             await cargarEstado();
+        });
+
+        botonAgregarTiempo.addEventListener('click', async () => {
+            botonAgregarTiempo.disabled = true;
+            try {
+                const respuesta = await fetch('/api/admin/ronda-1/agregar-tiempo', { method: 'POST' });
+                mensaje.textContent = respuesta.ok ? 'Se agregaron 20 segundos.' : 'No se pudo agregar tiempo.';
+                await cargarEstado();
+            } catch (error) {
+                mensaje.textContent = 'No se pudo agregar tiempo.';
+                console.error(error);
+            } finally {
+                botonAgregarTiempo.disabled = false;
+            }
         });
 
         botonVolver.addEventListener('click', async () => {

@@ -30,6 +30,8 @@ class Program
     private static readonly object CandadoLobby = new();
     private static volatile bool RondaIniciada;
     private static volatile bool PreviewRondaIniciada;
+    private static DateTime? InicioRondaUnoUtc;
+    private static int SegundosExtraRondaUno;
 
     [STAThread]
     static void Main(string[] args)
@@ -347,6 +349,7 @@ app.MapGet("/", (HttpContext ctx) => {
             rondaIniciada = RondaIniciada,
             preRondaActiva = RondaIniciada && !PreviewRondaIniciada,
             previewIniciada = PreviewRondaIniciada,
+            segundosRestantesRondaUno = ObtenerSegundosRestantesRondaUno(),
             participantes,
             equipos
         });
@@ -375,6 +378,28 @@ app.MapGet("/", (HttpContext ctx) => {
             listo,
             cantidadListos,
             total = 3
+        });
+    });
+
+    app.MapGet("/api/ronda-1/estado", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        if (!RondaIniciada)
+            return Results.Json(new { rondaIniciada = false, previewIniciada = false });
+        if (!GrupoPorParticipante.TryGetValue(responseId, out int numeroGrupo)) return Results.NotFound();
+
+        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
+        var integrantes = equipo.ParticipantIds.Select(id =>
+        {
+            if (!ParticipantesLobby.TryGetValue(id, out var integrante))
+                return new { id, nombre = id, efigie = "" };
+            return new { id, nombre = integrante.Nombre, efigie = integrante.Svg };
+        }).ToArray();
+        return Results.Json(new
+        {
+            rondaIniciada = true,
+            previewIniciada = PreviewRondaIniciada,
+            segundosRestantes = ObtenerSegundosRestantesRondaUno(),
+            integrantes
         });
     });
 
@@ -413,12 +438,24 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/admin/sesion/forzar-inicio", () => IniciarPreRonda(completarConBots: true, botsListos: true));
 
     app.MapPost("/api/admin/preronda/forzar-listo", () => {
-        if (!RondaIniciada) return Results.Conflict();
-        foreach (var equipo in EquiposPreRonda)
-            foreach (string id in equipo.ParticipantIds)
-                ParticipantesListos[id] = true;
-        PreviewRondaIniciada = true;
-        return Results.Json(new { estado = "ok", previewIniciada = true });
+        lock (CandadoLobby)
+        {
+            if (!RondaIniciada) return Results.Conflict();
+            foreach (var equipo in EquiposPreRonda)
+                foreach (string id in equipo.ParticipantIds)
+                    ParticipantesListos[id] = true;
+            IniciarRondaUno();
+            return Results.Json(new { estado = "ok", previewIniciada = true });
+        }
+    });
+
+    app.MapPost("/api/admin/ronda-1/agregar-tiempo", () => {
+        lock (CandadoLobby)
+        {
+            if (!PreviewRondaIniciada) return Results.Conflict();
+            SegundosExtraRondaUno += 20;
+            return Results.Json(new { estado = "ok", segundosRestantes = ObtenerSegundosRestantesRondaUno() });
+        }
     });
 
     IResult RetrocederSesion()
@@ -428,6 +465,8 @@ app.MapGet("/", (HttpContext ctx) => {
             if (PreviewRondaIniciada)
             {
                 PreviewRondaIniciada = false;
+                InicioRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
                 ParticipantesListos.Clear();
                 return Results.Json(new { estado = "ok", etapaAnterior = "pre-ronda-1", cambio = true });
             }
@@ -435,6 +474,8 @@ app.MapGet("/", (HttpContext ctx) => {
             {
                 RondaIniciada = false;
                 PreviewRondaIniciada = false;
+                InicioRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
                 EquiposPreRonda = new List<RoundTeam>();
                 GrupoPorParticipante.Clear();
                 ParticipantesListos.Clear();
@@ -784,6 +825,8 @@ app.MapGet("/", (HttpContext ctx) => {
             }
 
             PreviewRondaIniciada = false;
+            InicioRondaUnoUtc = null;
+            SegundosExtraRondaUno = 0;
             RespuestasQueVuelvenAEncuesta.Clear();
             RondaIniciada = true;
         }
@@ -897,9 +940,30 @@ app.MapGet("/", (HttpContext ctx) => {
         lock (CandadoLobby)
         {
             if (!RondaIniciada || EquiposPreRonda.Count != 5) return;
-            PreviewRondaIniciada = EquiposPreRonda
+            bool todosListos = EquiposPreRonda
                 .SelectMany(equipo => equipo.ParticipantIds)
                 .All(id => ParticipantesListos.TryGetValue(id, out bool listo) && listo);
+            if (todosListos)
+                IniciarRondaUno();
+        }
+    }
+
+    void IniciarRondaUno()
+    {
+        if (PreviewRondaIniciada) return;
+        InicioRondaUnoUtc = DateTime.UtcNow;
+        SegundosExtraRondaUno = 0;
+        PreviewRondaIniciada = true;
+    }
+
+    int ObtenerSegundosRestantesRondaUno()
+    {
+        lock (CandadoLobby)
+        {
+            if (!InicioRondaUnoUtc.HasValue) return 120;
+            int totalSegundos = 120 + SegundosExtraRondaUno;
+            int transcurridos = (int)Math.Ceiling((DateTime.UtcNow - InicioRondaUnoUtc.Value).TotalSeconds);
+            return Math.Max(0, totalSegundos - transcurridos);
         }
     }
 
