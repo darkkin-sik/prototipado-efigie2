@@ -110,8 +110,8 @@ public static class GeneradorEfigie
     {
         var ic = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
-        // ViewBox centrado en (0,0) con tamaño suficiente para cubrir RadioBaseCarrera (45) + margen
-        sb.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-75 -75 150 150\" width=\"100%\" height=\"100%\" style=\"background:#ffffff;\">");
+        string viewBox = incluirMarcoYNombre ? "-75 -75 150 150" : "-50 -50 100 100";
+        sb.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{viewBox}\" width=\"100%\" height=\"100%\" style=\"background:#ffffff;\">");
         sb.AppendLine("<g fill=\"none\" stroke=\"#000000\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">");
 
         // En Rhino +Y va hacia arriba; en SVG +Y va hacia abajo, por eso invertimos Y (-p.Y)

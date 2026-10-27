@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#000000">
-    <title>Ronda en curso - Efigie</title>
+    <title>Ronda 1 preview - Efigie</title>
     <style>
         * { box-sizing: border-box; }
         html, body { width: 100%; min-height: 100%; margin: 0; background: #000; color: #fff; }
@@ -13,6 +13,27 @@
     </style>
 </head>
 <body>
-    <main><h1>Ronda en curso</h1></main>
+    <main><h1>Ronda 1 preview</h1></main>
+    <script>
+        const responseId = new URLSearchParams(window.location.search).get('id');
+        async function revisarEstadoRonda() {
+            if (!responseId) return;
+            try {
+                const respuesta = await fetch('/api/lobby/estado', { cache: 'no-store' });
+                if (!respuesta.ok) return;
+                const estado = await respuesta.json();
+                if (!estado.rondaIniciada) {
+                    window.location.replace('/lobby/' + encodeURIComponent(responseId));
+                } else if (!estado.previewIniciada) {
+                    window.location.replace('/pre-ronda-1?id=' + encodeURIComponent(responseId));
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+        revisarEstadoRonda();
+        const intervaloEstado = setInterval(revisarEstadoRonda, 1500);
+        window.addEventListener('pagehide', () => clearInterval(intervaloEstado));
+    </script>
 </body>
 </html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#133463">
+    <title>Pre-ronda 1 - Efigie</title>
+    <style>
+        :root { color-scheme: light; --equipo: #133463; --tinta: #ffffff; }
+        * { box-sizing: border-box; }
+        html, body { width: 100%; min-height: 100%; margin: 0; }
+        body { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--equipo); color: var(--tinta); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; transition: background-color 250ms ease, color 250ms ease; }
+        main { width: min(100%, 520px); text-align: center; }
+        .logo { width: min(177px, 54vw); height: auto; margin: 0 auto 34px; filter: brightness(0) invert(1); }
+        h1 { margin: 0 0 10px; font-size: clamp(1.5rem, 5vw, 2rem); }
+        .equipo { margin: 0 0 38px; font-size: 1rem; }
+        .boton-listo { min-width: min(100%, 260px); min-height: 58px; padding: 14px 22px; border: 0; border-radius: 5px; background: #ffffff; color: #101a15; font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; }
+        .boton-listo:hover:not(:disabled) { background: #e8eee9; }
+        .boton-listo:focus-visible { outline: 3px solid var(--tinta); outline-offset: 4px; }
+        .boton-listo:disabled { opacity: 0.7; cursor: default; }
+        .ayuda { min-height: 1.5em; margin: 16px 0 0; }
+        @media (max-height: 560px) { .logo { margin-bottom: 14px; } .equipo { margin-bottom: 20px; } }
+    </style>
+</head>
+<body>
+    <main>
+        <img class="logo" src="/efigie-logo.svg" alt="Efigie">
+        <h1>Pre-ronda 1</h1>
+        <p class="equipo" id="equipo">Cargando equipo...</p>
+        <button type="button" class="boton-listo" id="marcarListo" disabled>Estoy listo 0/3</button>
+        <p class="ayuda" id="mensaje" aria-live="polite"></p>
+    </main>
+    <script>
+        const responseId = new URLSearchParams(window.location.search).get('id');
+        const boton = document.getElementById('marcarListo');
+        const mensaje = document.getElementById('mensaje');
+        let estadoActual = null;
+
+        async function actualizarEstado() {
+            if (!responseId) return;
+            try {
+                const url = '/api/preronda/estado?responseId=' + encodeURIComponent(responseId);
+                const respuesta = await fetch(url, { cache: 'no-store' });
+                if (!respuesta.ok) return;
+                estadoActual = await respuesta.json();
+                if (!estadoActual.rondaIniciada) {
+                    window.location.replace('/lobby/' + encodeURIComponent(responseId));
+                    return;
+                }
+                document.documentElement.style.setProperty('--equipo', estadoActual.color);
+                document.documentElement.style.setProperty('--tinta', estadoActual.colorTexto);
+                document.querySelector('meta[name="theme-color"]').content = estadoActual.color;
+                document.getElementById('equipo').textContent = `Equipo ${estadoActual.grupo}`;
+                boton.textContent = estadoActual.listo ? `Estoy listo ${estadoActual.cantidadListos}/3` : `Estoy listo ${estadoActual.cantidadListos}/3`;
+                boton.disabled = estadoActual.listo;
+                mensaje.textContent = estadoActual.listo ? 'Esperando a tu equipo.' : '';
+                if (estadoActual.previewIniciada) {
+                    window.location.replace('/ronda-1-preview?id=' + encodeURIComponent(responseId));
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        boton.addEventListener('click', async () => {
+            if (boton.disabled) return;
+            boton.disabled = true;
+            await fetch('/api/preronda/listo', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ responseId })
+            });
+            await actualizarEstado();
+        });
+
+        actualizarEstado();
+        const intervalo = setInterval(actualizarEstado, 1200);
+        window.addEventListener('pagehide', () => clearInterval(intervalo));
+    </script>
+</body>
+</html>

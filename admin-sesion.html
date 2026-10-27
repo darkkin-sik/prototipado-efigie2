@@ -19,8 +19,24 @@
         .marca-bot { padding: 3px 7px; background: #dcebe2; color: #355a46; font-size: 0.75rem; }
         .expulsar { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
         .expulsar:hover { background: #e6ece8; }
-        .acciones { display: flex; justify-content: space-between; gap: 14px; padding-top: 30px; }
+        .equipos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+        .equipo { min-width: 0; padding: 12px; border-top: 4px solid var(--color-equipo); background: #ffffff; }
+        .efigies-integrantes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: min(100%, 600px); margin: 0 auto 12px; }
+        .efigie-integrante { min-width: 0; margin: 0; text-align: center; }
+        .efigie-dibujo { width: min(100%, 180px); aspect-ratio: 1; margin: 0 auto; }
+        .efigie-dibujo svg { display: block; width: 100%; height: 100%; background: #fff; }
+        .nombre-integrante { min-height: 2.4em; margin: 5px 0 2px; overflow-wrap: anywhere; font-size: 0.85rem; }
+        .listo-integrante { margin: 0; color: var(--muted); font-size: 0.8rem; }
+        .listo-integrante[data-listo="true"] { color: #286547; font-weight: 700; }
+        .equipo h2 { margin: 0 0 6px; text-align: center; font-size: 1rem; }
+        .equipo p { margin: 0 0 8px; color: var(--muted); font-size: 0.85rem; }
+        .integrantes { margin: 0; padding: 0; list-style: none; }
+        .integrante { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
+        .estado-listo { flex: 0 0 auto; color: var(--muted); }
+        .estado-listo[data-listo="true"] { color: #286547; font-weight: 700; }
+        .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding-top: 30px; }
         .accion { min-height: 48px; padding: 11px 17px; border: 0; border-radius: 4px; background: var(--green); color: #101a15; font: inherit; font-weight: 600; cursor: pointer; }
+        .accion-volver { background: #dcebe2; }
         .accion:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
         .accion:disabled, .expulsar:disabled { opacity: 0.55; cursor: not-allowed; }
         .accion:focus-visible, .expulsar:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
@@ -36,18 +52,26 @@
             <p class="estado" id="estadoSesion" aria-live="polite">Esperando participantes... 0/15</p>
         </header>
         <ul class="lista" id="participantes" aria-label="Participantes en espera"></ul>
+        <div class="equipos" id="equipos" aria-label="Equipos de la pre-ronda" hidden></div>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
         <footer class="acciones">
             <button type="button" class="accion" id="simular">Simular ronda</button>
-            <button type="button" class="accion" id="iniciar">Forzar comienzo ronda</button>
+            <button type="button" class="accion" id="comenzar" disabled>Comenzar ronda</button>
+            <button type="button" class="accion" id="forzar">Forzar comienzo ronda</button>
+            <button type="button" class="accion" id="forzarListo" hidden>Forzar listo</button>
+            <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
         </footer>
     </main>
     <script>
         const lista = document.getElementById('participantes');
+        const listaEquipos = document.getElementById('equipos');
         const estado = document.getElementById('estadoSesion');
         const mensaje = document.getElementById('mensaje');
         const botonSimular = document.getElementById('simular');
-        const botonIniciar = document.getElementById('iniciar');
+        const botonComenzar = document.getElementById('comenzar');
+        const botonForzar = document.getElementById('forzar');
+        const botonForzarListo = document.getElementById('forzarListo');
+        const botonVolver = document.getElementById('volver');
         let rondaIniciada = false;
 
         async function cargarEstado() {
@@ -56,10 +80,50 @@
                 if (!respuesta.ok) throw new Error('No se pudo consultar la sesión.');
                 const sesion = await respuesta.json();
                 rondaIniciada = sesion.rondaIniciada;
-                estado.textContent = rondaIniciada ? 'Ronda en curso' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
-                botonSimular.disabled = rondaIniciada;
-                botonIniciar.disabled = rondaIniciada;
+                const preRondaActiva = sesion.preRondaActiva;
+                estado.textContent = sesion.previewIniciada ? 'Ronda 1 preview' : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
+                lista.hidden = preRondaActiva;
+                listaEquipos.hidden = !preRondaActiva;
+                botonSimular.hidden = rondaIniciada;
+                botonComenzar.hidden = rondaIniciada;
+                botonForzar.hidden = rondaIniciada;
+                botonComenzar.disabled = sesion.cantidad !== sesion.capacidad;
+                botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
                 lista.replaceChildren();
+                listaEquipos.replaceChildren();
+
+                for (const equipo of sesion.equipos) {
+                    const tarjeta = document.createElement('section');
+                    tarjeta.className = 'equipo';
+                    tarjeta.style.setProperty('--color-equipo', equipo.color);
+                    const efigies = document.createElement('div');
+                    efigies.className = 'efigies-integrantes';
+                    for (const integrante of equipo.integrantes) {
+                        const figura = document.createElement('figure');
+                        figura.className = 'efigie-integrante';
+                        const dibujo = document.createElement('div');
+                        dibujo.className = 'efigie-dibujo';
+                        dibujo.setAttribute('role', 'img');
+                        dibujo.setAttribute('aria-label', `Efigie de ${integrante.nombre}`);
+                        dibujo.innerHTML = integrante.efigie;
+                        const nombre = document.createElement('figcaption');
+                        nombre.className = 'nombre-integrante';
+                        nombre.textContent = integrante.nombre + (integrante.esBot ? ' (simulado)' : '');
+                        const listo = document.createElement('p');
+                        listo.className = 'listo-integrante';
+                        listo.dataset.listo = String(integrante.listo);
+                        listo.textContent = integrante.listo ? 'Listo' : 'Esperando';
+                        figura.append(dibujo, nombre, listo);
+                        efigies.append(figura);
+                    }
+                    const titulo = document.createElement('h2');
+                    titulo.textContent = `Equipo ${equipo.numero}`;
+                    const puntaje = document.createElement('p');
+                    puntaje.textContent = `${equipo.posibilidades}/7 posibilidades de triangulación · Puntaje ${equipo.puntaje}`;
+                    tarjeta.append(efigies, titulo, puntaje);
+                    listaEquipos.append(tarjeta);
+                }
+
                 for (const participante of sesion.participantes) {
                     const elemento = document.createElement('li');
                     elemento.className = 'participante';
@@ -96,18 +160,39 @@
             await cargarEstado();
         }
 
+        async function enviarInicio(ruta, confirmacion) {
+            if (!window.confirm(confirmacion)) return;
+            const respuesta = await fetch(ruta, { method: 'POST' });
+            mensaje.textContent = respuesta.ok ? 'Pre-ronda 1 iniciada.' : 'Se necesitan 15 participantes para comenzar.';
+            await cargarEstado();
+        }
+
         botonSimular.addEventListener('click', async () => {
             botonSimular.disabled = true;
             const respuesta = await fetch('/api/admin/sesion/simular', { method: 'POST' });
-            mensaje.textContent = respuesta.ok ? 'Ronda completada con participantes simulados.' : 'No se pudo simular la ronda.';
+            mensaje.textContent = respuesta.ok ? 'Pre-ronda iniciada con participantes simulados.' : 'No se pudo simular la ronda.';
             await cargarEstado();
         });
 
-        botonIniciar.addEventListener('click', async () => {
-            if (!window.confirm('¿Forzar el comienzo de la ronda para todos los participantes?')) return;
-            botonIniciar.disabled = true;
-            const respuesta = await fetch('/api/admin/sesion/iniciar', { method: 'POST' });
-            mensaje.textContent = respuesta.ok ? 'La ronda comenzó.' : 'No se pudo iniciar la ronda.';
+        botonComenzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/iniciar', '¿Comenzar la pre-ronda con los 15 participantes?'));
+        botonForzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/forzar-inicio', '¿Forzar el comienzo completando los lugares vacíos con bots?'));
+
+        botonForzarListo.addEventListener('click', async () => {
+            const respuesta = await fetch('/api/admin/preronda/forzar-listo', { method: 'POST' });
+            mensaje.textContent = respuesta.ok ? 'Avance forzado a Ronda 1 preview.' : 'No se pudo forzar el avance.';
+            await cargarEstado();
+        });
+
+        botonVolver.addEventListener('click', async () => {
+            botonVolver.disabled = true;
+            const respuesta = await fetch('/api/admin/sesion/retroceder', { method: 'POST' });
+            if (respuesta.ok) {
+                const resultado = await respuesta.json();
+                mensaje.textContent = !resultado.cambio ? 'La sesión ya está en el lobby.' : resultado.etapaAnterior === 'pre-ronda-1' ? 'Todos regresan a la pre-ronda.' : 'Todos regresan al lobby.';
+            } else {
+                mensaje.textContent = 'No se pudo retroceder la sesión.';
+            }
+            botonVolver.disabled = false;
             await cargarEstado();
         });
 

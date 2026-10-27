@@ -15,13 +15,21 @@ class Program
         public DateTime LastSeenUtc { get; init; }
     }
 
-    private sealed record LobbyParticipant(string ResponseId, string SessionId, string Nombre, string Svg, DateTime LastSeenUtc, bool EsBot);
+    private sealed record LobbyParticipant(string ResponseId, string SessionId, string Nombre, string Svg, DateTime LastSeenUtc, bool EsBot, DatosRespuesta Datos);
+    private sealed record RoundTeam(int GroupNumber, string Color, string TextColor, string[] ParticipantIds, int TriangulationPossibilities, int FitnessScore);
 
     private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
     private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesLobby = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, DateTime> ExpulsadosLobby = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, byte> RespuestasQueVuelvenAEncuesta = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, bool> ParticipantesListos = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, int> GrupoPorParticipante = new(StringComparer.Ordinal);
+    private static readonly string[] ColoresGrupo = { "#133463", "#7C171F", "#6064A3", "#84B444", "#E27646" };
+    private static readonly string[] ColoresTextoGrupo = { "#ffffff", "#ffffff", "#ffffff", "#101a15", "#101a15" };
+    private static List<RoundTeam> EquiposPreRonda = new();
     private static readonly object CandadoLobby = new();
     private static volatile bool RondaIniciada;
+    private static volatile bool PreviewRondaIniciada;
 
     [STAThread]
     static void Main(string[] args)
@@ -257,7 +265,7 @@ app.MapGet("/", (HttpContext ctx) => {
         .marca {{ width: min(177px, 54vw); height: auto; margin: 4px 0 25px; }}
         h1 {{ margin: 0 0 12px; text-align: center; font-size: clamp(1.15rem, 4vw, 1.6rem); font-weight: 650; }}
         .nombre {{ margin: 0 0 14px; text-align: center; font-size: 1rem; color: #53615b; overflow-wrap: anywhere; }}
-        .efigie {{ width: min(72vmin, 560px); height: min(72vmin, 560px); flex: 0 0 auto; }}
+        .efigie {{ width: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 200px)); height: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 200px)); flex: 0 1 auto; }}
         .efigie svg {{ width: 100%; height: 100%; display: block; }}
         .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 {{ transform-origin: 0px 0px; transform-box: view-box; animation-timing-function: linear; animation-iteration-count: infinite; }}
         .rotar-capa-1 {{ animation-name: girarHorario; animation-duration: 18s; }}
@@ -265,7 +273,7 @@ app.MapGet("/", (HttpContext ctx) => {
         .rotar-capa-3 {{ animation-name: girarHorario; animation-duration: 8s; }}
         @keyframes girarHorario {{ to {{ transform: rotate(360deg); }} }}
         @keyframes girarAntihorario {{ to {{ transform: rotate(-360deg); }} }}
-        @media (max-height: 680px) {{ .marca {{ margin-bottom: 12px; }} .efigie {{ width: min(58vmin, 460px); height: min(58vmin, 460px); }} }}
+        @media (max-height: 680px) {{ body {{ padding-block: 12px max(16px, env(safe-area-inset-bottom)); }} .marca {{ margin-bottom: 12px; }} h1 {{ margin-bottom: 8px; }} .nombre {{ margin-bottom: 8px; }} .efigie {{ width: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 150px)); height: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 150px)); }} }}
         @media (prefers-reduced-motion: reduce) {{ .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 {{ animation-duration: 0.01ms; }} }}
     </style>
 </head>
@@ -286,8 +294,13 @@ app.MapGet("/", (HttpContext ctx) => {
                 const respuesta = await fetch('/api/lobby/heartbeat', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({{ sessionId, responseId }}) }});
                 if (!respuesta.ok) return;
                 const estado = await respuesta.json();
+                if (estado.regresarEncuesta) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/encuesta?nueva=1'); return; }}
                 if (estado.expulsado) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/'); return; }}
-                if (estado.rondaIniciada) {{ window.location.replace('/ronda-en-curso'); return; }}
+                if (estado.rondaIniciada) {{
+                    const destino = estado.previewIniciada ? '/ronda-1-preview' : '/pre-ronda-1';
+                    window.location.replace(`${{destino}}?id=${{encodeURIComponent(responseId)}}`);
+                    return;
+                }}
                 document.getElementById('estadoLobby').textContent = `Esperando participantes... ${{estado.cantidad}}/15`;
             }} catch (error) {{ console.error(error); }}
         }}
@@ -304,6 +317,8 @@ app.MapGet("/", (HttpContext ctx) => {
     });
 
     app.MapGet("/admin-sesion", () => Results.File(Path.Combine(dirActual, "admin-sesion.html"), "text/html; charset=utf-8"));
+    app.MapGet("/pre-ronda-1", () => Results.File(Path.Combine(dirActual, "pre-ronda-1.html"), "text/html; charset=utf-8"));
+    app.MapGet("/ronda-1-preview", () => Results.File(Path.Combine(dirActual, "ronda-en-curso.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-en-curso", () => Results.File(Path.Combine(dirActual, "ronda-en-curso.html"), "text/html; charset=utf-8"));
 
     app.MapGet("/api/admin/sesion", () => {
@@ -311,7 +326,67 @@ app.MapGet("/", (HttpContext ctx) => {
         var participantes = ParticipantesLobby.Values
             .OrderBy(participante => participante.Nombre, StringComparer.OrdinalIgnoreCase)
             .Select(participante => new { id = participante.ResponseId, nombre = participante.Nombre, esBot = participante.EsBot });
-        return Results.Json(new { cantidad = ParticipantesLobby.Count, capacidad = 15, rondaIniciada = RondaIniciada, participantes });
+        var equipos = EquiposPreRonda.Select(equipo => new
+        {
+            numero = equipo.GroupNumber,
+            color = equipo.Color,
+            posibilidades = equipo.TriangulationPossibilities,
+            puntaje = equipo.FitnessScore,
+            integrantes = equipo.ParticipantIds.Select(id =>
+            {
+                if (!ParticipantesLobby.TryGetValue(id, out var integrante))
+                    return new { id, nombre = id, esBot = false, listo = false, efigie = "" };
+                bool listo = ParticipantesListos.TryGetValue(id, out bool marcado) && marcado;
+                return new { id, nombre = integrante.Nombre, esBot = integrante.EsBot, listo, efigie = integrante.Svg };
+            }).ToArray()
+        }).ToArray();
+        return Results.Json(new
+        {
+            cantidad = ParticipantesLobby.Count,
+            capacidad = 15,
+            rondaIniciada = RondaIniciada,
+            preRondaActiva = RondaIniciada && !PreviewRondaIniciada,
+            previewIniciada = PreviewRondaIniciada,
+            participantes,
+            equipos
+        });
+    });
+
+    app.MapGet("/api/lobby/estado", () => Results.Json(new { rondaIniciada = RondaIniciada, previewIniciada = PreviewRondaIniciada }));
+
+    app.MapGet("/api/preronda/estado", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        if (!RondaIniciada)
+            return Results.Json(new { rondaIniciada = false, previewIniciada = false });
+        if (!GrupoPorParticipante.TryGetValue(responseId, out int numeroGrupo)) return Results.NotFound();
+
+        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
+        bool listo = ParticipantesListos.TryGetValue(responseId, out bool marcado) && marcado;
+        int cantidadListos = equipo.ParticipantIds.Count(id =>
+            ParticipantesLobby.TryGetValue(id, out var participante) &&
+            ParticipantesListos.TryGetValue(id, out bool estaListo) && estaListo);
+        return Results.Json(new
+        {
+            rondaIniciada = true,
+            previewIniciada = PreviewRondaIniciada,
+            grupo = numeroGrupo,
+            color = equipo.Color,
+            colorTexto = equipo.TextColor,
+            listo,
+            cantidadListos,
+            total = 3
+        });
+    });
+
+    app.MapPost("/api/preronda/listo", async (HttpContext ctx) => {
+        var solicitud = await ctx.Request.ReadFromJsonAsync<PrerondaRequest>();
+        if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) || !RondaIniciada)
+            return Results.BadRequest();
+        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+
+        ParticipantesListos[solicitud.responseId] = true;
+        EvaluarAvancePreview();
+        return Results.Json(new { estado = "ok", previewIniciada = PreviewRondaIniciada });
     });
 
     app.MapPost("/api/admin/sesion/expulsar", async (HttpContext ctx) => {
@@ -331,44 +406,69 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Json(new { estado = "ok" });
     });
 
-    app.MapPost("/api/admin/sesion/simular", () => {
-        LimpiarParticipantesLobby();
-        if (RondaIniciada) return Results.Conflict();
+    app.MapPost("/api/admin/sesion/simular", () => IniciarPreRonda(completarConBots: true, botsListos: false));
 
+    app.MapPost("/api/admin/sesion/iniciar", () => IniciarPreRonda(completarConBots: false, botsListos: false));
+
+    app.MapPost("/api/admin/sesion/forzar-inicio", () => IniciarPreRonda(completarConBots: true, botsListos: true));
+
+    app.MapPost("/api/admin/preronda/forzar-listo", () => {
+        if (!RondaIniciada) return Results.Conflict();
+        foreach (var equipo in EquiposPreRonda)
+            foreach (string id in equipo.ParticipantIds)
+                ParticipantesListos[id] = true;
+        PreviewRondaIniciada = true;
+        return Results.Json(new { estado = "ok", previewIniciada = true });
+    });
+
+    IResult RetrocederSesion()
+    {
         lock (CandadoLobby)
         {
-            int faltantes = Math.Max(0, 15 - ParticipantesLobby.Count);
-            int numero = 1;
-            while (faltantes > 0)
+            if (PreviewRondaIniciada)
             {
-                string nombre = $"bot{numero++}";
-                string idBot = $"bot:{nombre}";
-                if (ParticipantesLobby.ContainsKey(idBot)) continue;
-                var datosBot = CrearDatosBot(nombre);
-                string svgBot = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(datosBot, LeerConfig(rutaConfig), incluirMarcoYNombre: false));
-                ParticipantesLobby[idBot] = new LobbyParticipant(idBot, "", nombre, svgBot, DateTime.UtcNow, true);
-                faltantes--;
+                PreviewRondaIniciada = false;
+                ParticipantesListos.Clear();
+                return Results.Json(new { estado = "ok", etapaAnterior = "pre-ronda-1", cambio = true });
             }
-        }
-        return Results.Json(new { estado = "ok", cantidad = ParticipantesLobby.Count });
-    });
+            if (RondaIniciada)
+            {
+                RondaIniciada = false;
+                PreviewRondaIniciada = false;
+                EquiposPreRonda = new List<RoundTeam>();
+                GrupoPorParticipante.Clear();
+                ParticipantesListos.Clear();
+                return Results.Json(new { estado = "ok", etapaAnterior = "lobby", cambio = true });
+            }
 
-    app.MapPost("/api/admin/sesion/iniciar", () => {
-        RondaIniciada = true;
-        return Results.Json(new { estado = "ok", rondaIniciada = true });
-    });
+            string[] idsEncuesta = ParticipantesLobby.Values
+                .Where(participante => !participante.EsBot)
+                .Select(participante => participante.ResponseId)
+                .ToArray();
+            foreach (string id in idsEncuesta)
+                RespuestasQueVuelvenAEncuesta[id] = 0;
+            bool habiaParticipantes = idsEncuesta.Length > 0;
+            ParticipantesLobby.Clear();
+            return Results.Json(new { estado = "ok", etapaAnterior = "encuesta", cambio = habiaParticipantes });
+        }
+    }
+
+    app.MapPost("/api/admin/sesion/retroceder", () => RetrocederSesion());
+    app.MapPost("/api/admin/sesion/volver-lobby", () => RetrocederSesion());
 
     app.MapPost("/api/lobby/heartbeat", (SessionHeartbeat heartbeat) => {
         if (heartbeat == null || !Guid.TryParseExact(heartbeat.sessionId, "N", out _) || string.IsNullOrWhiteSpace(heartbeat.responseId))
             return Results.BadRequest();
 
         DateTime ahora = DateTime.UtcNow;
+        if (RespuestasQueVuelvenAEncuesta.ContainsKey(heartbeat.responseId))
+            return Results.Json(new { regresarEncuesta = true });
         if (ExpulsadosLobby.TryGetValue(heartbeat.responseId, out DateTime expulsionHasta))
         {
             if (expulsionHasta > ahora) return Results.Json(new { expulsado = true, cantidad = ParticipantesLobby.Count });
             ExpulsadosLobby.TryRemove(heartbeat.responseId, out _);
         }
-        if (RondaIniciada) return Results.Json(new { rondaIniciada = true, cantidad = ParticipantesLobby.Count });
+        if (RondaIniciada) return Results.Json(new { rondaIniciada = true, previewIniciada = PreviewRondaIniciada, cantidad = ParticipantesLobby.Count });
 
         var usuario = LeerUsuariosCsv(rutaCsv).FirstOrDefault(respuesta => respuesta.id == heartbeat.responseId);
         if (usuario == null) return Results.NotFound();
@@ -381,7 +481,7 @@ app.MapGet("/", (HttpContext ctx) => {
 
             ParticipantesLobby.AddOrUpdate(
                 usuario.id,
-                _ => new LobbyParticipant(usuario.id, heartbeat.sessionId, usuario.nombre, InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(usuario, LeerConfig(rutaConfig), incluirMarcoYNombre: false)), ahora, false),
+                _ => new LobbyParticipant(usuario.id, heartbeat.sessionId, usuario.nombre, GeneradorEfigie.GenerarSVG(usuario, LeerConfig(rutaConfig), incluirMarcoYNombre: false), ahora, false, usuario),
                 (_, existente) => existente with { SessionId = heartbeat.sessionId, LastSeenUtc = ahora });
         }
 
@@ -390,6 +490,7 @@ app.MapGet("/", (HttpContext ctx) => {
 
     app.MapPost("/api/lobby/desconectar", (SessionHeartbeat heartbeat) => {
         if (heartbeat == null || !Guid.TryParseExact(heartbeat.sessionId, "N", out _)) return Results.BadRequest();
+        if (RondaIniciada) return Results.NoContent();
         if (ParticipantesLobby.TryGetValue(heartbeat.responseId, out var participante) && participante.SessionId == heartbeat.sessionId)
             ParticipantesLobby.TryRemove(heartbeat.responseId, out _);
         return Results.NoContent();
@@ -617,10 +718,13 @@ app.MapGet("/", (HttpContext ctx) => {
     void LimpiarParticipantesLobby()
     {
         DateTime ahora = DateTime.UtcNow;
-        foreach (var participante in ParticipantesLobby)
+        if (!RondaIniciada)
         {
-            if (!participante.Value.EsBot && ahora - participante.Value.LastSeenUtc > TimeSpan.FromSeconds(90))
-                ParticipantesLobby.TryRemove(participante.Key, out _);
+            foreach (var participante in ParticipantesLobby)
+            {
+                if (!participante.Value.EsBot && ahora - participante.Value.LastSeenUtc > TimeSpan.FromSeconds(90))
+                    ParticipantesLobby.TryRemove(participante.Key, out _);
+            }
         }
         foreach (var expulsion in ExpulsadosLobby)
         {
@@ -644,6 +748,159 @@ app.MapGet("/", (HttpContext ctx) => {
             estacion = estaciones[Random.Shared.Next(estaciones.Length)], grupal = grupales[Random.Shared.Next(grupales.Length)],
             formato = formatos[Random.Shared.Next(formatos.Length)], rol = roles[Random.Shared.Next(roles.Length)]
         };
+    }
+
+    IResult IniciarPreRonda(bool completarConBots, bool botsListos)
+    {
+        lock (CandadoLobby)
+        {
+            if (RondaIniciada) return Results.Conflict();
+            LimpiarParticipantesLobby();
+
+            int numeroBot = 1;
+            while (completarConBots && ParticipantesLobby.Count < 15)
+            {
+                string nombre = $"bot{numeroBot++}";
+                string idBot = $"bot:{nombre}";
+                if (ParticipantesLobby.ContainsKey(idBot)) continue;
+                DatosRespuesta datosBot = CrearDatosBot(nombre);
+                string svgBot = GeneradorEfigie.GenerarSVG(datosBot, LeerConfig(rutaConfig), incluirMarcoYNombre: false);
+                ParticipantesLobby[idBot] = new LobbyParticipant(idBot, "", nombre, svgBot, DateTime.UtcNow, true, datosBot);
+            }
+
+            if (ParticipantesLobby.Count != 15) return Results.Conflict();
+
+            EquiposPreRonda = ConstruirEquiposOptimos(ParticipantesLobby.Values.ToList());
+            GrupoPorParticipante.Clear();
+            ParticipantesListos.Clear();
+            foreach (RoundTeam equipo in EquiposPreRonda)
+            {
+                foreach (string id in equipo.ParticipantIds)
+                {
+                    GrupoPorParticipante[id] = equipo.GroupNumber;
+                    if (botsListos && ParticipantesLobby.TryGetValue(id, out var participante) && participante.EsBot)
+                        ParticipantesListos[id] = true;
+                }
+            }
+
+            PreviewRondaIniciada = false;
+            RespuestasQueVuelvenAEncuesta.Clear();
+            RondaIniciada = true;
+        }
+        EvaluarAvancePreview();
+        return Results.Json(new { estado = "ok", rondaIniciada = true, equipos = 5, participantes = 15 });
+    }
+
+    List<RoundTeam> ConstruirEquiposOptimos(List<LobbyParticipant> participantes)
+    {
+        const int reinicios = 8;
+        const int iteraciones = 5000;
+        List<LobbyParticipant> mejorOrden = null;
+        int mejorPuntaje = int.MinValue;
+
+        int EvaluarOrden(IReadOnlyList<LobbyParticipant> orden)
+        {
+            int total = 0;
+            for (int grupo = 0; grupo < 5; grupo++)
+                total += EvaluarTrio(orden.Skip(grupo * 3).Take(3).ToArray()).Puntaje;
+            return total;
+        }
+
+        for (int reinicio = 0; reinicio < reinicios; reinicio++)
+        {
+            var actual = participantes.ToList();
+            for (int i = actual.Count - 1; i > 0; i--)
+            {
+                int j = Random.Shared.Next(i + 1);
+                (actual[i], actual[j]) = (actual[j], actual[i]);
+            }
+
+            int puntajeActual = EvaluarOrden(actual);
+            if (puntajeActual > mejorPuntaje)
+            {
+                mejorPuntaje = puntajeActual;
+                mejorOrden = actual.ToList();
+            }
+
+            for (int iteracion = 0; iteracion < iteraciones; iteracion++)
+            {
+                int primero = Random.Shared.Next(15);
+                int segundo = Random.Shared.Next(15);
+                if (primero / 3 == segundo / 3) continue;
+
+                (actual[primero], actual[segundo]) = (actual[segundo], actual[primero]);
+                int puntajeNuevo = EvaluarOrden(actual);
+                double temperatura = 1.5 * (1.0 - iteracion / (double)iteraciones) + 0.05;
+                bool aceptar = puntajeNuevo >= puntajeActual ||
+                    Random.Shared.NextDouble() < Math.Exp((puntajeNuevo - puntajeActual) / temperatura);
+                if (aceptar)
+                {
+                    puntajeActual = puntajeNuevo;
+                    if (puntajeNuevo > mejorPuntaje)
+                    {
+                        mejorPuntaje = puntajeNuevo;
+                        mejorOrden = actual.ToList();
+                    }
+                }
+                else
+                {
+                    (actual[primero], actual[segundo]) = (actual[segundo], actual[primero]);
+                }
+            }
+        }
+
+        var equipos = new List<RoundTeam>(5);
+        for (int grupo = 0; grupo < 5; grupo++)
+        {
+            var trio = mejorOrden.Skip(grupo * 3).Take(3).ToArray();
+            var (puntaje, posibilidades) = EvaluarTrio(trio);
+            equipos.Add(new RoundTeam(grupo + 1, ColoresGrupo[grupo], ColoresTextoGrupo[grupo], trio.Select(persona => persona.ResponseId).ToArray(), posibilidades, puntaje));
+        }
+        return equipos;
+    }
+
+    (int Puntaje, int Posibilidades) EvaluarTrio(IReadOnlyList<LobbyParticipant> trio)
+    {
+        string[][] variables = trio.Select(persona => new[]
+        {
+            FirmaAnio(persona.Datos.anio), persona.Datos.facultad, persona.Datos.etapa,
+            persona.Datos.estacion, persona.Datos.grupal, persona.Datos.formato, persona.Datos.rol
+        }).ToArray();
+
+        int puntaje = 0;
+        int posibilidades = 0;
+        for (int variable = 0; variable < 7; variable++)
+        {
+            int distintos = variables.Select(respuestas => respuestas[variable]).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            if (distintos == 2)
+            {
+                puntaje += 2;
+                posibilidades++;
+            }
+            else if (distintos == 3)
+            {
+                puntaje++;
+            }
+        }
+        return (puntaje, posibilidades);
+    }
+
+    string FirmaAnio(string texto)
+    {
+        int.TryParse(new string((texto ?? "").Where(char.IsDigit).ToArray()), out int anio);
+        int dosDigitos = Math.Abs(anio % 100);
+        return $"{(anio < 2000 ? "petalos" : "poligono")}-{dosDigitos:D2}";
+    }
+
+    void EvaluarAvancePreview()
+    {
+        lock (CandadoLobby)
+        {
+            if (!RondaIniciada || EquiposPreRonda.Count != 5) return;
+            PreviewRondaIniciada = EquiposPreRonda
+                .SelectMany(equipo => equipo.ParticipantIds)
+                .All(id => ParticipantesListos.TryGetValue(id, out bool listo) && listo);
+        }
     }
 
     app.Run();
@@ -769,6 +1026,11 @@ public class SessionHeartbeat
 }
 
 public class ExpulsionLobbyRequest
+{
+    public string responseId { get; set; } = "";
+}
+
+public class PrerondaRequest
 {
     public string responseId { get; set; } = "";
 }
