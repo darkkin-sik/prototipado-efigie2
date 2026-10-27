@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eaf3f0">
+    <title>Resultados - Ronda 1 - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --line: #cbd6d0; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; padding: 22px 20px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 520px); margin: 0 auto; }
+        h1 { margin: 18px 0 8px; text-align: center; font-size: clamp(1.5rem, 5vw, 2rem); }
+        .subtitulo { margin: 0 0 22px; text-align: center; color: #53615b; }
+        .equipos { display: grid; gap: 12px; }
+        .equipo { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 62px; padding: 12px 16px; border-radius: 4px; background: var(--color-equipo); color: var(--color-texto); }
+        .identidad { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .posicion { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid currentColor; border-radius: 50%; font-weight: 700; }
+        .nombre { overflow-wrap: anywhere; font-weight: 600; }
+        .puntos { flex: 0 0 auto; font-size: 1.15rem; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .acciones { margin-top: 26px; text-align: center; }
+        #listo { min-width: min(100%, 260px); min-height: 54px; padding: 12px 22px; border: 0; border-radius: 5px; background: #133463; color: #fff; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
+        #listo:disabled { opacity: 0.65; cursor: default; }
+        .mensaje { min-height: 1.5em; margin: 12px 0 0; color: #53615b; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Resultados de la ronda 1</h1>
+        <p class="subtitulo">Puntaje promedio por equipo</p>
+        <section class="equipos" id="equipos" aria-label="Tabla de posiciones"></section>
+        <div class="acciones">
+            <button type="button" id="listo">Estoy listo</button>
+            <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+        </div>
+    </main>
+    <script>
+        const responseId = new URLSearchParams(window.location.search).get('id');
+        const listaEquipos = document.getElementById('equipos');
+        const botonListo = document.getElementById('listo');
+        const mensaje = document.getElementById('mensaje');
+        let cargando = false;
+        let listo = false;
+
+        function renderizar(equipos) {
+            listaEquipos.replaceChildren();
+            equipos.forEach((equipo, indice) => {
+                const fila = document.createElement('article');
+                fila.className = 'equipo';
+                fila.style.setProperty('--color-equipo', equipo.color);
+                fila.style.setProperty('--color-texto', equipo.colorTexto);
+                const identidad = document.createElement('div');
+                identidad.className = 'identidad';
+                const posicion = document.createElement('span');
+                posicion.className = 'posicion';
+                posicion.textContent = String(indice + 1);
+                const nombre = document.createElement('span');
+                nombre.className = 'nombre';
+                nombre.textContent = `Equipo ${equipo.numero}`;
+                identidad.append(posicion, nombre);
+                const puntos = document.createElement('span');
+                puntos.className = 'puntos';
+                puntos.textContent = `${equipo.puntos} pts`;
+                fila.append(identidad, puntos);
+                listaEquipos.append(fila);
+            });
+        }
+
+        async function marcarListo() {
+            if (listo || !responseId) return;
+            botonListo.disabled = true;
+            try {
+                const respuesta = await fetch('/api/ronda-1/listo-siguiente', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId })
+                });
+                if (!respuesta.ok) throw new Error('No se pudo registrar que estás listo.');
+                const resultado = await respuesta.json();
+                listo = true;
+                botonListo.textContent = 'Listo';
+                if (resultado.equipoListo) {
+                    window.location.replace('/ronda-2?id=' + encodeURIComponent(responseId));
+                    return;
+                }
+                mensaje.textContent = 'Esperando a los demás integrantes de tu equipo.';
+                await actualizarEstado();
+            } catch (error) {
+                mensaje.textContent = error.message;
+                console.error(error);
+                botonListo.disabled = false;
+            }
+        }
+
+        async function actualizarEstado() {
+            if (cargando || !responseId) return;
+            cargando = true;
+            try {
+                const respuesta = await fetch('/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId), { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo consultar la leaderboard.');
+                const estado = await respuesta.json();
+                if (!estado.rondaIniciada) {
+                    window.location.replace('/lobby/' + encodeURIComponent(responseId));
+                    return;
+                }
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
+                const esperandoRespuesta = estado.etapaRondaUno === 'adivinanza' && estado.yaRespondio;
+                if (estado.etapaRondaUno === 'ronda-2' || estado.equipoListoSiguiente) {
+                    window.location.replace('/ronda-2?id=' + encodeURIComponent(responseId));
+                    return;
+                }
+                if (estado.etapaRondaUno !== 'leaderboard' && !esperandoRespuesta) {
+                    window.location.replace((destinos[estado.etapaRondaUno] || '/pre-ronda-1') + '?id=' + encodeURIComponent(responseId));
+                    return;
+                }
+                renderizar(estado.equipos);
+                listo = estado.listoSiguiente;
+                botonListo.disabled = listo || esperandoRespuesta;
+                botonListo.textContent = listo ? 'Listo' : 'Estoy listo';
+                mensaje.textContent = listo
+                    ? `Esperando a los demás integrantes de tu equipo (${estado.cantidadListosSiguiente}/${estado.totalParticipantes}).`
+                    : esperandoRespuesta
+                        ? 'Esperando a que termine el tiempo de adivinanza.'
+                        : `${estado.cantidadListosSiguiente}/${estado.totalParticipantes} integrantes de tu equipo listos.`;
+            } catch (error) {
+                mensaje.textContent = 'No se pudo conectar con la leaderboard. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        botonListo.addEventListener('click', marcarListo);
+        actualizarEstado();
+        const intervalo = setInterval(actualizarEstado, 1200);
+        window.addEventListener('pagehide', () => clearInterval(intervalo));
+    </script>
+</body>
+</html>

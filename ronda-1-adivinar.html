@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eaf3f0">
+    <title>Ronda 1 - Adivinanza - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --selected: #d7e5df; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; padding: 18px 20px max(110px, calc(90px + env(safe-area-inset-bottom))); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 620px); margin: 0 auto; }
+        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+        h1 { max-width: 500px; margin: 30px auto 28px; text-align: center; font-size: clamp(1.2rem, 5vw, 1.65rem); line-height: 1.2; font-weight: 500; }
+        .opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 3vw, 22px); }
+        .opcion { min-width: 0; padding: 7px; border: 2px solid transparent; border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease; }
+        .opcion[aria-pressed="true"] { border-color: #b6c9bf; border-radius: 12px; background: var(--selected); }
+        .opcion:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .dibujo { width: min(100%, 220px); aspect-ratio: 1; margin: 0 auto; }
+        .dibujo svg { display: block; width: 100%; height: 100%; background: transparent !important; }
+        .acciones { position: fixed; z-index: 2; right: 0; bottom: max(16px, env(safe-area-inset-bottom)); left: 0; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+        #listo { min-width: min(82vw, 300px); min-height: 54px; padding: 12px 20px; border: 0; border-radius: 5px; background: #133463; color: #fff; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgb(16 26 21 / 18%); pointer-events: auto; }
+        #listo:disabled { opacity: 0.45; cursor: default; }
+        .mensaje { min-height: 1.5em; margin: 10px 0 0; padding: 4px 10px; border-radius: 5px; background: var(--paper); text-align: center; color: #53615b; font-size: 0.85rem; pointer-events: auto; }
+        [hidden] { display: none !important; }
+        @media (max-width: 380px) { body { padding-inline: 14px; } h1 { margin-top: 24px; } }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="temporizador" role="timer" aria-label="Tiempo restante">
+            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
+            <span id="tiempo">2:00</span>
+        </div>
+        <h1>¡Encontrá las dos efigies que pertenecen a tus compañeros!</h1>
+        <section class="opciones" id="opciones" aria-label="Efigies para elegir"></section>
+        <div class="acciones">
+            <button type="button" id="listo" disabled hidden>Listo</button>
+            <p class="mensaje" id="mensaje" role="status" aria-live="polite">Elegí 2 efigies.</p>
+        </div>
+    </main>
+    <script>
+        const responseId = new URLSearchParams(window.location.search).get('id');
+        const tiempo = document.getElementById('tiempo');
+        const listaOpciones = document.getElementById('opciones');
+        const botonListo = document.getElementById('listo');
+        const mensaje = document.getElementById('mensaje');
+        const seleccionadas = new Set();
+        let finRondaMs = Date.now() + 120000;
+        let cargando = false;
+        let yaRespondio = false;
+        let opcionesRenderizadas = false;
+
+        function formatearTiempo(segundos) {
+            return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+        }
+
+        function mostrarTiempo(segundos) {
+            finRondaMs = Date.now() + segundos * 1000;
+            tiempo.textContent = formatearTiempo(segundos);
+        }
+
+        function actualizarTemporizador() {
+            const restantes = Math.max(0, Math.ceil((finRondaMs - Date.now()) / 1000));
+            tiempo.textContent = formatearTiempo(restantes);
+            if (restantes === 0) tiempo.setAttribute('aria-label', 'Tiempo terminado');
+        }
+
+        function actualizarBoton() {
+            botonListo.disabled = yaRespondio || seleccionadas.size !== 2;
+            botonListo.hidden = yaRespondio || seleccionadas.size !== 2;
+        }
+
+        function renderizarOpciones(opciones) {
+            listaOpciones.replaceChildren();
+            for (const opcion of opciones) {
+                const boton = document.createElement('button');
+                boton.type = 'button';
+                boton.className = 'opcion';
+                boton.setAttribute('aria-label', `Efigie de ${opcion.nombre}`);
+                boton.setAttribute('aria-pressed', 'false');
+                const dibujo = document.createElement('div');
+                dibujo.className = 'dibujo';
+                dibujo.setAttribute('aria-hidden', 'true');
+                dibujo.innerHTML = opcion.efigie;
+                boton.append(dibujo);
+                boton.addEventListener('click', () => {
+                    if (yaRespondio) return;
+                    if (seleccionadas.has(opcion.id)) {
+                        seleccionadas.delete(opcion.id);
+                        boton.setAttribute('aria-pressed', 'false');
+                    } else if (seleccionadas.size < 2) {
+                        seleccionadas.add(opcion.id);
+                        boton.setAttribute('aria-pressed', 'true');
+                    }
+                    actualizarBoton();
+                    mensaje.textContent = `Elegiste ${seleccionadas.size} de 2 efigies.`;
+                });
+                listaOpciones.append(boton);
+            }
+            opcionesRenderizadas = true;
+        }
+
+        async function enviarRespuesta() {
+            if (botonListo.disabled || seleccionadas.size !== 2) return;
+            botonListo.disabled = true;
+            try {
+                const respuesta = await fetch('/api/ronda-1/adivinar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, seleccionadas: [...seleccionadas] })
+                });
+                if (!respuesta.ok) throw new Error(respuesta.status === 409 ? 'Se cerró el tiempo para responder.' : 'No se pudo guardar tu respuesta.');
+                yaRespondio = true;
+                mensaje.textContent = 'Respuesta enviada.';
+                window.location.replace('/ronda-1-leaderboard?id=' + encodeURIComponent(responseId));
+            } catch (error) {
+                mensaje.textContent = error.message;
+                console.error(error);
+                actualizarBoton();
+            }
+        }
+
+        async function actualizarRonda() {
+            if (cargando) return;
+            if (!responseId) {
+                mensaje.textContent = 'Falta el identificador de participante.';
+                return;
+            }
+            cargando = true;
+            try {
+                const url = '/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId) + (opcionesRenderizadas ? '' : '&incluirEfigies=1');
+                const respuesta = await fetch(url, { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo consultar el estado de la ronda.');
+                const ronda = await respuesta.json();
+                if (!ronda.rondaIniciada) {
+                    window.location.replace('/lobby/' + encodeURIComponent(responseId));
+                    return;
+                }
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
+                if (ronda.etapaRondaUno !== 'adivinanza' || ronda.yaRespondio) {
+                    const destino = ronda.etapaRondaUno === 'adivinanza' && ronda.yaRespondio
+                        ? '/ronda-1-leaderboard'
+                        : destinos[ronda.etapaRondaUno] || '/pre-ronda-1';
+                    window.location.replace(destino + '?id=' + encodeURIComponent(responseId));
+                    return;
+                }
+                mostrarTiempo(ronda.segundosRestantes);
+                if (!opcionesRenderizadas) renderizarOpciones(ronda.opciones);
+                if (ronda.yaRespondio && !yaRespondio) {
+                    yaRespondio = true;
+                    mensaje.textContent = '¡Respuesta enviada! Esperá a que termine el tiempo.';
+                    actualizarBoton();
+                }
+                if (!yaRespondio && seleccionadas.size === 0)
+                    mensaje.textContent = `Elegí 2 efigies entre ${ronda.opciones.length} participantes.`;
+            } catch (error) {
+                mensaje.textContent = 'No se pudo conectar con la ronda. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        botonListo.addEventListener('click', enviarRespuesta);
+        actualizarRonda();
+        const intervaloEstado = setInterval(actualizarRonda, 1000);
+        const intervaloTemporizador = setInterval(actualizarTemporizador, 250);
+        window.addEventListener('pagehide', () => {
+            clearInterval(intervaloEstado);
+            clearInterval(intervaloTemporizador);
+        });
+    </script>
+</body>
+</html>

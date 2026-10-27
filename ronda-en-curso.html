@@ -4,38 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#eaf3f0">
-    <title>Ronda 1 - Efigie</title>
+    <title>Ronda 1 - Memoria - Efigie</title>
     <style>
-        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --line: #111a16; }
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
-        body { min-height: 100vh; padding: 18px 20px 30px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
-        main { width: min(100%, 520px); margin: 0 auto; }
+        body { min-height: 100vh; padding: 18px 20px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 520px); min-height: calc(100vh - 42px); margin: 0 auto; display: flex; flex-direction: column; }
         .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
         .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
-        h1 { max-width: 420px; margin: 15px auto 28px; text-align: center; font-size: clamp(1.25rem, 5vw, 1.7rem); line-height: 1.15; font-weight: 500; text-transform: uppercase; }
-        .efigie-principal { width: min(100%, 250px); margin: 0 auto; text-align: center; }
+        h1 { max-width: 390px; margin: 30px auto 28px; text-align: center; font-size: clamp(1.25rem, 5vw, 1.7rem); line-height: 1.2; font-weight: 500; }
+        .efigie-principal { width: min(76vw, 290px); margin: 0 auto; text-align: center; }
         .dibujo-principal { width: 100%; aspect-ratio: 1; }
-        .dibujo-principal svg, .dibujo-companero svg { display: block; width: 100%; height: 100%; }
-        .nombre-principal { margin: 8px 0 25px; overflow-wrap: anywhere; font-size: 0.95rem; }
-        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: min(100%, 360px); margin: 0 auto 28px; }
-        .companero { min-width: 0; padding: 8px; border: 1px solid var(--line); text-align: center; }
-        .dibujo-companero { width: min(100%, 140px); aspect-ratio: 1; margin: 0 auto; }
-        .nombre-companero { min-height: 1.2em; margin: 5px 0 0; overflow-wrap: anywhere; font-size: 0.75rem; }
-        .notas { width: min(100%, 360px); margin: 0 auto; }
-        .notas h2 { margin: 0 0 7px; font-size: 1rem; font-weight: 500; }
-        .lista-notas { display: grid; gap: 6px; max-height: 160px; margin: 0 0 8px; padding: 0; overflow-y: auto; list-style: none; }
-        .nota { padding: 7px 9px; border: 1px solid #aebdb6; border-radius: 4px; background: #f5faf7; overflow-wrap: anywhere; white-space: pre-wrap; }
-        .editor-nota { min-height: 88px; padding: 9px; border: 1px solid var(--line); border-radius: 5px; background: transparent; }
-        .editor-nota textarea { display: block; width: 100%; min-height: 44px; resize: vertical; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
-        .editor-nota textarea::placeholder { color: var(--ink); opacity: 1; }
-        .controles-nota { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .contador-nota, .mensaje { margin: 0; color: #53615b; font-size: 0.8rem; }
-        button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-        button:disabled { opacity: 0.5; cursor: default; }
-        .mensaje { min-height: 1.4em; margin-top: 5px; }
-        [hidden] { display: none !important; }
-        @media (max-width: 380px) { body { padding-inline: 14px; } .efigie-principal { width: min(100%, 220px); } }
+        .dibujo-principal svg, .dibujo-companero svg { display: block; width: 100%; height: 100%; background: transparent !important; }
+        .nombre-principal { margin: 4px 0 34px; overflow-wrap: anywhere; font-size: 0.9rem; }
+        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: min(100%, 310px); margin: 0 auto 28px; }
+        .companero { min-width: 0; margin: 0; text-align: center; }
+        .dibujo-companero { width: min(100%, 154px); aspect-ratio: 1; margin: 0 auto; }
+        .nombre-companero { min-height: 1.2em; margin: 1px 0 0; overflow-wrap: anywhere; font-size: 0.78rem; }
+        .puntaje { display: flex; align-items: center; gap: 9px; margin: auto 0 0; padding-top: 18px; font-size: 1.1rem; }
+        .trofeo { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+        .mensaje { min-height: 1.4em; margin: 8px 0 0; text-align: center; color: #53615b; font-size: 0.85rem; }
+        @media (max-width: 380px) { body { padding-inline: 14px; } h1 { margin-top: 24px; } .efigie-principal { width: min(76vw, 270px); } .companeros { width: min(100%, 290px); gap: 14px; } }
     </style>
 </head>
 <body>
@@ -45,43 +35,35 @@
                 <circle cx="12" cy="13" r="8.5"></circle>
                 <path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path>
             </svg>
-            <span id="tiempo">2:00</span>
+            <span id="tiempo">0:30</span>
         </div>
-        <h1>Pregunta disparadora ronda 1</h1>
-        <p class="mensaje" id="mensajeRonda" role="status" aria-live="polite"></p>
+        <h1>¿Qué tan buena es tu memoria?</h1>
         <section class="efigie-principal" aria-label="Tu efigie">
             <div class="dibujo-principal" id="efigiePropia"></div>
             <p class="nombre-principal" id="nombrePropio"></p>
         </section>
         <section class="companeros" id="companeros" aria-label="Efigies de tu equipo"></section>
-        <section class="notas" aria-labelledby="tituloNotas">
-            <h2 id="tituloNotas">Notas</h2>
-            <ul class="lista-notas" id="listaNotas" aria-label="Tus notas"></ul>
-            <div class="editor-nota">
-                <textarea id="textoNota" maxlength="20" rows="2" placeholder="Notas..." aria-label="Escribir una nota de hasta 20 caracteres"></textarea>
-                <div class="controles-nota">
-                    <span class="contador-nota"><span id="cantidadCaracteres">0</span>/20</span>
-                    <button type="button" id="agregarNota" disabled>Agregar nota</button>
-                </div>
-            </div>
-            <p class="mensaje" id="mensajeNota" role="status" aria-live="polite"></p>
-        </section>
+        <p class="mensaje" id="mensajeRonda" role="status" aria-live="polite"></p>
+        <p class="puntaje" aria-label="Puntaje de equipo">
+            <svg class="trofeo" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v7a5 5 0 0 1-10 0V4ZM7 6H4v2a4 4 0 0 0 4 4M17 6h3v2a4 4 0 0 1-4 4"></path></svg>
+            <span>0</span>
+        </p>
     </main>
     <script>
         const responseId = new URLSearchParams(window.location.search).get('id');
         const tiempo = document.getElementById('tiempo');
-        const textoNota = document.getElementById('textoNota');
-        const botonNota = document.getElementById('agregarNota');
-        const listaNotas = document.getElementById('listaNotas');
-        const mensajeNota = document.getElementById('mensajeNota');
-        const claveNotas = `efigie-notas-ronda-1-${responseId || 'sin-id'}`;
-        let finRondaMs = Date.now() + 120000;
+        const mensaje = document.getElementById('mensajeRonda');
+        let finRondaMs = Date.now() + 30000;
         let cargando = false;
+        let contenidoRenderizado = false;
 
         function formatearTiempo(segundos) {
-            const minutos = Math.floor(segundos / 60);
-            const resto = segundos % 60;
-            return `${minutos}:${String(resto).padStart(2, '0')}`;
+            return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+        }
+
+        function mostrarTiempo(segundos) {
+            finRondaMs = Date.now() + segundos * 1000;
+            tiempo.textContent = formatearTiempo(segundos);
         }
 
         function actualizarTemporizador() {
@@ -90,111 +72,58 @@
             if (restantes === 0) tiempo.setAttribute('aria-label', 'Tiempo terminado');
         }
 
-        function mostrarNotas(notas) {
-            listaNotas.replaceChildren();
-            for (const texto of notas) {
-                const elemento = document.createElement('li');
-                elemento.className = 'nota';
-                elemento.textContent = texto;
-                listaNotas.append(elemento);
-            }
-        }
-
-        function cargarNotas() {
-            try {
-                const guardadas = JSON.parse(localStorage.getItem(claveNotas) || '[]');
-                if (!Array.isArray(guardadas) || !guardadas.every(nota => typeof nota === 'string' && nota.length <= 20)) {
-                    throw new Error('El formato de las notas guardadas no es válido.');
-                }
-                mostrarNotas(guardadas);
-                return guardadas;
-            } catch (error) {
-                mensajeNota.textContent = 'No se pudieron cargar las notas guardadas.';
-                console.error(error);
-                return [];
-            }
-        }
-
-        let notas = cargarNotas();
-
-        textoNota.addEventListener('input', () => {
-            document.getElementById('cantidadCaracteres').textContent = String(textoNota.value.length);
-            botonNota.disabled = !textoNota.value.trim();
-        });
-
-        botonNota.addEventListener('click', () => {
-            const texto = textoNota.value.trim().slice(0, 20);
-            if (!texto) return;
-            const nuevasNotas = [...notas, texto];
-            try {
-                localStorage.setItem(claveNotas, JSON.stringify(nuevasNotas));
-                notas = nuevasNotas;
-                mostrarNotas(notas);
-                textoNota.value = '';
-                document.getElementById('cantidadCaracteres').textContent = '0';
-                botonNota.disabled = true;
-                mensajeNota.textContent = '';
-            } catch (error) {
-                mensajeNota.textContent = 'No se pudo guardar la nota en este dispositivo.';
-                console.error(error);
-            }
-        });
-
         async function actualizarRonda() {
             if (cargando) return;
             if (!responseId) {
-                document.getElementById('mensajeRonda').textContent = 'Falta el identificador de participante.';
+                mensaje.textContent = 'Falta el identificador de participante.';
                 return;
             }
             cargando = true;
             try {
-                const respuesta = await fetch('/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId), { cache: 'no-store' });
-                if (respuesta.status === 404) {
-                    document.getElementById('mensajeRonda').textContent = 'No se encontró tu equipo.';
-                    return;
-                }
+                const url = '/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId) + (contenidoRenderizado ? '' : '&incluirEfigies=1');
+                const respuesta = await fetch(url, { cache: 'no-store' });
+                if (respuesta.status === 404) throw new Error('No se encontró tu equipo.');
                 if (!respuesta.ok) throw new Error('No se pudo consultar el estado de la ronda.');
                 const ronda = await respuesta.json();
                 if (!ronda.rondaIniciada) {
                     window.location.replace('/lobby/' + encodeURIComponent(responseId));
                     return;
                 }
-                if (!ronda.previewIniciada) {
-                    window.location.replace('/pre-ronda-1?id=' + encodeURIComponent(responseId));
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
+                const etapaActiva = ronda.etapaRondaUno || (ronda.previewIniciada ? 'memoria' : 'pre-ronda');
+                if (etapaActiva !== 'memoria') {
+                    window.location.replace((destinos[etapaActiva] || '/pre-ronda-1') + '?id=' + encodeURIComponent(responseId));
                     return;
                 }
-                finRondaMs = Date.now() + ronda.segundosRestantes * 1000;
-                const propios = ronda.integrantes.find(integrante => integrante.id === responseId);
-                if (!propios) {
-                    document.getElementById('mensajeRonda').textContent = 'No se encontró tu efigie.';
-                    return;
+                mostrarTiempo(ronda.segundosRestantes);
+                if (!contenidoRenderizado) {
+                    const propios = ronda.integrantes.find(integrante => integrante.id === responseId);
+                    if (!propios) throw new Error('No se encontró tu efigie.');
+                    const efigiePropia = document.getElementById('efigiePropia');
+                    efigiePropia.innerHTML = propios.efigie;
+                    efigiePropia.setAttribute('role', 'img');
+                    efigiePropia.setAttribute('aria-label', `Efigie de ${propios.nombre}`);
+                    document.getElementById('nombrePropio').textContent = propios.nombre;
+                    const companeros = document.getElementById('companeros');
+                    for (const integrante of ronda.integrantes.filter(persona => persona.id !== responseId)) {
+                        const figura = document.createElement('figure');
+                        figura.className = 'companero';
+                        const dibujo = document.createElement('div');
+                        dibujo.className = 'dibujo-companero';
+                        dibujo.setAttribute('role', 'img');
+                        dibujo.setAttribute('aria-label', `Efigie de ${integrante.nombre}`);
+                        dibujo.innerHTML = integrante.efigie;
+                        const nombre = document.createElement('figcaption');
+                        nombre.className = 'nombre-companero';
+                        nombre.textContent = integrante.nombre;
+                        figura.append(dibujo, nombre);
+                        companeros.append(figura);
+                    }
+                    contenidoRenderizado = true;
                 }
-                document.getElementById('mensajeRonda').textContent = '';
-                const efigiePropia = document.getElementById('efigiePropia');
-                efigiePropia.innerHTML = propios.efigie;
-                efigiePropia.setAttribute('role', 'img');
-                efigiePropia.setAttribute('aria-label', `Efigie de ${propios.nombre}`);
-                document.getElementById('nombrePropio').textContent = propios.nombre;
-
-                const companeros = document.getElementById('companeros');
-                companeros.replaceChildren();
-                for (const integrante of ronda.integrantes.filter(persona => persona.id !== responseId)) {
-                    const figura = document.createElement('figure');
-                    figura.className = 'companero';
-                    const dibujo = document.createElement('div');
-                    dibujo.className = 'dibujo-companero';
-                    dibujo.setAttribute('role', 'img');
-                    dibujo.setAttribute('aria-label', `Efigie de ${integrante.nombre}`);
-                    dibujo.innerHTML = integrante.efigie;
-                    const nombre = document.createElement('figcaption');
-                    nombre.className = 'nombre-companero';
-                    nombre.textContent = integrante.nombre;
-                    figura.append(dibujo, nombre);
-                    companeros.append(figura);
-                }
-                actualizarTemporizador();
+                mensaje.textContent = '';
             } catch (error) {
-                document.getElementById('mensajeRonda').textContent = 'No se pudo conectar con la ronda. Reintentando...';
+                mensaje.textContent = 'No se pudo conectar con la ronda. Reintentando...';
                 console.error(error);
             } finally {
                 cargando = false;
@@ -202,7 +131,7 @@
         }
 
         actualizarRonda();
-        const intervaloEstado = setInterval(actualizarRonda, 2500);
+        const intervaloEstado = setInterval(actualizarRonda, 1000);
         const intervaloTemporizador = setInterval(actualizarTemporizador, 250);
         window.addEventListener('pagehide', () => {
             clearInterval(intervaloEstado);

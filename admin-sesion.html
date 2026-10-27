@@ -61,6 +61,8 @@
             <button type="button" class="accion" id="forzar">Forzar comienzo ronda</button>
             <button type="button" class="accion" id="forzarListo" hidden>Forzar listo</button>
             <button type="button" class="accion" id="agregarTiempo" hidden>Agregar 20 seg</button>
+            <button type="button" class="accion" id="forzarLeaderboard" hidden>Forzar leaderboard (simular bots)</button>
+            <button type="button" class="accion" id="forzarSiguiente" hidden>Forzar avance desde leaderboard</button>
             <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
         </footer>
     </main>
@@ -75,6 +77,8 @@
         const botonForzar = document.getElementById('forzar');
         const botonForzarListo = document.getElementById('forzarListo');
         const botonAgregarTiempo = document.getElementById('agregarTiempo');
+        const botonForzarLeaderboard = document.getElementById('forzarLeaderboard');
+        const botonForzarSiguiente = document.getElementById('forzarSiguiente');
         const botonVolver = document.getElementById('volver');
         let rondaIniciada = false;
 
@@ -85,9 +89,10 @@
                 const sesion = await respuesta.json();
                 rondaIniciada = sesion.rondaIniciada;
                 const preRondaActiva = sesion.preRondaActiva;
-                estado.textContent = sesion.previewIniciada ? 'Ronda 1' : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
-                tiempoRonda.hidden = !sesion.previewIniciada;
-                if (sesion.previewIniciada) {
+                const nombresEtapa = { 'memoria': 'Ronda 1 · Memoria', 'adivinanza': 'Ronda 1 · Adivinanza', 'leaderboard': 'Ronda 1 · Resultados', 'ronda-2': 'Ronda 2 · Borrador' };
+                estado.textContent = sesion.previewIniciada ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1') : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
+                tiempoRonda.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
+                if (!tiempoRonda.hidden) {
                     const restantes = sesion.segundosRestantesRondaUno;
                     tiempoRonda.textContent = `Tiempo restante ${Math.floor(restantes / 60)}:${String(restantes % 60).padStart(2, '0')}`;
                 }
@@ -98,7 +103,9 @@
                 botonForzar.hidden = rondaIniciada;
                 botonComenzar.disabled = sesion.cantidad !== sesion.capacidad;
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
-                botonAgregarTiempo.hidden = !sesion.previewIniciada;
+                botonAgregarTiempo.hidden = sesion.etapaRondaUno !== 'memoria';
+                botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
+                botonForzarSiguiente.hidden = sesion.etapaRondaUno !== 'leaderboard';
                 lista.replaceChildren();
                 listaEquipos.replaceChildren();
 
@@ -188,9 +195,18 @@
         botonForzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/forzar-inicio', '¿Forzar el comienzo completando los lugares vacíos con bots?'));
 
         botonForzarListo.addEventListener('click', async () => {
-            const respuesta = await fetch('/api/admin/preronda/forzar-listo', { method: 'POST' });
-            mensaje.textContent = respuesta.ok ? 'Avance forzado a Ronda 1 preview.' : 'No se pudo forzar el avance.';
-            await cargarEstado();
+            botonForzarListo.disabled = true;
+            try {
+                const respuesta = await fetch('/api/admin/preronda/forzar-listo', { method: 'POST' });
+                if (!respuesta.ok) throw new Error('No se pudo forzar el avance. Verificá que la pre-ronda esté activa.');
+                mensaje.textContent = 'Avance forzado. Los participantes pasarán a la etapa de memoria.';
+                await cargarEstado();
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con el servidor para forzar el avance.';
+                console.error(error);
+            } finally {
+                botonForzarListo.disabled = false;
+            }
         });
 
         botonAgregarTiempo.addEventListener('click', async () => {
@@ -206,6 +222,35 @@
                 botonAgregarTiempo.disabled = false;
             }
         });
+
+        async function forzarEtapa(boton, ruta, confirmacion, exito) {
+            if (confirmacion && !window.confirm(confirmacion)) return;
+            boton.disabled = true;
+            try {
+                const respuesta = await fetch(ruta, { method: 'POST' });
+                if (!respuesta.ok) throw new Error('No se pudo forzar el avance. Verificá que la etapa correspondiente esté activa.');
+                mensaje.textContent = exito;
+                await cargarEstado();
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con el servidor.';
+                console.error(error);
+            } finally {
+                boton.disabled = false;
+            }
+        }
+
+        botonForzarLeaderboard.addEventListener('click', () => forzarEtapa(
+            botonForzarLeaderboard,
+            '/api/admin/ronda-1/forzar-leaderboard',
+            '¿Forzar el cierre de la adivinanza y simular las respuestas de los bots?',
+            'Adivinanza cerrada; los bots respondieron y se abrió la leaderboard.'
+        ));
+        botonForzarSiguiente.addEventListener('click', () => forzarEtapa(
+            botonForzarSiguiente,
+            '/api/admin/ronda-1/forzar-siguiente',
+            '¿Forzar el avance de todos los equipos desde la leaderboard?',
+            'Todos avanzan a la pantalla de Ronda 2.'
+        ));
 
         botonVolver.addEventListener('click', async () => {
             botonVolver.disabled = true;

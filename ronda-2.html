@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eaf3f0">
+    <title>Ronda 2 - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 520px); text-align: center; }
+        h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); font-weight: 500; }
+        p { color: #53615b; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Ronda 2</h1>
+        <p>Esta pantalla es un borrador para la siguiente ronda.</p>
+    </main>
+    <script>
+        const responseId = new URLSearchParams(window.location.search).get('id');
+        async function verificarEtapa() {
+            if (!responseId) return;
+            try {
+                const respuesta = await fetch('/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId), { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo verificar el estado de la sesión.');
+                const estado = await respuesta.json();
+                if (estado.etapaRondaUno !== 'ronda-2' && !estado.equipoListoSiguiente) {
+                    const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard' };
+                    window.location.replace((destinos[estado.etapaRondaUno] || '/pre-ronda-1') + '?id=' + encodeURIComponent(responseId));
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+        verificarEtapa();
+        const intervalo = setInterval(verificarEtapa, 2000);
+        window.addEventListener('pagehide', () => clearInterval(intervalo));
+    </script>
+</body>
+</html>

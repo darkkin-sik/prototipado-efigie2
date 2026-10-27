@@ -9,7 +9,9 @@ Aplicación web local para responder una encuesta, generar una efigie visual a p
 3. **Lobby:** los participantes esperan en `/lobby/{id}`. El panel de administración está en `/admin-sesion`; muestra quiénes ingresaron y permite expulsar participantes antes de comenzar.
 4. **Armado de equipos:** al comenzar, el servidor organiza 15 participantes en cinco equipos de tres. El panel permite iniciar una simulación con bots o completar lugares vacíos con bots.
 5. **Pre-ronda:** cada participante marca que está listo. Cuando todos están listos, comienza la ronda 1.
-6. **Ronda 1:** cada participante ve su efigie y las otras dos de su equipo, una pregunta disparadora y un temporizador de dos minutos. Las notas se guardan en el almacenamiento local del navegador, con un máximo de 20 caracteres por nota. Desde administración se pueden agregar 20 segundos al temporizador.
+6. **Memoria (30 segundos):** cada participante ve su efigie y las otras dos de su equipo para memorizarlas.
+7. **Adivinanza (2 minutos):** cada participante elige dos efigies de las demás personas de la sala. El puntaje individual suma 50 puntos por cada acierto y hasta 100 puntos adicionales según la rapidez de respuesta. El puntaje del equipo es el promedio de sus tres integrantes.
+8. **Leaderboard:** al enviar la respuesta, cada participante pasa directamente a la tabla de equipos ordenada por puntaje. El botón «Estoy listo» se habilita al terminar los dos minutos; cada equipo avanza cuando sus integrantes reales están listos. Administración puede forzar el cierre de la adivinanza (simulando las respuestas de los bots) o el avance desde la leaderboard.
 
 El estado de la sesión y el temporizador viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
 
@@ -52,6 +54,9 @@ ngrok no es necesario para usar la aplicación desde la misma computadora. Sí r
 - `GeneradorEfigie.cs`: generación de las efigies SVG a partir de las respuestas.
 - `index.html`: encuesta.
 - `pre-ronda-1.html`: pantalla para indicar que se está listo.
-- `ronda-en-curso.html`: interfaz de la ronda 1.
+- `ronda-en-curso.html`: etapa de memoria de la ronda 1.
+- `ronda-1-adivinar.html`: selección de las efigies de los compañeros.
+- `ronda-1-leaderboard.html`: resultados y avance a la siguiente ronda.
+- `ronda-2.html`: pantalla borrador de la ronda 2.
 - `admin-sesion.html`: panel de administración.
 - `respuestas_app.csv`: respuestas guardadas por la aplicación.

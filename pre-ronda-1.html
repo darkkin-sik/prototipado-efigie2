@@ -54,8 +54,10 @@
                 boton.textContent = estadoActual.listo ? `Estoy listo ${estadoActual.cantidadListos}/3` : `Estoy listo ${estadoActual.cantidadListos}/3`;
                 boton.disabled = estadoActual.listo;
                 mensaje.textContent = estadoActual.listo ? 'Esperando a tu equipo.' : '';
-                if (estadoActual.previewIniciada) {
-                    window.location.replace('/ronda-1-preview?id=' + encodeURIComponent(responseId));
+                const destinos = { 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
+                const etapaActiva = estadoActual.etapaRondaUno || (estadoActual.previewIniciada ? 'memoria' : 'pre-ronda');
+                if (etapaActiva !== 'pre-ronda') {
+                    window.location.replace((destinos[etapaActiva] || '/ronda-1-preview') + '?id=' + encodeURIComponent(responseId));
                 }
             } catch (error) {
                 console.error(error);
