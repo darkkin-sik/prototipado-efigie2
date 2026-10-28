@@ -51,6 +51,7 @@
     </main>
     <script>
         const responseId = new URLSearchParams(window.location.search).get('id');
+        const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
         const tiempo = document.getElementById('tiempo');
         const mensaje = document.getElementById('mensajeRonda');
         let finRondaMs = Date.now() + 30000;
@@ -85,13 +86,13 @@
                 if (respuesta.status === 404) throw new Error('No se encontró tu equipo.');
                 if (!respuesta.ok) throw new Error('No se pudo consultar el estado de la ronda.');
                 const ronda = await respuesta.json();
-                if (!ronda.rondaIniciada) {
+                if (!ronda.rondaIniciada && !adminPreview) {
                     window.location.replace('/lobby/' + encodeURIComponent(responseId));
                     return;
                 }
-                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2', 'ronda-3': '/ronda-3' };
                 const etapaActiva = ronda.etapaRondaUno || (ronda.previewIniciada ? 'memoria' : 'pre-ronda');
-                if (etapaActiva !== 'memoria') {
+                if (etapaActiva !== 'memoria' && !adminPreview) {
                     window.location.replace((destinos[etapaActiva] || '/pre-ronda-1') + '?id=' + encodeURIComponent(responseId));
                     return;
                 }
@@ -138,5 +139,6 @@
             clearInterval(intervaloTemporizador);
         });
     </script>
+    <script src="/admin-navigation.js" defer></script>
 </body>
 </html>

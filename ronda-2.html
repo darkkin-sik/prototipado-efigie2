@@ -6,39 +6,270 @@
     <meta name="theme-color" content="#eaf3f0">
     <title>Ronda 2 - Efigie</title>
     <style>
-        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; }
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
-        body { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
-        main { width: min(100%, 520px); text-align: center; }
-        h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); font-weight: 500; }
-        p { color: #53615b; }
+        body { min-height: 100vh; padding: 18px 18px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; transition: background-color 200ms ease, color 200ms ease; }
+        body.intermedio { display: grid; place-items: center; padding: 24px; background: #000; color: #fff; }
+        main { width: min(100%, 520px); margin: 0 auto; }
+        body.intermedio main { position: static; min-height: 0; }
+        body.intermedio .temporizador { position: fixed; top: 24px; right: 24px; color: #fff; }
+        body.intermedio #pantallaNegra { position: fixed; inset: 0; display: grid; place-items: center; }
+        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+        h1 { margin: 11px 0 8px; text-align: center; font-size: clamp(1.3rem, 5vw, 1.7rem); line-height: 1.2; font-weight: 500; }
+        .instruccion { margin: 0 0 8px; text-align: center; color: var(--muted); }
+        .efigie { width: min(62vw, 220px); aspect-ratio: 1; margin: 0 auto; }
+        .efigie svg { display: block; width: 100%; height: 100%; background: transparent !important; }
+        .efigie svg [data-capa].resaltada, .efigie svg [data-capa].resaltada * { stroke: #e53920 !important; stroke-width: 0.9 !important; filter: none; }
+        .nombre { margin: 3px 0 8px; text-align: center; overflow-wrap: anywhere; font-size: 0.9rem; }
+        .opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; }
+        .opcion { min-width: 0; min-height: 100px; padding: 2px; border: 2px solid transparent; border-radius: 9px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+        .opcion[aria-pressed="true"] { border-color: #133463; background: #d7e5df; }
+        .opcion:focus-visible, #continuar:focus-visible { outline: 3px solid #133463; outline-offset: 3px; }
+        .opcion-dibujo { width: min(100%, 124px); aspect-ratio: 1; margin: 0 auto; }
+        .opcion-dibujo svg { display: block; width: 100%; height: 100%; background: transparent !important; }
+        #continuar { display: block; width: min(100%, 300px); min-height: 46px; margin: 5px auto 0; padding: 8px 20px; border: 0; border-radius: 5px; background: #133463; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+        #continuar[hidden] { display: none; }
+        .mensaje { min-height: 1.4em; margin: 10px 0 0; text-align: center; color: var(--muted); }
+        body.intermedio h1 { margin: 0; color: #fff; font-size: 1.2rem; }
+        [hidden] { display: none !important; }
+        @media (max-width: 380px) { body { padding-inline: 12px; } .efigie { width: min(62vw, 210px); } .opcion-dibujo { width: min(100%, 110px); } .opciones { gap: 2px 6px; } }
     </style>
 </head>
 <body>
     <main>
-        <h1>Ronda 2</h1>
-        <p>Esta pantalla es un borrador para la siguiente ronda.</p>
+        <div class="temporizador" id="temporizador" role="timer" aria-label="Tiempo restante">
+            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
+            <span id="tiempo">0:10</span>
+        </div>
+        <section id="pantalla">
+            <h1 id="titulo">¡Atención!</h1>
+            <p class="instruccion" id="instruccion">Observá la efigie de tu compañero.</p>
+            <div class="efigie" id="efigie" role="img"></div>
+            <p class="nombre" id="nombre"></p>
+            <section id="zonaEleccion" hidden aria-label="Elegí la capa que cambió">
+                <p class="instruccion">¿Qué capa cambió?</p>
+                <div class="opciones" id="opciones"></div>
+                <button type="button" id="continuar" hidden>Continuar</button>
+            </section>
+            <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+        </section>
+        <section id="pantallaNegra" hidden aria-live="assertive">
+            <h1>¡Algo cambió!</h1>
+        </section>
     </main>
     <script>
-        const responseId = new URLSearchParams(window.location.search).get('id');
-        async function verificarEtapa() {
-            if (!responseId) return;
+        const parametros = new URLSearchParams(window.location.search);
+        const responseId = parametros.get('id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const queryVista = adminPreview ? '&adminPreview=1' : '';
+        const body = document.body;
+        const tiempo = document.getElementById('tiempo');
+        const pantalla = document.getElementById('pantalla');
+        const pantallaNegra = document.getElementById('pantallaNegra');
+        const temporizador = document.getElementById('temporizador');
+        const titulo = document.getElementById('titulo');
+        const instruccion = document.getElementById('instruccion');
+        const dibujo = document.getElementById('efigie');
+        const nombre = document.getElementById('nombre');
+        const zonaEleccion = document.getElementById('zonaEleccion');
+        const opciones = document.getElementById('opciones');
+        const botonContinuar = document.getElementById('continuar');
+        const mensaje = document.getElementById('mensaje');
+        let fase = '';
+        let desafioActual = null;
+        let seleccion = '';
+        let finFase = 0;
+        let enviando = false;
+        let cambiandoFase = false;
+        let cargando = false;
+
+        function mostrarTiempo(segundos) {
+            const restantes = Math.max(0, Math.ceil(segundos));
+            tiempo.textContent = `0:${String(restantes).padStart(2, '0')}`;
+            temporizador.setAttribute('aria-label', `Tiempo restante: ${restantes} segundos`);
+        }
+
+        function mostrarEfigie(svg, nombreCompanero) {
+            dibujo.innerHTML = svg;
+            dibujo.setAttribute('aria-label', `Efigie de ${nombreCompanero}`);
+            nombre.textContent = nombreCompanero;
+        }
+
+        function mostrarIntermedio() {
+            fase = 'intermedio';
+            body.classList.add('intermedio');
+            pantalla.hidden = true;
+            pantallaNegra.hidden = false;
+            finFase = Date.now() + 5000;
+            mostrarTiempo(5);
+        }
+
+        async function mostrarEleccion(desafio) {
+            const respuesta = await fetch(`/api/ronda-2/iniciar${adminPreview ? '?adminPreview=1' : ''}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ responseId, indice: desafio.indice })
+            });
+            if (!respuesta.ok) throw new Error('No se pudo iniciar el desafío.');
+            const inicio = await respuesta.json();
+            fase = 'eleccion';
+            body.classList.remove('intermedio');
+            pantallaNegra.hidden = true;
+            pantalla.hidden = false;
+            temporizador.hidden = false;
+            titulo.textContent = '¡Algo cambió!';
+            instruccion.textContent = 'Elegí cuál de las cuatro capas es diferente.';
+            mostrarEfigie(desafio.efigieCambiada, desafio.targetName);
+            zonaEleccion.hidden = false;
+            opciones.replaceChildren();
+            seleccion = '';
+            botonContinuar.hidden = true;
+            botonContinuar.disabled = false;
+            for (const opcion of desafio.opciones) {
+                const boton = document.createElement('button');
+                boton.type = 'button';
+                boton.className = 'opcion';
+                boton.setAttribute('aria-pressed', 'false');
+                boton.setAttribute('aria-label', `Opción ${opciones.children.length + 1}`);
+                const miniatura = document.createElement('div');
+                miniatura.className = 'opcion-dibujo';
+                miniatura.setAttribute('aria-hidden', 'true');
+                miniatura.innerHTML = opcion.efigie;
+                boton.append(miniatura);
+                boton.addEventListener('click', () => {
+                    if (enviando) return;
+                    seleccion = opcion.capa;
+                    for (const otra of opciones.children)
+                        otra.setAttribute('aria-pressed', String(otra === boton));
+                    for (const capa of dibujo.querySelectorAll('[data-capa]'))
+                        capa.classList.toggle('resaltada', capa.getAttribute('data-capa') === opcion.capa);
+                    botonContinuar.hidden = false;
+                });
+                opciones.append(boton);
+            }
+            finFase = Date.now() + inicio.segundosRestantes * 1000;
+            mostrarTiempo(inicio.segundosRestantes);
+            mensaje.textContent = '';
+        }
+
+        async function cargarDesafio() {
+            if (cargando || !responseId) return;
+            cargando = true;
             try {
-                const respuesta = await fetch('/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId), { cache: 'no-store' });
-                if (!respuesta.ok) throw new Error('No se pudo verificar el estado de la sesión.');
-                const estado = await respuesta.json();
-                if (estado.etapaRondaUno !== 'ronda-2' && !estado.equipoListoSiguiente) {
-                    const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard' };
-                    window.location.replace((destinos[estado.etapaRondaUno] || '/pre-ronda-1') + '?id=' + encodeURIComponent(responseId));
+                const respuesta = await fetch(`/api/ronda-2/estado?responseId=${encodeURIComponent(responseId)}${queryVista}`, { cache: 'no-store' });
+                if (!respuesta.ok) {
+                    if (respuesta.status === 409 && !adminPreview) {
+                        const etapa = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+                        if (etapa.ok) {
+                            const estado = await etapa.json();
+                            if (estado.etapaRondaUno !== 'ronda-2') {
+                                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-3': '/ronda-3' };
+                                window.location.replace((destinos[estado.etapaRondaUno] || '/ronda-1-leaderboard') + '?id=' + encodeURIComponent(responseId));
+                                return;
+                            }
+                        }
+                    }
+                    throw new Error('No se pudo consultar la ronda 2.');
                 }
+                const estado = await respuesta.json();
+                if (estado.completados >= estado.total) {
+                    window.location.replace(`/ronda-2-leaderboard?id=${encodeURIComponent(responseId)}${queryVista}`);
+                    return;
+                }
+                desafioActual = estado.desafios.find(desafio => !desafio.respondido);
+                if (!desafioActual) throw new Error('No hay un desafío pendiente.');
+                if (desafioActual.iniciado) {
+                    await mostrarEleccion(desafioActual);
+                    return;
+                }
+                fase = 'observacion';
+                body.classList.remove('intermedio');
+                pantallaNegra.hidden = true;
+                pantalla.hidden = false;
+                temporizador.hidden = false;
+                titulo.textContent = '¡Atención!';
+                instruccion.textContent = 'Observá la efigie de tu compañero.';
+                zonaEleccion.hidden = true;
+                mostrarEfigie(desafioActual.efigieOriginal, desafioActual.targetName);
+                finFase = Date.now() + 10000;
+                mostrarTiempo(10);
+                mensaje.textContent = `Compañero ${estado.completados + 1} de ${estado.total}`;
             } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con la ronda 2.';
                 console.error(error);
+            } finally {
+                cargando = false;
             }
         }
-        verificarEtapa();
-        const intervalo = setInterval(verificarEtapa, 2000);
-        window.addEventListener('pagehide', () => clearInterval(intervalo));
+
+        async function enviarRespuesta(capa) {
+            if (enviando || !desafioActual) return;
+            enviando = true;
+            botonContinuar.disabled = true;
+            try {
+                const respuesta = await fetch(`/api/ronda-2/responder${adminPreview ? '?adminPreview=1' : ''}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, indice: desafioActual.indice, capa })
+                });
+                if (!respuesta.ok) throw new Error('No se pudo guardar tu respuesta.');
+                const resultado = await respuesta.json();
+                opciones.querySelectorAll('button').forEach(boton => boton.disabled = true);
+                botonContinuar.hidden = true;
+                mensaje.textContent = resultado.correcto
+                    ? `¡Correcto! Sumaste ${resultado.puntos} puntos.`
+                    : 'No era esa capa. Sumaste 0 puntos.';
+                setTimeout(() => {
+                    enviando = false;
+                    cargarDesafio();
+                }, 1200);
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo enviar la respuesta.';
+                console.error(error);
+                enviando = false;
+                botonContinuar.disabled = false;
+            }
+        }
+
+        function actualizarTemporizador() {
+            if (!finFase || fase === 'intermedio') return;
+            const restantes = Math.max(0, (finFase - Date.now()) / 1000);
+            mostrarTiempo(restantes);
+            if (restantes > 0 || cambiandoFase || enviando) return;
+            if (fase === 'observacion') {
+                cambiandoFase = true;
+                mostrarIntermedio();
+                cambiandoFase = false;
+            } else if (fase === 'eleccion') {
+                void enviarRespuesta(seleccion);
+            }
+        }
+
+        function actualizarIntermedio() {
+            if (fase !== 'intermedio' || cambiandoFase) return;
+            const restantes = Math.max(0, (finFase - Date.now()) / 1000);
+            mostrarTiempo(restantes);
+            if (restantes > 0) return;
+            cambiandoFase = true;
+            mostrarEleccion(desafioActual)
+                .catch(error => {
+                    mensaje.textContent = error.message || 'No se pudo mostrar el desafío.';
+                    console.error(error);
+                })
+                .finally(() => cambiandoFase = false);
+        }
+
+        botonContinuar.addEventListener('click', () => enviarRespuesta(seleccion));
+        if (!responseId) {
+            mensaje.textContent = 'Falta el identificador de participante.';
+        } else {
+            cargarDesafio();
+            setInterval(actualizarTemporizador, 200);
+            setInterval(actualizarIntermedio, 200);
+        }
     </script>
+    <script src="/admin-navigation.js" defer></script>
 </body>
 </html>

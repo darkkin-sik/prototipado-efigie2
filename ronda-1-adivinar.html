@@ -43,6 +43,7 @@
     </main>
     <script>
         const responseId = new URLSearchParams(window.location.search).get('id');
+        const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
         const tiempo = document.getElementById('tiempo');
         const listaOpciones = document.getElementById('opciones');
         const botonListo = document.getElementById('listo');
@@ -105,6 +106,10 @@
 
         async function enviarRespuesta() {
             if (botonListo.disabled || seleccionadas.size !== 2) return;
+            if (adminPreview) {
+                mensaje.textContent = 'Vista de prueba: la respuesta no se registra.';
+                return;
+            }
             botonListo.disabled = true;
             try {
                 const respuesta = await fetch('/api/ronda-1/adivinar', {
@@ -135,12 +140,12 @@
                 const respuesta = await fetch(url, { cache: 'no-store' });
                 if (!respuesta.ok) throw new Error('No se pudo consultar el estado de la ronda.');
                 const ronda = await respuesta.json();
-                if (!ronda.rondaIniciada) {
+                if (!ronda.rondaIniciada && !adminPreview) {
                     window.location.replace('/lobby/' + encodeURIComponent(responseId));
                     return;
                 }
-                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
-                if (ronda.etapaRondaUno !== 'adivinanza' || ronda.yaRespondio) {
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2', 'ronda-3': '/ronda-3' };
+                if ((ronda.etapaRondaUno !== 'adivinanza' || ronda.yaRespondio) && !adminPreview) {
                     const destino = ronda.etapaRondaUno === 'adivinanza' && ronda.yaRespondio
                         ? '/ronda-1-leaderboard'
                         : destinos[ronda.etapaRondaUno] || '/pre-ronda-1';
@@ -173,5 +178,6 @@
             clearInterval(intervaloTemporizador);
         });
     </script>
+    <script src="/admin-navigation.js" defer></script>
 </body>
 </html>

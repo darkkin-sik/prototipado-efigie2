@@ -32,6 +32,7 @@
     </main>
     <script>
         const responseId = new URLSearchParams(window.location.search).get('id');
+        const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
         const boton = document.getElementById('marcarListo');
         const mensaje = document.getElementById('mensaje');
         let estadoActual = null;
@@ -43,7 +44,7 @@
                 const respuesta = await fetch(url, { cache: 'no-store' });
                 if (!respuesta.ok) return;
                 estadoActual = await respuesta.json();
-                if (!estadoActual.rondaIniciada) {
+                if (!estadoActual.rondaIniciada && !adminPreview) {
                     window.location.replace('/lobby/' + encodeURIComponent(responseId));
                     return;
                 }
@@ -52,11 +53,11 @@
                 document.querySelector('meta[name="theme-color"]').content = estadoActual.color;
                 document.getElementById('equipo').textContent = `Equipo ${estadoActual.grupo}`;
                 boton.textContent = estadoActual.listo ? `Estoy listo ${estadoActual.cantidadListos}/3` : `Estoy listo ${estadoActual.cantidadListos}/3`;
-                boton.disabled = estadoActual.listo;
+                boton.disabled = adminPreview || estadoActual.listo;
                 mensaje.textContent = estadoActual.listo ? 'Esperando a tu equipo.' : '';
-                const destinos = { 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2' };
+                const destinos = { 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2', 'ronda-3': '/ronda-3' };
                 const etapaActiva = estadoActual.etapaRondaUno || (estadoActual.previewIniciada ? 'memoria' : 'pre-ronda');
-                if (etapaActiva !== 'pre-ronda') {
+                if (etapaActiva !== 'pre-ronda' && !adminPreview) {
                     window.location.replace((destinos[etapaActiva] || '/ronda-1-preview') + '?id=' + encodeURIComponent(responseId));
                 }
             } catch (error) {
@@ -65,7 +66,7 @@
         }
 
         boton.addEventListener('click', async () => {
-            if (boton.disabled) return;
+            if (boton.disabled || adminPreview) return;
             boton.disabled = true;
             await fetch('/api/preronda/listo', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ responseId })
@@ -77,5 +78,6 @@
         const intervalo = setInterval(actualizarEstado, 1200);
         window.addEventListener('pagehide', () => clearInterval(intervalo));
     </script>
+    <script src="/admin-navigation.js" defer></script>
 </body>
 </html>

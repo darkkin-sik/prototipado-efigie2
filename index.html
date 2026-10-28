@@ -110,6 +110,7 @@
         .opcion input:checked + span { background: var(--accent-selected); color: var(--accent-selected-ink); }
         .opcion input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 3px; }
         .opcion span:hover { transform: translateY(-1px); }
+        .opcion span:active { filter: brightness(0.78); }
         .navegacion {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -128,6 +129,7 @@
             transition: filter 150ms ease, opacity 150ms ease;
         }
         .navegacion button:hover:not(:disabled) { filter: brightness(0.94); }
+        .navegacion button:active:not(:disabled) { filter: brightness(0.76); transform: translateY(1px); }
         .navegacion button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
         .navegacion button:disabled { opacity: 0.48; cursor: not-allowed; }
         @keyframes aparecer {
@@ -177,16 +179,15 @@
         <form id="formEncuesta" novalidate>
             <section class="paso activo" data-campo="nombre">
                 <h1 id="pregunta-nombre">1. Nombre completo o apodo</h1>
-                <input class="respuesta-texto" type="text" id="nombre" name="nombre" placeholder="Ej: José Sicardi" aria-labelledby="pregunta-nombre" autocomplete="name" required>
+                <input class="respuesta-texto" type="text" id="nombre" name="nombre" aria-labelledby="pregunta-nombre" autocomplete="name" required>
             </section>
             <section class="paso" data-campo="anio">
                 <h1 id="pregunta-anio">2. Año de nacimiento</h1>
-                <input class="respuesta-texto" type="number" id="anio" name="anio" placeholder="Ej: 2004" min="1920" max="2026" aria-labelledby="pregunta-anio" required>
+                <input class="respuesta-texto" type="number" id="anio" name="anio" min="1920" max="2026" aria-labelledby="pregunta-anio" required>
             </section>
             <section class="paso" data-campo="facultad">
                 <h1 id="pregunta-facultad">3. ¿A qué facultad pertenecés?</h1>
                 <div class="opciones dos-columnas" role="radiogroup" aria-labelledby="pregunta-facultad">
-                    <label class="opcion"><input type="radio" name="facultad" value="Arquitectura y Diseño" required><span>Arquitectura y Diseño</span></label>
                     <label class="opcion"><input type="radio" name="facultad" value="Ciencias Económicas"><span>Ciencias Económicas</span></label>
                     <label class="opcion"><input type="radio" name="facultad" value="Ciencias Médicas"><span>Ciencias Médicas</span></label>
                     <label class="opcion"><input type="radio" name="facultad" value="Ciencias Sociales"><span>Ciencias Sociales</span></label>
@@ -263,6 +264,24 @@
         const btnEnviar = document.getElementById('btnEnviar');
         const barraProgreso = document.querySelector('.progreso-valor');
         const barraAccesible = document.querySelector('.progreso-barra');
+        const nombreInput = document.getElementById('nombre');
+        const nombres = ['Mateo', 'Juan', 'Nicolás', 'Tomás', 'Santiago', 'Sofía', 'Martina', 'Valentina', 'Camila', 'Lucía'];
+        const apellidos = ['González', 'Rodríguez', 'Gómez', 'Fernández', 'López', 'Díaz', 'Martínez', 'Pérez', 'García', 'Sánchez'];
+        const nombreAleatorio = nombres[Math.floor(Math.random() * nombres.length)];
+        const apellidoAleatorio = apellidos[Math.floor(Math.random() * apellidos.length)];
+        nombreInput.placeholder = `Ej: ${nombreAleatorio} ${apellidoAleatorio}`;
+
+        nombreInput.addEventListener('input', () => {
+            const valor = nombreInput.value.replace(/\s+/g, ' ');
+            const primerEspacio = valor.indexOf(' ');
+            const segundoEspacio = primerEspacio === -1 ? -1 : valor.indexOf(' ', primerEspacio + 1);
+            const valorValido = segundoEspacio === -1 ? valor : valor.slice(0, segundoEspacio);
+            if (valorValido !== nombreInput.value) {
+                const posicion = Math.min(nombreInput.selectionStart, valorValido.length);
+                nombreInput.value = valorValido;
+                nombreInput.setSelectionRange(posicion, posicion);
+            }
+        });
         const colores = ['#6064A3', '#7C171F', '#459BDA', '#84B444', '#CE2D7B', '#F9DB52', '#6EB392', '#E27646', '#85A8C8', '#133463', '#8B1C31'];
         const indicesColor = colores.map((_, index) => index);
         for (let index = indicesColor.length - 1; index > 0; index--) {
@@ -276,7 +295,7 @@
             const rgb = color.match(/[\da-f]{2}/gi).map(segmento => parseInt(segmento, 16) / 255);
             const luminancia = rgb.map(valor => valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4);
             const brillo = 0.2126 * luminancia[0] + 0.7152 * luminancia[1] + 0.0722 * luminancia[2];
-            const rgbOscuro = rgb.map(valor => Math.round(valor * 0.78 * 255));
+            const rgbOscuro = rgb.map(valor => Math.round(valor * 0.62 * 255));
             const colorOscuro = `#${rgbOscuro.map(valor => valor.toString(16).padStart(2, '0')).join('')}`;
             const linealOscuro = rgbOscuro.map(valor => {
                 const normalizado = valor / 255;
@@ -375,5 +394,6 @@
 
         mostrarPaso(0);
     </script>
+    <script src="/admin-navigation.js" defer></script>
 </body>
 </html>

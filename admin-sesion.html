@@ -36,8 +36,15 @@
         .estado-listo[data-listo="true"] { color: #286547; font-weight: 700; }
         .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding-top: 30px; }
         .accion { min-height: 48px; padding: 11px 17px; border: 0; border-radius: 4px; background: var(--green); color: #101a15; font: inherit; font-weight: 600; cursor: pointer; }
+        a.accion { display: grid; place-items: center; text-align: center; text-decoration: none; }
         .accion-volver { background: #dcebe2; }
         .accion:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
+        .pruebas { margin-top: 24px; padding: 16px; border: 1px solid var(--line); background: #fff; }
+        .pruebas h2 { margin: 0 0 10px; font-size: 1.05rem; }
+        .pruebas label { display: block; margin-bottom: 6px; font-size: 0.9rem; }
+        .pruebas select { width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); font: inherit; }
+        .accesos-prueba { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 9px; margin-top: 12px; }
+        .accesos-prueba .accion { min-height: 42px; padding: 8px; font-size: 0.9rem; }
         .accion:disabled, .expulsar:disabled { opacity: 0.55; cursor: not-allowed; }
         .accion:focus-visible, .expulsar:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
         .mensaje { min-height: 1.5em; margin: 12px 0 0; text-align: center; color: var(--muted); }
@@ -54,6 +61,12 @@
         </header>
         <ul class="lista" id="participantes" aria-label="Participantes en espera"></ul>
         <div class="equipos" id="equipos" aria-label="Equipos de la pre-ronda" hidden></div>
+        <section class="pruebas" id="pruebas" hidden aria-label="Accesos directos de prueba">
+            <h2>Ir a una parte de la experiencia</h2>
+            <label for="participantePrueba">Participante para visualizar</label>
+            <select id="participantePrueba"></select>
+            <nav class="accesos-prueba" id="accesosPrueba" aria-label="Partes de la experiencia"></nav>
+        </section>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
         <footer class="acciones">
             <button type="button" class="accion" id="simular">Simular ronda</button>
@@ -80,7 +93,84 @@
         const botonForzarLeaderboard = document.getElementById('forzarLeaderboard');
         const botonForzarSiguiente = document.getElementById('forzarSiguiente');
         const botonVolver = document.getElementById('volver');
+        const panelPruebas = document.getElementById('pruebas');
+        const participantePrueba = document.getElementById('participantePrueba');
+        const accesosPrueba = document.getElementById('accesosPrueba');
         let rondaIniciada = false;
+        let participantesParaPrueba = [];
+        let firmaParticipantesPrueba = '';
+        const etapasPrueba = [
+            { clave: 'encuesta', nombre: 'Encuesta', ruta: () => '/encuesta?nueva=1' },
+            { clave: 'efigie', nombre: 'Efigie', ruta: id => `/efigie/${encodeURIComponent(id)}` },
+            { clave: 'lobby', nombre: 'Lobby', ruta: id => `/lobby/${encodeURIComponent(id)}?adminPreview=1` },
+            { clave: 'pre-ronda-1', nombre: 'Pre-ronda 1', ruta: id => `/pre-ronda-1?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-1-memoria', nombre: 'Ronda 1 · Memoria', ruta: id => `/ronda-1-preview?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-1-adivinanza', nombre: 'Ronda 1 · Adivinanza', ruta: id => `/ronda-1-adivinar?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-1-resultados', nombre: 'Ronda 1 · Resultados', ruta: id => `/ronda-1-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-2', nombre: 'Ronda 2', ruta: id => `/ronda-2?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-2-resultados', nombre: 'Resultados · Ronda 2', ruta: id => `/ronda-2-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-3', nombre: 'Ronda 3 · Borrador', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` }
+        ];
+
+        function actualizarAccesosPrueba(participantes) {
+            participantesParaPrueba = participantes;
+            const firmaParticipantes = participantes.map(participante =>
+                `${participante.id}:${participante.nombre}:${participante.esBot}`
+            ).join('|');
+            if (firmaParticipantes === firmaParticipantesPrueba) {
+                panelPruebas.hidden = !rondaIniciada || participantes.length === 0;
+                return;
+            }
+            firmaParticipantesPrueba = firmaParticipantes;
+            const idGuardado = localStorage.getItem('mi_efigie_id');
+            const idSeleccionado = participantePrueba.value || idGuardado;
+            participantePrueba.replaceChildren();
+            for (const participante of participantes) {
+                const opcion = document.createElement('option');
+                opcion.value = participante.id;
+                opcion.textContent = `${participante.nombre}${participante.esBot ? ' (simulado)' : ''}`;
+                participantePrueba.append(opcion);
+            }
+            if ([...participantePrueba.options].some(opcion => opcion.value === idSeleccionado))
+                participantePrueba.value = idSeleccionado;
+
+            accesosPrueba.replaceChildren();
+            for (const etapa of etapasPrueba) {
+                const boton = document.createElement('button');
+                boton.type = 'button';
+                boton.className = 'accion';
+                boton.textContent = etapa.nombre;
+                boton.addEventListener('click', () => navegarParticipante(etapa));
+                accesosPrueba.append(boton);
+            }
+            panelPruebas.hidden = !rondaIniciada || participantes.length === 0;
+        }
+        participantePrueba.addEventListener('change', () => actualizarAccesosPrueba(participantesParaPrueba));
+
+        async function navegarParticipante(etapa) {
+            const participante = participantesParaPrueba.find(persona => persona.id === participantePrueba.value);
+            if (!participante) {
+                mensaje.textContent = 'Seleccioná un participante para continuar.';
+                return;
+            }
+            if (participante.esBot) {
+                window.open(etapa.ruta(participante.id), '_blank', 'noopener');
+                mensaje.textContent = `Abriendo vista de prueba de ${participante.nombre}.`;
+                return;
+            }
+            try {
+                const respuesta = await fetch('/api/admin/participante/navegar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId: participante.id, etapa: etapa.clave })
+                });
+                if (!respuesta.ok) throw new Error('No se pudo enviar al participante a esa parte de la experiencia.');
+                mensaje.textContent = `${participante.nombre} fue enviado a ${etapa.nombre}.`;
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo enviar la navegación.';
+                console.error(error);
+            }
+        }
 
         async function cargarEstado() {
             try {
@@ -89,7 +179,7 @@
                 const sesion = await respuesta.json();
                 rondaIniciada = sesion.rondaIniciada;
                 const preRondaActiva = sesion.preRondaActiva;
-                const nombresEtapa = { 'memoria': 'Ronda 1 · Memoria', 'adivinanza': 'Ronda 1 · Adivinanza', 'leaderboard': 'Ronda 1 · Resultados', 'ronda-2': 'Ronda 2 · Borrador' };
+                const nombresEtapa = { 'memoria': 'Ronda 1 · Memoria', 'adivinanza': 'Ronda 1 · Adivinanza', 'leaderboard': 'Ronda 1 · Resultados', 'ronda-2': 'Ronda 2 · Resultados', 'ronda-3': 'Ronda 3' };
                 estado.textContent = sesion.previewIniciada ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1') : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
                 tiempoRonda.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
                 if (!tiempoRonda.hidden) {
@@ -105,7 +195,9 @@
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
                 botonAgregarTiempo.hidden = sesion.etapaRondaUno !== 'memoria';
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
-                botonForzarSiguiente.hidden = sesion.etapaRondaUno !== 'leaderboard';
+                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2'].includes(sesion.etapaRondaUno);
+                botonForzarSiguiente.textContent = sesion.etapaRondaUno === 'ronda-2' ? 'Forzar avance a ronda 3' : 'Forzar avance desde leaderboard';
+                actualizarAccesosPrueba(sesion.participantes);
                 lista.replaceChildren();
                 listaEquipos.replaceChildren();
 
@@ -248,8 +340,8 @@
         botonForzarSiguiente.addEventListener('click', () => forzarEtapa(
             botonForzarSiguiente,
             '/api/admin/ronda-1/forzar-siguiente',
-            '¿Forzar el avance de todos los equipos desde la leaderboard?',
-            'Todos avanzan a la pantalla de Ronda 2.'
+            '¿Forzar el avance desde la etapa actual?',
+            'Se forzó el avance de todos los participantes.'
         ));
 
         botonVolver.addEventListener('click', async () => {

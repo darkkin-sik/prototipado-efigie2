@@ -11,7 +11,12 @@ Aplicación web local para responder una encuesta, generar una efigie visual a p
 5. **Pre-ronda:** cada participante marca que está listo. Cuando todos están listos, comienza la ronda 1.
 6. **Memoria (30 segundos):** cada participante ve su efigie y las otras dos de su equipo para memorizarlas.
 7. **Adivinanza (2 minutos):** cada participante elige dos efigies de las demás personas de la sala. El puntaje individual suma 50 puntos por cada acierto y hasta 100 puntos adicionales según la rapidez de respuesta. El puntaje del equipo es el promedio de sus tres integrantes.
-8. **Leaderboard:** al enviar la respuesta, cada participante pasa directamente a la tabla de equipos ordenada por puntaje. El botón «Estoy listo» se habilita al terminar los dos minutos; cada equipo avanza cuando sus integrantes reales están listos. Administración puede forzar el cierre de la adivinanza (simulando las respuestas de los bots) o el avance desde la leaderboard.
+8. **Leaderboard:** al enviar la respuesta, cada participante pasa directamente a la tabla de equipos ordenada por puntaje. El botón «Estoy listo» se habilita al terminar los dos minutos; la ronda 2 empieza cuando todos los participantes reales están listos. Administración puede forzar el cierre de la adivinanza (simulando las respuestas de los bots) o el avance desde la leaderboard.
+9. **Ronda 2:** cada participante observa por 10 segundos la efigie de cada uno de sus dos compañeros, ve la transición negra con «¡Algo cambió!» durante 5 segundos y luego identifica la capa modificada entre cuatro opciones. La modificación se vuelve a generar con Rhino y excluye el color. Cada acierto suma 100 puntos más hasta 100 por rapidez; las respuestas incorrectas o fuera de tiempo suman 0. Al terminar los dos desafíos aparece la tabla de resultados.
+
+El panel de administración incluye accesos para enviar a un participante seleccionado a una etapa en su propio dispositivo. En el caso de bots, abre una vista de prueba en una pestaña aparte. Las vistas de prueba con `adminPreview=1` no cambian la etapa compartida ni marcan a nadie como listo; sus respuestas de ronda 2 se mantienen separadas del puntaje real. El botón «Forzar retroceso» también envía a los dispositivos la pantalla correspondiente al estado restablecido.
+
+Las leaderboards comparten el estilo de `leaderboard.css`, distinguen el equipo propio, actualizan los puntajes periódicamente y animan el reordenamiento. En ronda 2, «Estoy listo para continuar» espera a todos los participantes reales antes de abrir la ronda 3; administración puede forzar ese avance desde su panel.
 
 El estado de la sesión y el temporizador viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
 
@@ -57,6 +62,10 @@ ngrok no es necesario para usar la aplicación desde la misma computadora. Sí r
 - `ronda-en-curso.html`: etapa de memoria de la ronda 1.
 - `ronda-1-adivinar.html`: selección de las efigies de los compañeros.
 - `ronda-1-leaderboard.html`: resultados y avance a la siguiente ronda.
-- `ronda-2.html`: pantalla borrador de la ronda 2.
+- `ronda-2.html`: minijuego de diferencias de la ronda 2.
+- `ronda-2-leaderboard.html`: resultados de la ronda 2.
+- `leaderboard.css`: formato compartido de las tablas de resultados.
+- `admin-navigation.js`: recepción de navegaciones enviadas desde administración.
+- `ronda-3.html`: pantalla borrador de la ronda 3.
 - `admin-sesion.html`: panel de administración.
 - `respuestas_app.csv`: respuestas guardadas por la aplicación.

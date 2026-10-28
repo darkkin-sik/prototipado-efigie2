@@ -1,0 +1,87 @@
+:root {
+    color-scheme: light;
+    --paper: #eaf3f0;
+    --ink: #101a15;
+    --muted: #53615b;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; margin: 0; }
+body {
+    min-height: 100vh;
+    padding: 22px 18px max(24px, env(safe-area-inset-bottom));
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+}
+main { width: min(100%, 520px); margin: 0 auto; }
+h1 { margin: 18px 0 8px; text-align: center; font-size: clamp(1.5rem, 5vw, 2rem); }
+.subtitulo { margin: 0 0 22px; text-align: center; color: var(--muted); }
+.equipos { display: grid; gap: 12px; }
+.equipo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 95%;
+    min-height: 58px;
+    justify-self: center;
+    padding: 10px 14px;
+    border-radius: 4px;
+    background: var(--color-equipo);
+    color: var(--color-texto);
+    transition: width 180ms ease, box-shadow 180ms ease, outline-color 180ms ease;
+}
+.equipo-propio {
+    width: 100%;
+    min-height: 66px;
+    padding: 12px 16px;
+    outline: 3px solid #e6ad3f;
+    outline-offset: 2px;
+    box-shadow: 0 3px 14px rgb(16 26 21 / 18%);
+}
+.equipo.animando { will-change: transform; }
+.identidad { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.posicion {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-weight: 700;
+}
+.nombre { overflow-wrap: anywhere; font-weight: 600; }
+.marca-propia {
+    flex: 0 0 auto;
+    padding: 4px 7px;
+    border-radius: 999px;
+    background: #fff;
+    color: #101a15;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.puntos { flex: 0 0 auto; font-size: 1.1rem; font-variant-numeric: tabular-nums; font-weight: 700; }
+.acciones { margin-top: 26px; text-align: center; }
+#listo, #continuar {
+    min-width: min(100%, 260px);
+    min-height: 54px;
+    padding: 12px 22px;
+    border: 0;
+    border-radius: 5px;
+    background: #133463;
+    color: #fff;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+#listo:disabled, #continuar:disabled { opacity: 0.65; cursor: default; }
+#listo:focus-visible, #continuar:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.mensaje { min-height: 1.5em; margin: 12px 0 0; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+    .equipo { transition: none; }
+}
