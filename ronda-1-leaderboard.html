@@ -109,14 +109,20 @@
                     window.location.replace('/lobby/' + encodeURIComponent(responseId));
                     return;
                 }
-                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2', 'ronda-3': '/ronda-3' };
+                const destinos = {
+                    'pre-ronda': '/pre-ronda-1',
+                    'memoria': '/ronda-1-preview',
+                    'adivinanza': '/ronda-1-adivinar',
+                    'leaderboard': '/ronda-1-leaderboard',
+                    'ronda-2': '/ronda-2',
+                    'ronda-3-notas': '/ronda-3',
+                    'ronda-3-identificacion': '/ronda-3-identificacion',
+                    'ronda-3-leaderboard': '/ronda-3-leaderboard',
+                    'ronda-4': '/ronda-4'
+                };
                 const esperandoRespuesta = estado.etapaRondaUno === 'adivinanza' && estado.yaRespondio;
-                if (estado.etapaRondaUno === 'ronda-3' && !adminPreview) {
-                    window.location.replace('/ronda-3?id=' + encodeURIComponent(responseId));
-                    return;
-                }
-                if (estado.etapaRondaUno === 'ronda-2' && !adminPreview) {
-                    window.location.replace('/ronda-2?id=' + encodeURIComponent(responseId));
+                if (['ronda-2', 'ronda-3-notas', 'ronda-3-identificacion', 'ronda-3-leaderboard', 'ronda-4'].includes(estado.etapaRondaUno) && !adminPreview) {
+                    window.location.replace(destinos[estado.etapaRondaUno] + '?id=' + encodeURIComponent(responseId));
                     return;
                 }
                 if (estado.etapaRondaUno !== 'leaderboard' && !esperandoRespuesta && !adminPreview) {

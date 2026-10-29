@@ -165,7 +165,7 @@
                         if (etapa.ok) {
                             const estado = await etapa.json();
                             if (estado.etapaRondaUno !== 'ronda-2') {
-                                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-3': '/ronda-3' };
+                                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-3-notas': '/ronda-3', 'ronda-3-identificacion': '/ronda-3-identificacion', 'ronda-3-leaderboard': '/ronda-3-leaderboard', 'ronda-4': '/ronda-4' };
                                 window.location.replace((destinos[estado.etapaRondaUno] || '/ronda-1-leaderboard') + '?id=' + encodeURIComponent(responseId));
                                 return;
                             }

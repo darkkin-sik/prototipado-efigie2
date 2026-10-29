@@ -109,7 +109,10 @@
             { clave: 'ronda-1-resultados', nombre: 'Ronda 1 · Resultados', ruta: id => `/ronda-1-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-2', nombre: 'Ronda 2', ruta: id => `/ronda-2?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-2-resultados', nombre: 'Resultados · Ronda 2', ruta: id => `/ronda-2-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-3', nombre: 'Ronda 3 · Borrador', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` }
+            { clave: 'ronda-3', nombre: 'Ronda 3 · Notas', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-3-identificacion', nombre: 'Ronda 3 · Identificación', ruta: id => `/ronda-3-identificacion?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-3-resultados', nombre: 'Ronda 3 · Resultados', ruta: id => `/ronda-3-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-4', nombre: 'Ronda 4 · Borrador', ruta: id => `/ronda-4?id=${encodeURIComponent(id)}&adminPreview=1` }
         ];
 
         function actualizarAccesosPrueba(participantes) {
@@ -179,9 +182,18 @@
                 const sesion = await respuesta.json();
                 rondaIniciada = sesion.rondaIniciada;
                 const preRondaActiva = sesion.preRondaActiva;
-                const nombresEtapa = { 'memoria': 'Ronda 1 · Memoria', 'adivinanza': 'Ronda 1 · Adivinanza', 'leaderboard': 'Ronda 1 · Resultados', 'ronda-2': 'Ronda 2 · Resultados', 'ronda-3': 'Ronda 3' };
+                const nombresEtapa = {
+                    'memoria': 'Ronda 1 · Memoria',
+                    'adivinanza': 'Ronda 1 · Adivinanza',
+                    'leaderboard': 'Ronda 1 · Resultados',
+                    'ronda-2': 'Ronda 2',
+                    'ronda-3-notas': 'Ronda 3 · Notas',
+                    'ronda-3-identificacion': 'Ronda 3 · Identificación',
+                    'ronda-3-leaderboard': 'Ronda 3 · Resultados',
+                    'ronda-4': 'Ronda 4 · Borrador'
+                };
                 estado.textContent = sesion.previewIniciada ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1') : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
-                tiempoRonda.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
+                tiempoRonda.hidden = !['memoria', 'adivinanza', 'ronda-3-notas', 'ronda-3-identificacion'].includes(sesion.etapaRondaUno);
                 if (!tiempoRonda.hidden) {
                     const restantes = sesion.segundosRestantesRondaUno;
                     tiempoRonda.textContent = `Tiempo restante ${Math.floor(restantes / 60)}:${String(restantes % 60).padStart(2, '0')}`;
@@ -195,8 +207,15 @@
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
                 botonAgregarTiempo.hidden = sesion.etapaRondaUno !== 'memoria';
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
-                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2'].includes(sesion.etapaRondaUno);
-                botonForzarSiguiente.textContent = sesion.etapaRondaUno === 'ronda-2' ? 'Forzar avance a ronda 3' : 'Forzar avance desde leaderboard';
+                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2', 'ronda-3-notas', 'ronda-3-identificacion', 'ronda-3-leaderboard'].includes(sesion.etapaRondaUno);
+                const nombresForzar = {
+                    leaderboard: 'Forzar avance a ronda 2',
+                    'ronda-2': 'Forzar avance a ronda 3',
+                    'ronda-3-notas': 'Forzar avance a identificación',
+                    'ronda-3-identificacion': 'Forzar avance a resultados de ronda 3',
+                    'ronda-3-leaderboard': 'Forzar avance a ronda 4'
+                };
+                botonForzarSiguiente.textContent = nombresForzar[sesion.etapaRondaUno] || 'Forzar avance';
                 actualizarAccesosPrueba(sesion.participantes);
                 lista.replaceChildren();
                 listaEquipos.replaceChildren();

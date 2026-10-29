@@ -83,7 +83,13 @@
                 const resultados = await respuesta.json();
                 renderizar(resultados.equipos, resultados.equipoPropio);
                 if (resultados.rondaTresIniciada && !adminPreview) {
-                    window.location.replace(`/ronda-3?id=${encodeURIComponent(responseId)}`);
+                    const destinos = {
+                        'ronda-3-notas': '/ronda-3',
+                        'ronda-3-identificacion': '/ronda-3-identificacion',
+                        'ronda-3-leaderboard': '/ronda-3-leaderboard',
+                        'ronda-4': '/ronda-4'
+                    };
+                    window.location.replace(`${destinos[resultados.etapaRondaUno] || '/ronda-3'}?id=${encodeURIComponent(responseId)}`);
                     return;
                 }
                 botonListo.disabled = adminPreview || resultados.listoContinuar || enviandoListo;

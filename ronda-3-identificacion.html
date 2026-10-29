@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eaf3f0">
+    <title>Ronda 3 · Identificación - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --blue: #133463; --selected: #d7e5df; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; padding: 18px 20px max(96px, calc(80px + env(safe-area-inset-bottom))); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 620px); margin: 0 auto; }
+        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+        h1 { margin: 10px 0 4px; text-align: center; font-size: clamp(1.3rem, 5vw, 1.65rem); line-height: 1.2; font-weight: 500; }
+        .instruccion { margin: 0; text-align: center; color: var(--muted); line-height: 1.4; }
+        .efigie { width: min(88vw, 470px); aspect-ratio: 1; margin: 0 auto 2px; }
+        .efigie svg { display: block; width: 100%; height: 100%; overflow: visible; }
+        .efigie [data-capa].resaltada { filter: drop-shadow(0 0 2px #e53920); }
+        .efigie [data-capa].resaltada, .efigie [data-capa].resaltada * { stroke: #e53920 !important; stroke-width: 1.15 !important; }
+        .progreso { display: flex; justify-content: center; gap: 9px; margin: 0 0 8px; }
+        .paso { width: 10px; height: 10px; border: 1px solid #53615b; border-radius: 50%; background: transparent; }
+        .paso.activo { background: var(--blue); border-color: var(--blue); }
+        .paso.completo { background: #6eb392; border-color: #286547; }
+        .pregunta { width: min(100%, 500px); margin: 0 auto; }
+        .pregunta h2 { margin: 0 0 6px; text-align: center; font-size: 1rem; font-weight: 500; }
+        .opciones select { display: block; width: 100%; min-height: 48px; padding: 9px 12px; border: 1px solid #87938c; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }
+        .opciones select:focus-visible, .navegacion button:focus-visible, #continuar:focus-visible, .notas-consulta summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .navegacion { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
+        .navegacion button { min-width: 120px; min-height: 44px; padding: 9px 14px; border: 0; border-radius: 5px; background: #d7e5df; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+        .navegacion button:disabled { opacity: 0.5; cursor: default; }
+        .acciones { position: fixed; z-index: 3; right: 0; bottom: max(14px, env(safe-area-inset-bottom)); left: 0; display: flex; justify-content: center; pointer-events: none; }
+        #continuar { min-width: min(82vw, 300px); min-height: 54px; padding: 12px 20px; border: 0; border-radius: 5px; background: var(--blue); color: #fff; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgb(16 26 21 / 18%); pointer-events: auto; }
+        #continuar:disabled { opacity: 0.5; cursor: default; }
+        .mensaje { min-height: 1.4em; margin: 6px 0 0; text-align: center; color: var(--muted); }
+        .notas-consulta { position: fixed; z-index: 4; bottom: max(16px, env(safe-area-inset-bottom)); left: max(16px, env(safe-area-inset-left)); }
+        .notas-consulta[open] { display: flex; flex-direction: column-reverse; align-items: flex-start; }
+        .notas-consulta summary { display: inline-flex; align-items: center; min-height: 46px; padding: 10px 14px; border: 1px solid #b6c9bf; border-radius: 5px; background: var(--selected); color: var(--ink); font-size: .9rem; font-weight: 600; cursor: pointer; list-style: none; }
+        .notas-consulta summary::-webkit-details-marker { display: none; }
+        .notas-panel { width: min(82vw, 340px); max-height: 45vh; overflow-y: auto; margin-bottom: 8px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); box-shadow: 0 4px 14px rgb(16 26 21 / 18%); }
+        .notas-panel h2 { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
+        .notas-panel ul { display: grid; gap: 5px; margin: 0; padding-left: 20px; }
+        .notas-panel li { overflow-wrap: anywhere; }
+        [hidden] { display: none !important; }
+        @media (max-height: 720px) {
+            body { padding-top: 10px; }
+            h1 { margin-top: 5px; }
+            .efigie { width: min(66vh, 360px); margin-block: 0; }
+            .progreso { margin-bottom: 4px; }
+        }
+        @media (max-width: 380px) {
+            body { padding-inline: 14px; }
+            .efigie { width: min(90vw, 440px); }
+            .navegacion button { min-width: 110px; }
+        }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="temporizador" role="timer" aria-label="Tiempo restante">
+            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
+            <span id="tiempo">3:00</span>
+        </div>
+        <h1>Relacioná cada parte con lo que representa</h1>
+        <p class="instruccion">Elegí una opción para cada parte resaltada.</p>
+        <div class="efigie" id="efigie" role="img" aria-label="Tu efigie con una parte resaltada"></div>
+        <nav class="progreso" id="progreso" aria-label="Progreso de respuestas"></nav>
+        <section class="pregunta" aria-label="Opciones de respuesta">
+            <h2 id="tituloPregunta">¿Qué representa esta parte?</h2>
+            <div class="opciones">
+                <select id="opciones" aria-label="Elegí qué representa esta parte"></select>
+            </div>
+            <div class="navegacion">
+                <button type="button" id="anterior">Anterior</button>
+                <button type="button" id="siguiente">Siguiente</button>
+            </div>
+        </section>
+        <div class="acciones">
+            <button type="button" id="continuar" hidden disabled>Continuar</button>
+        </div>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+    </main>
+    <details class="notas-consulta">
+        <summary>Consultar mis notas</summary>
+        <div class="notas-panel">
+            <h2>Mis notas</h2>
+            <ul id="listaNotas"></ul>
+            <p id="sinNotas">Todavía no escribiste notas.</p>
+        </div>
+    </details>
+    <script>
+        const parametros = new URLSearchParams(location.search);
+        const responseId = parametros.get('id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const queryVista = adminPreview ? '&adminPreview=1' : '';
+        const apiVista = adminPreview ? '?adminPreview=1' : '';
+        const efigie = document.getElementById('efigie');
+        const opciones = document.getElementById('opciones');
+        const progreso = document.getElementById('progreso');
+        const botonAnterior = document.getElementById('anterior');
+        const botonSiguiente = document.getElementById('siguiente');
+        const botonContinuar = document.getElementById('continuar');
+        const temporizador = document.getElementById('tiempo');
+        const mensaje = document.getElementById('mensaje');
+        const listaNotas = document.getElementById('listaNotas');
+        const sinNotas = document.getElementById('sinNotas');
+        const claveNotas = `ronda-3-notas:${responseId}`;
+        let preguntas = [];
+        let respuestas = [];
+        let indiceActual = 0;
+        let cargando = false;
+        let enviando = false;
+        let temporizadorInicializado = false;
+        let finEtapa = Date.now() + 180000;
+
+        function mostrarTiempo(segundos) {
+            finEtapa = Date.now() + segundos * 1000;
+            actualizarTemporizador();
+        }
+
+        function actualizarTemporizador() {
+            const segundos = Math.max(0, Math.ceil((finEtapa - Date.now()) / 1000));
+            temporizador.textContent = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+        }
+
+        function actualizarControles() {
+            botonAnterior.disabled = indiceActual === 0 || enviando;
+            botonSiguiente.disabled = indiceActual === preguntas.length - 1 || enviando;
+            const completo = respuestas.length === preguntas.length && respuestas.every(Boolean);
+            botonContinuar.hidden = !completo;
+            botonContinuar.disabled = !completo || enviando;
+            progreso.querySelectorAll('.paso').forEach((paso, indice) => {
+                paso.classList.toggle('activo', indice === indiceActual);
+                paso.classList.toggle('completo', Boolean(respuestas[indice]));
+            });
+        }
+
+        function dibujarPregunta() {
+            if (!preguntas.length) return;
+            efigie.querySelectorAll('[data-capa]').forEach(capa => capa.classList.remove('resaltada'));
+            const pregunta = preguntas[indiceActual];
+            const capa = efigie.querySelector(`[data-capa="${CSS.escape(pregunta.layer)}"]`);
+            if (!capa) throw new Error('No se pudo resaltar la parte seleccionada de la efigie.');
+            capa.classList.add('resaltada');
+            opciones.replaceChildren();
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Seleccioná una opción';
+            opciones.append(placeholder);
+            pregunta.opciones.forEach(opcion => {
+                const opcionElemento = document.createElement('option');
+                opcionElemento.value = opcion;
+                opcionElemento.textContent = opcion;
+                opciones.append(opcionElemento);
+            });
+            opciones.value = respuestas[indiceActual] || '';
+            opciones.disabled = enviando;
+            document.getElementById('tituloPregunta').textContent = `¿Qué representa esta parte? (${indiceActual + 1} de ${preguntas.length})`;
+            actualizarControles();
+        }
+
+        function renderizarNotas(notas) {
+            listaNotas.replaceChildren(...notas.map(nota => {
+                const elemento = document.createElement('li');
+                elemento.textContent = nota;
+                return elemento;
+            }));
+            listaNotas.hidden = notas.length === 0;
+            sinNotas.hidden = notas.length > 0;
+        }
+
+        async function seleccionarRespuesta(opcion) {
+            if (enviando || !responseId) return;
+            respuestas[indiceActual] = opcion;
+            enviando = true;
+            actualizarControles();
+            try {
+                dibujarPregunta();
+                const respuesta = await fetch(`/api/ronda-3/responder${apiVista}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, answers: respuestas, finalizar: false })
+                });
+                if (!respuesta.ok) throw new Error('No se pudo guardar la selección.');
+                mensaje.textContent = '';
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo guardar la selección.';
+                console.error(error);
+            } finally {
+                enviando = false;
+                actualizarControles();
+            }
+        }
+
+        async function redirigirSegunEtapa() {
+            const respuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+            if (!respuesta.ok) return;
+            const estado = await respuesta.json();
+            const destinos = {
+                'ronda-3-notas': '/ronda-3',
+                'ronda-3-leaderboard': '/ronda-3-leaderboard',
+                'ronda-4': '/ronda-4'
+            };
+            const destino = destinos[estado.etapaRondaUno];
+            if (destino && !adminPreview)
+                location.replace(`${destino}?id=${encodeURIComponent(responseId)}`);
+        }
+
+        async function cargarEstado() {
+            if (cargando || enviando || !responseId) return;
+            cargando = true;
+            try {
+                const respuesta = await fetch(`/api/ronda-3/identificacion?responseId=${encodeURIComponent(responseId)}${queryVista}`, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview) {
+                    await redirigirSegunEtapa();
+                    return;
+                }
+                if (!respuesta.ok) throw new Error('No se pudo consultar la ronda 3.');
+                const estado = await respuesta.json();
+                if (preguntas.length === 0) {
+                    efigie.innerHTML = estado.efigie;
+                    preguntas = estado.preguntas;
+                    respuestas = [...estado.respuestas];
+                    progreso.replaceChildren(...preguntas.map((_, indice) => {
+                        const punto = document.createElement('span');
+                        punto.className = 'paso';
+                        punto.setAttribute('aria-label', `Respuesta ${indice + 1}`);
+                        return punto;
+                    }));
+                    dibujarPregunta();
+                } else {
+                    respuestas = [...estado.respuestas];
+                    actualizarControles();
+                }
+                let notas = estado.notas || [];
+                const notasGuardadas = sessionStorage.getItem(claveNotas);
+                if (notasGuardadas) {
+                    try {
+                        const notasLocales = JSON.parse(notasGuardadas);
+                        if (Array.isArray(notasLocales) && notasLocales.every(nota => typeof nota === 'string'))
+                            notas = notasLocales;
+                        else
+                            console.error('El formato de las notas locales no es válido.');
+                    } catch (error) {
+                        console.error('No se pudieron leer las notas guardadas en este dispositivo.', error);
+                    }
+                }
+                renderizarNotas(notas);
+                if (!temporizadorInicializado) {
+                    mostrarTiempo(estado.segundosRestantes);
+                    temporizadorInicializado = true;
+                }
+                if (estado.respondido) {
+                    botonAnterior.disabled = true;
+                    botonSiguiente.disabled = true;
+                    opciones.disabled = true;
+                    botonContinuar.hidden = true;
+                    mensaje.textContent = adminPreview
+                        ? 'Respuestas completas en la vista de prueba.'
+                        : 'Respuestas enviadas. Esperando al resto de los participantes.';
+                }
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con la ronda. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        botonAnterior.addEventListener('click', () => {
+            if (indiceActual > 0) {
+                indiceActual--;
+                dibujarPregunta();
+            }
+        });
+        botonSiguiente.addEventListener('click', () => {
+            if (indiceActual < preguntas.length - 1) {
+                indiceActual++;
+                dibujarPregunta();
+            }
+        });
+        opciones.addEventListener('change', () => seleccionarRespuesta(opciones.value));
+        botonContinuar.addEventListener('click', async () => {
+            if (enviando || respuestas.some(respuesta => !respuesta)) return;
+            enviando = true;
+            actualizarControles();
+            try {
+                const respuesta = await fetch(`/api/ronda-3/responder${apiVista}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, answers: respuestas, finalizar: true })
+                });
+                if (!respuesta.ok) throw new Error('No se pudieron confirmar las respuestas.');
+                if (adminPreview) {
+                    mensaje.textContent = 'Respuestas completas en la vista de prueba.';
+                    enviando = false;
+                    await cargarEstado();
+                } else {
+                    location.replace(`/ronda-3-leaderboard?id=${encodeURIComponent(responseId)}`);
+                }
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudieron confirmar las respuestas.';
+                console.error(error);
+                enviando = false;
+                actualizarControles();
+            }
+        });
+
+        if (!responseId) {
+            mensaje.textContent = 'Falta el identificador de participante.';
+        } else {
+            cargarEstado();
+            const intervalo = setInterval(cargarEstado, 900);
+            const reloj = setInterval(actualizarTemporizador, 250);
+            window.addEventListener('pagehide', () => {
+                clearInterval(intervalo);
+                clearInterval(reloj);
+            });
+        }
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>

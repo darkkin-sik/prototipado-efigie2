@@ -16,7 +16,9 @@ Aplicación web local para responder una encuesta, generar una efigie visual a p
 
 El panel de administración incluye accesos para enviar a un participante seleccionado a una etapa en su propio dispositivo. En el caso de bots, abre una vista de prueba en una pestaña aparte. Las vistas de prueba con `adminPreview=1` no cambian la etapa compartida ni marcan a nadie como listo; sus respuestas de ronda 2 se mantienen separadas del puntaje real. El botón «Forzar retroceso» también envía a los dispositivos la pantalla correspondiente al estado restablecido.
 
-Las leaderboards comparten el estilo de `leaderboard.css`, distinguen el equipo propio, actualizan los puntajes periódicamente y animan el reordenamiento. En ronda 2, «Estoy listo para continuar» espera a todos los participantes reales antes de abrir la ronda 3; administración puede forzar ese avance desde su panel.
+En la ronda 3, una etapa de notas de dos minutos precede a una etapa de tres minutos para relacionar las seis partes de la efigie con su significado. Cada acierto suma 100 puntos y se agregan hasta 100 puntos por rapidez; al terminar el tiempo se consideran las selecciones existentes. El leaderboard se actualiza mientras responden los participantes y habilita «Estoy listo para continuar» cuando termina la etapa. Al completarse el avance compartido se abre el borrador de la ronda 4. **La interfaz de la ronda 4 todavía está pendiente; por ahora es solo una pantalla de borrador.**
+
+Las leaderboards comparten el estilo de `leaderboard.css`, distinguen el equipo propio, actualizan los puntajes periódicamente y animan el reordenamiento. En rondas 2 y 3, «Estoy listo para continuar» espera a todos los participantes reales antes de abrir la siguiente etapa; administración puede forzar ese avance desde su panel.
 
 El estado de la sesión y el temporizador viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
 
@@ -66,6 +68,9 @@ ngrok no es necesario para usar la aplicación desde la misma computadora. Sí r
 - `ronda-2-leaderboard.html`: resultados de la ronda 2.
 - `leaderboard.css`: formato compartido de las tablas de resultados.
 - `admin-navigation.js`: recepción de navegaciones enviadas desde administración.
-- `ronda-3.html`: pantalla borrador de la ronda 3.
+- `ronda-3.html`: primera parte de la ronda 3, con notas y efigies del equipo.
+- `ronda-3-identificacion.html`: identificación de las seis capas de la efigie.
+- `ronda-3-leaderboard.html`: resultados animados de la ronda 3 y avance compartido.
+- `ronda-4.html`: pantalla borrador de la ronda 4.
 - `admin-sesion.html`: panel de administración.
 - `respuestas_app.csv`: respuestas guardadas por la aplicación.

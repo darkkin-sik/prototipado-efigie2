@@ -4,26 +4,223 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#eaf3f0">
-    <title>Ronda 3 - Efigie</title>
+    <title>Ronda 3 · Notas - Efigie</title>
     <style>
-        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; }
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --blue: #133463; --selected: #d7e5df; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
-        body { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
-        main { width: min(100%, 520px); text-align: center; }
-        .logo { width: min(177px, 54vw); height: auto; margin: 0 auto 34px; }
-        h1 { margin: 0 0 12px; font-size: clamp(1.7rem, 7vw, 2.4rem); }
-        p { color: var(--muted); line-height: 1.5; }
-        .estado { display: inline-block; margin-top: 12px; padding: 8px 14px; border-radius: 999px; background: #dcebe2; color: #355a46; font-size: 0.9rem; font-weight: 600; }
+        body { min-height: 100vh; padding: 18px 16px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 620px); margin: 0 auto; }
+        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+        h1 { margin: 14px 0 4px; text-align: center; font-size: clamp(1.45rem, 5vw, 1.9rem); font-weight: 500; }
+        .instruccion { margin: 0 0 14px; text-align: center; color: var(--muted); line-height: 1.4; }
+        .efigie-principal { width: min(72vw, 310px); aspect-ratio: 1; margin: 0 auto 8px; }
+        .efigie-principal svg, .efigie-companero svg { display: block; width: 100%; height: 100%; }
+        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: min(100%, 380px); margin: 0 auto 16px; }
+        .companero { min-width: 0; margin: 0; text-align: center; }
+        .efigie-companero { width: min(100%, 170px); aspect-ratio: 1; margin: auto; }
+        figcaption { margin-top: 3px; overflow-wrap: anywhere; color: var(--muted); font-size: 0.78rem; }
+        .notas { display: grid; gap: 7px; }
+        .nota-fila { display: flex; align-items: center; gap: 7px; }
+        .nota { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid #68756e; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }
+        .nota:focus-visible, .eliminar:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+        .nota:focus { border-color: var(--ink); background: var(--selected); }
+        .eliminar { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid transparent; border-radius: 50%; background: transparent; color: #7c171f; font-size: 1.35rem; cursor: pointer; }
+        .eliminar:hover { background: #f5e5e5; }
+        .eliminar[hidden] { display: none; }
+        .mensaje { min-height: 1.5em; margin: 10px 0 0; text-align: center; color: var(--muted); }
+        @media (max-height: 760px) {
+            body { padding-top: 10px; }
+            h1 { margin-top: 8px; }
+            .efigie-principal { width: min(62vw, 265px); margin-bottom: 4px; }
+            .companeros { width: min(100%, 380px); margin-bottom: 8px; }
+            .efigie-companero { width: min(100%, 150px); }
+            .nota { min-height: 38px; padding-block: 7px; }
+        }
     </style>
 </head>
 <body>
     <main>
-        <img class="logo" src="/efigie-logo.svg" alt="Efigie">
-        <h1>Ronda 3</h1>
-        <p>Esta parte de la experiencia todavía está en preparación.</p>
-        <span class="estado">Borrador</span>
+        <div class="temporizador" role="timer" aria-label="Tiempo restante">
+            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
+            <span id="tiempo">2:00</span>
+        </div>
+        <h1>¡Hay pistas a simple vista!</h1>
+        <p class="instruccion">Observá las efigies de tu equipo y anotá lo que quieras recordar. Cada nota puede tener hasta 15 caracteres.</p>
+        <div class="efigie-principal" id="efigiePropia" role="img" aria-label="Tu efigie"></div>
+        <section class="companeros" id="companeros" aria-label="Efigies de tus compañeros"></section>
+        <section class="notas" id="notas" aria-label="Tus notas"></section>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
     </main>
+    <script>
+        const parametros = new URLSearchParams(location.search);
+        const responseId = parametros.get('id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const queryVista = adminPreview ? '&adminPreview=1' : '';
+        const listaNotas = document.getElementById('notas');
+        const mensaje = document.getElementById('mensaje');
+        const tiempo = document.getElementById('tiempo');
+        const claveNotas = `ronda-3-notas:${responseId}`;
+        let notas = [];
+        let cargando = false;
+        let contenidoCargado = false;
+        let guardado = Promise.resolve();
+        let finEtapa = Date.now() + 120000;
+
+        function mostrarTiempo(segundos) {
+            finEtapa = Date.now() + segundos * 1000;
+            actualizarTemporizador();
+        }
+
+        function actualizarTemporizador() {
+            const segundos = Math.max(0, Math.ceil((finEtapa - Date.now()) / 1000));
+            tiempo.textContent = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+            document.querySelector('.temporizador').setAttribute('aria-label', `Tiempo restante: ${tiempo.textContent}`);
+        }
+
+        function renderizarEfigies(efigies) {
+            const propia = efigies.find(efigie => efigie.propia);
+            if (!propia) throw new Error('No se encontró tu efigie en el equipo.');
+            const dibujoPropio = document.getElementById('efigiePropia');
+            dibujoPropio.innerHTML = propia.svg;
+            dibujoPropio.setAttribute('aria-label', `Efigie de ${propia.nombre}`);
+            const companeros = document.getElementById('companeros');
+            companeros.replaceChildren();
+            for (const efigie of efigies.filter(persona => !persona.propia)) {
+                const figura = document.createElement('figure');
+                figura.className = 'companero';
+                const dibujo = document.createElement('div');
+                dibujo.className = 'efigie-companero';
+                dibujo.setAttribute('role', 'img');
+                dibujo.setAttribute('aria-label', `Efigie de ${efigie.nombre}`);
+                dibujo.innerHTML = efigie.svg;
+                const nombre = document.createElement('figcaption');
+                nombre.textContent = efigie.nombre;
+                figura.append(dibujo, nombre);
+                companeros.append(figura);
+            }
+        }
+
+        function dibujarNotas(indiceEnFoco = -1, posicionCursor = null) {
+            listaNotas.replaceChildren();
+            notas.forEach((texto, indice) => {
+                const fila = document.createElement('div');
+                fila.className = 'nota-fila';
+                const entrada = document.createElement('input');
+                entrada.className = 'nota';
+                entrada.type = 'text';
+                entrada.maxLength = 15;
+                entrada.value = texto;
+                entrada.placeholder = 'Añadir nota';
+                entrada.setAttribute('aria-label', `Nota ${indice + 1}, máximo 15 caracteres`);
+                entrada.addEventListener('keydown', evento => {
+                    if (evento.key === 'Enter') evento.preventDefault();
+                });
+                entrada.addEventListener('input', () => {
+                    entrada.value = entrada.value.replace(/[\r\n]/g, '').slice(0, 15);
+                    notas[indice] = entrada.value;
+                    if (entrada.value && indice === notas.length - 1) {
+                        notas.push('');
+                        const posicionCursor = entrada.selectionStart;
+                        dibujarNotas(indice, posicionCursor);
+                    }
+                    sessionStorage.setItem(claveNotas, JSON.stringify(notas.filter(nota => nota.length > 0)));
+                    guardarNotas();
+                });
+                const eliminar = document.createElement('button');
+                eliminar.className = 'eliminar';
+                eliminar.type = 'button';
+                eliminar.hidden = indice === notas.length - 1 && texto === '';
+                eliminar.textContent = '×';
+                eliminar.setAttribute('aria-label', `Eliminar nota ${indice + 1}`);
+                eliminar.addEventListener('click', () => {
+                    notas.splice(indice, 1);
+                    if (!notas.length || notas[notas.length - 1] !== '') notas.push('');
+                    dibujarNotas();
+                    sessionStorage.setItem(claveNotas, JSON.stringify(notas.filter(nota => nota.length > 0)));
+                    guardarNotas();
+                });
+                fila.append(entrada, eliminar);
+                listaNotas.append(fila);
+            });
+            if (indiceEnFoco >= 0) {
+                const entrada = listaNotas.querySelectorAll('input')[indiceEnFoco];
+                entrada?.focus({ preventScroll: true });
+                if (posicionCursor !== null)
+                    entrada?.setSelectionRange(posicionCursor, posicionCursor);
+            }
+        }
+
+        function guardarNotas() {
+            const guardables = notas.filter(nota => nota.length > 0);
+            guardado = guardado.then(async () => {
+                const respuesta = await fetch(`/api/ronda-3/notas${adminPreview ? '?adminPreview=1' : ''}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, notes: guardables })
+                });
+                if (!respuesta.ok) throw new Error('No se pudieron guardar las notas.');
+            }).catch(error => {
+                mensaje.textContent = error.message;
+                console.error(error);
+            });
+        }
+
+        async function redirigirSegunEtapa() {
+            const respuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+            if (!respuesta.ok) return;
+            const estado = await respuesta.json();
+            const destinos = {
+                'ronda-3-identificacion': '/ronda-3-identificacion',
+                'ronda-3-leaderboard': '/ronda-3-leaderboard',
+                'ronda-4': '/ronda-4'
+            };
+            const destino = destinos[estado.etapaRondaUno];
+            if (destino && !adminPreview)
+                location.replace(`${destino}?id=${encodeURIComponent(responseId)}`);
+        }
+
+        async function actualizarEstado() {
+            if (cargando || !responseId) return;
+            cargando = true;
+            try {
+                const respuesta = await fetch(`/api/ronda-3/notas?responseId=${encodeURIComponent(responseId)}${queryVista}`, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview) {
+                    await redirigirSegunEtapa();
+                    return;
+                }
+                if (!respuesta.ok) throw new Error('No se pudo cargar la ronda 3.');
+                const estado = await respuesta.json();
+                if (!contenidoCargado) {
+                    renderizarEfigies(estado.efigies);
+                    notas = [...estado.notas, ''];
+                    sessionStorage.setItem(claveNotas, JSON.stringify(estado.notas));
+                    dibujarNotas();
+                    contenidoCargado = true;
+                }
+                mostrarTiempo(estado.segundosRestantes);
+                mensaje.textContent = '';
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con la ronda. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        if (!responseId) {
+            mensaje.textContent = 'Falta el identificador de participante.';
+        } else {
+            actualizarEstado();
+            const intervalo = setInterval(actualizarEstado, 1200);
+            const reloj = setInterval(actualizarTemporizador, 250);
+            window.addEventListener('pagehide', () => {
+                clearInterval(intervalo);
+                clearInterval(reloj);
+            });
+        }
+    </script>
     <script src="/admin-navigation.js" defer></script>
 </body>
 </html>
