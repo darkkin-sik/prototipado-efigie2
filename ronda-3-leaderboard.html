@@ -34,6 +34,16 @@
         let cargando = false;
         let enviandoListo = false;
 
+        function urlEtapa(destino) {
+            const query = new URLSearchParams({ id: responseId });
+            for (const clave of ['espectador', 'sesion']) {
+                const valor = parametros.get(clave);
+                if (valor) query.set(clave, valor);
+            }
+            if (adminPreview) query.set('adminPreview', '1');
+            return `${destino}?${query}`;
+        }
+
         function renderizar(equipos, equipoPropio) {
             const posicionesAnteriores = new Map(
                 [...listaEquipos.children].map(fila => [fila.dataset.equipo, fila.getBoundingClientRect().top])
@@ -94,7 +104,7 @@
                 const resultados = await respuesta.json();
                 renderizar(resultados.equipos, resultados.equipoPropio);
                 if (resultados.rondaCuatroIniciada && !adminPreview) {
-                    location.replace(`/ronda-4?id=${encodeURIComponent(responseId)}`);
+                    location.replace(urlEtapa('/ronda-4'));
                     return;
                 }
 

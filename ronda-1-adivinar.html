@@ -11,8 +11,6 @@
         html, body { min-height: 100%; margin: 0; }
         body { min-height: 100vh; padding: 18px 20px max(110px, calc(90px + env(safe-area-inset-bottom))); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
         main { width: min(100%, 620px); margin: 0 auto; }
-        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
         h1 { max-width: 500px; margin: 30px auto 28px; text-align: center; font-size: clamp(1.2rem, 5vw, 1.65rem); line-height: 1.2; font-weight: 500; }
         .opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(10px, 3vw, 22px); }
         .opcion { min-width: 0; padding: 7px; border: 2px solid transparent; border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease; }
@@ -30,10 +28,6 @@
 </head>
 <body>
     <main>
-        <div class="temporizador" role="timer" aria-label="Tiempo restante">
-            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
-            <span id="tiempo">2:00</span>
-        </div>
         <h1>¡Encontrá las dos efigies que pertenecen a tus compañeros!</h1>
         <section class="opciones" id="opciones" aria-label="Efigies para elegir"></section>
         <div class="acciones">
@@ -44,30 +38,13 @@
     <script>
         const responseId = new URLSearchParams(window.location.search).get('id');
         const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
-        const tiempo = document.getElementById('tiempo');
         const listaOpciones = document.getElementById('opciones');
         const botonListo = document.getElementById('listo');
         const mensaje = document.getElementById('mensaje');
         const seleccionadas = new Set();
-        let finRondaMs = Date.now() + 120000;
         let cargando = false;
         let yaRespondio = false;
         let opcionesRenderizadas = false;
-
-        function formatearTiempo(segundos) {
-            return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
-        }
-
-        function mostrarTiempo(segundos) {
-            finRondaMs = Date.now() + segundos * 1000;
-            tiempo.textContent = formatearTiempo(segundos);
-        }
-
-        function actualizarTemporizador() {
-            const restantes = Math.max(0, Math.ceil((finRondaMs - Date.now()) / 1000));
-            tiempo.textContent = formatearTiempo(restantes);
-            if (restantes === 0) tiempo.setAttribute('aria-label', 'Tiempo terminado');
-        }
 
         function actualizarBoton() {
             botonListo.disabled = yaRespondio || seleccionadas.size !== 2;
@@ -152,11 +129,10 @@
                     window.location.replace(destino + '?id=' + encodeURIComponent(responseId));
                     return;
                 }
-                mostrarTiempo(ronda.segundosRestantes);
                 if (!opcionesRenderizadas) renderizarOpciones(ronda.opciones);
                 if (ronda.yaRespondio && !yaRespondio) {
                     yaRespondio = true;
-                    mensaje.textContent = '¡Respuesta enviada! Esperá a que termine el tiempo.';
+                    mensaje.textContent = 'Respuesta enviada. Esperá que administración avance la ronda.';
                     actualizarBoton();
                 }
                 if (!yaRespondio && seleccionadas.size === 0)
@@ -172,10 +148,8 @@
         botonListo.addEventListener('click', enviarRespuesta);
         actualizarRonda();
         const intervaloEstado = setInterval(actualizarRonda, 1000);
-        const intervaloTemporizador = setInterval(actualizarTemporizador, 250);
         window.addEventListener('pagehide', () => {
             clearInterval(intervaloEstado);
-            clearInterval(intervaloTemporizador);
         });
     </script>
     <script src="/admin-navigation.js" defer></script>

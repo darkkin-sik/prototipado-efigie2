@@ -17,6 +17,7 @@ class Program
 
     private sealed record LobbyParticipant(string ResponseId, string SessionId, string Nombre, string Svg, DateTime LastSeenUtc, bool EsBot, DatosRespuesta Datos);
     private sealed record RoundTeam(int GroupNumber, string Color, string TextColor, string[] ParticipantIds, int TriangulationPossibilities, int FitnessScore);
+    private sealed record SpectatorSession(string SessionId, string ResponseId);
     private sealed record AdminNavigationRequest(string responseId, string etapa);
     private sealed record RoundTwoChoice(string Capa, string Nombre, string Efigie);
     private sealed class RoundTwoChallenge
@@ -51,6 +52,9 @@ class Program
 
     private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
     private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesLobby = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesEspectador = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, RoundTeam> EquiposEspectadorPorParticipante = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, SpectatorSession> SesionesEspectador = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, DateTime> ExpulsadosLobby = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, byte> RespuestasQueVuelvenAEncuesta = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, bool> ParticipantesListos = new(StringComparer.Ordinal);
@@ -63,6 +67,7 @@ class Program
     private static readonly ConcurrentDictionary<string, int> PuntajesRondaDos = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, RoundThreeParticipantState> EstadosRondaTres = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, int> PuntajesRondaTres = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, RoundThreeQuestion[]> PreguntasRondaTresPorEquipo = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, int> GrupoPorParticipante = new(StringComparer.Ordinal);
     private static readonly string[] ColoresGrupo = { "#133463", "#7C171F", "#6064A3", "#84B444", "#E27646" };
     private static readonly string[] ColoresTextoGrupo = { "#ffffff", "#ffffff", "#ffffff", "#101a15", "#101a15" };
@@ -80,8 +85,8 @@ class Program
         new("estaciones", "Estación favorita"),
         new("carrera", "Años de cursada"),
         new("rol", "Rol en un trabajo grupal"),
-        new("historia", "Formato de historia"),
-        new("conexiones", "Preferencia de trabajo")
+        new("historia", "Formato de historia preferido"),
+        new("conexiones", "Trabajar solo/en grupo")
     };
     private static readonly string[] OpcionesRondaTres =
     {
@@ -89,8 +94,8 @@ class Program
         "Estación favorita",
         "Años de cursada",
         "Rol en un trabajo grupal",
-        "Formato de historia",
-        "Preferencia de trabajo"
+        "Formato de historia preferido",
+        "Trabajar solo/en grupo"
     };
 
     [STAThread]
@@ -395,29 +400,58 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/ronda-3-identificacion", () => Results.File(Path.Combine(dirActual, "ronda-3-identificacion.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-3-leaderboard", () => Results.File(Path.Combine(dirActual, "ronda-3-leaderboard.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-4", () => Results.File(Path.Combine(dirActual, "ronda-4.html"), "text/html; charset=utf-8"));
+    app.MapGet("/espectador", () => Results.File(Path.Combine(dirActual, "espectador.html"), "text/html; charset=utf-8"));
+
+    app.MapGet("/api/espectador/estado", (HttpContext ctx) => {
+        string sessionId = ctx.Request.Query["sessionId"].FirstOrDefault() ?? "";
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        SpectatorSession espectador;
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            if (!Guid.TryParseExact(sessionId, "N", out _)) return Results.BadRequest();
+            espectador = ObtenerOCrearEspectador(sessionId);
+        }
+        else if (!string.IsNullOrWhiteSpace(responseId))
+        {
+            string[] partes = responseId.Split(':');
+            if (partes.Length != 3 || partes[0] != "esp" ||
+                !Guid.TryParseExact(partes[1], "N", out _) ||
+                !ParticipantesEspectador.ContainsKey(responseId) ||
+                !SesionesEspectador.TryGetValue(partes[1], out espectador))
+                return Results.NotFound();
+        }
+        else
+            return Results.BadRequest();
+
+        return Results.Json(new
+        {
+            responseId = espectador.ResponseId,
+            rondaIniciada = RondaIniciada,
+            etapaRondaUno = RondaIniciada ? ObtenerEtapaRondaUno() : "pre-ronda",
+            segundosRestantes = RondaIniciada ? ObtenerSegundosRestantesRondaUno() : 0
+        });
+    });
 
     app.MapGet("/api/ronda-3/notas", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        ActualizarEtapaRondaUno();
-        if (!GrupoPorParticipante.TryGetValue(responseId, out int numeroGrupo)) return Results.NotFound();
-        if (!adminPreview && EtapaRondaUno != 5) return Results.Conflict();
+        if (!TryObtenerEquipoRonda(responseId, out _, out RoundTeam equipo)) return Results.NotFound();
+        if (!adminPreview && EtapaRondaUno != 5 && ctx.Request.Query["consulta"] != "1") return Results.Conflict();
 
         RoundThreeParticipantState estado = ObtenerEstadoRondaTres(responseId, adminPreview);
-        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
         lock (estado.SyncRoot)
         {
             return Results.Json(new
             {
                 etapa = "notas",
-                segundosRestantes = adminPreview ? 120 : ObtenerSegundosRestantesRondaUno(),
+                segundosRestantes = adminPreview && !ParticipantesEspectador.ContainsKey(responseId) ? 30 : ObtenerSegundosRestantesRondaUno(),
                 efigies = equipo.ParticipantIds
-                    .Where(id => ParticipantesLobby.ContainsKey(id))
+                    .Where(id => TryObtenerParticipanteRonda(id, out _))
                     .Select(id => new
                     {
                         id,
-                        nombre = ParticipantesLobby[id].Nombre,
-                        svg = ParticipantesLobby[id].Svg,
+                        nombre = ObtenerParticipanteRonda(id).Nombre,
+                        svg = ObtenerParticipanteRonda(id).Svg,
                         propia = id == responseId
                     }).ToArray(),
                 notas = estado.Notes
@@ -428,13 +462,13 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/ronda-3/notas", async (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<RoundThreeNotesRequest>();
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        ActualizarEtapaRondaUno();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) || solicitud.notes == null)
             return Results.BadRequest();
         if (!adminPreview && EtapaRondaUno != 5) return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
         if (solicitud.notes.Any(nota => nota == null || nota.Length > 15 || nota.Contains('\n') || nota.Contains('\r')))
             return Results.BadRequest(new { error = "Cada nota debe ocupar una sola línea de hasta 15 caracteres." });
+        if (ctx.Request.Query["consulta"] == "1") return Results.Conflict();
 
         RoundThreeParticipantState estado = ObtenerEstadoRondaTres(solicitud.responseId, adminPreview);
         lock (estado.SyncRoot)
@@ -447,19 +481,18 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/api/ronda-3/identificacion", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        ActualizarEtapaRondaUno();
-        if (!GrupoPorParticipante.TryGetValue(responseId, out _)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(responseId, out _, out _)) return Results.NotFound();
         if (!adminPreview && EtapaRondaUno != 6) return Results.Conflict();
 
         RoundThreeParticipantState estado = ObtenerEstadoRondaTres(responseId, adminPreview);
-        if (!adminPreview) InicializarRespuestasBotsRondaTres();
+        if (!adminPreview || ParticipantesEspectador.ContainsKey(responseId)) InicializarRespuestasBotsRondaTres();
         lock (estado.SyncRoot)
         {
             return Results.Json(new
             {
                 etapa = "identificacion",
-                efigie = ParticipantesLobby[responseId].Svg,
-                segundosRestantes = adminPreview ? 180 : ObtenerSegundosRestantesRondaUno(),
+                efigie = ObtenerParticipanteRonda(responseId).Svg,
+                segundosRestantes = 0,
                 preguntas = estado.Questions.Select((pregunta, indice) => new
                 {
                     pregunta.Layer,
@@ -468,6 +501,8 @@ app.MapGet("/", (HttpContext ctx) => {
                 }),
                 respuestas = estado.Answers,
                 respondido = estado.Submitted,
+                respuestasCompletas = estado.Answers.All(respuesta => !string.IsNullOrWhiteSpace(respuesta)),
+                notas = estado.Notes,
                 puntos = estado.Points
             });
         }
@@ -476,39 +511,30 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/ronda-3/responder", async (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<RoundThreeAnswersRequest>();
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        ActualizarEtapaRondaUno();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) || solicitud.answers == null ||
             solicitud.answers.Length != PreguntasRondaTres.Length ||
             solicitud.answers.Any(respuesta => respuesta != "" && !OpcionesRondaTres.Contains(respuesta, StringComparer.Ordinal)))
             return Results.BadRequest();
         if (!adminPreview && EtapaRondaUno != 6) return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
-
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
         RoundThreeParticipantState estado = ObtenerEstadoRondaTres(solicitud.responseId, adminPreview);
+        bool todasRespondidas;
         lock (estado.SyncRoot)
         {
-            if (estado.Submitted) return Results.Conflict();
+            if (estado.Submitted) return Results.Json(new { estado = "ok", respondido = true, consensoEquipo = true, puntos = estado.Points });
             estado.Answers = solicitud.answers.ToArray();
-            bool todasRespondidas = estado.Answers.All(respuesta => !string.IsNullOrWhiteSpace(respuesta));
-            if (solicitud.finalizar)
-            {
-                FinalizarRespuestasRondaTres(solicitud.responseId, estado, adminPreview);
-                if (!adminPreview && ParticipantesLobby.Values
-                    .Where(participante => !participante.EsBot)
-                    .All(participante => EstadosRondaTres.TryGetValue(ClaveEstadoRondaTres(participante.ResponseId, adminPreview: false), out var respuesta)
-                        && respuesta.Submitted))
-                {
-                    lock (CandadoLobby)
-                    {
-                        EtapaRondaUno = 7;
-                        InicioEtapaRondaUnoUtc = null;
-                    }
-                }
-            }
+            todasRespondidas = estado.Answers.All(respuesta => !string.IsNullOrWhiteSpace(respuesta));
+        }
+        bool consensoEquipo = false;
+        if (!adminPreview && todasRespondidas)
+            consensoEquipo = IntentarCompletarConsensoEquipo(solicitud.responseId, adminPreview);
+        lock (estado.SyncRoot)
+        {
             return Results.Json(new
             {
                 estado = "ok",
                 respondido = estado.Submitted,
+                consensoEquipo,
                 respuestasCompletas = todasRespondidas,
                 puntos = estado.Points,
                 correctas = ContarAciertosRondaTres(estado)
@@ -519,8 +545,7 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/api/ronda-3/leaderboard", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        ActualizarEtapaRondaUno();
-        if (!GrupoPorParticipante.TryGetValue(responseId, out int numeroGrupo)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out _)) return Results.NotFound();
         if (!adminPreview && EtapaRondaUno is not (6 or 7 or 8)) return Results.Conflict();
         if (!adminPreview && EtapaRondaUno == 6 &&
             (!EstadosRondaTres.TryGetValue(responseId, out RoundThreeParticipantState estadoParticipante) || !estadoParticipante.Submitted))
@@ -540,7 +565,24 @@ app.MapGet("/", (HttpContext ctx) => {
                 puntos = puntuaciones.Length == 0 ? 0
                     : (int)Math.Round(puntuaciones.Average(), MidpointRounding.AwayFromZero)
             };
-        }).OrderByDescending(equipo => equipo.puntos).ThenBy(equipo => equipo.numero).ToArray();
+        }).ToList();
+        if (ParticipantesEspectador.ContainsKey(responseId))
+        {
+            RoundTeam equipoEspectador = EquiposEspectadorPorParticipante[responseId];
+            int[] puntuaciones = equipoEspectador.ParticipantIds
+                .Where(id => PuntajesRondaTres.ContainsKey(id))
+                .Select(id => PuntajesRondaTres[id])
+                .ToArray();
+            equipos.Add(new
+            {
+                numero = equipoEspectador.GroupNumber,
+                color = equipoEspectador.Color,
+                colorTexto = equipoEspectador.TextColor,
+                puntos = puntuaciones.Length == 0 ? 0
+                    : (int)Math.Round(puntuaciones.Average(), MidpointRounding.AwayFromZero)
+            });
+        }
+        var equiposOrdenados = equipos.OrderByDescending(equipo => equipo.puntos).ThenBy(equipo => equipo.numero).ToArray();
         int total = ParticipantesLobby.Values.Count(participante => !participante.EsBot);
         int listos = ParticipantesLobby.Values.Count(participante =>
             !participante.EsBot && ParticipantesListosRondaCuatro.ContainsKey(participante.ResponseId));
@@ -550,7 +592,7 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Json(new
         {
             equipoPropio = numeroGrupo,
-            equipos,
+            equipos = equiposOrdenados,
             listoContinuar = ParticipantesListosRondaCuatro.ContainsKey(responseId),
             listosContinuar = listos,
             totalParticipantes = total,
@@ -562,10 +604,9 @@ app.MapGet("/", (HttpContext ctx) => {
 
     app.MapPost("/api/ronda-3/listo-siguiente", async (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<PrerondaRequest>();
-        ActualizarEtapaRondaUno();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId)) return Results.BadRequest();
         if (EtapaRondaUno != 7) return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
 
         ParticipantesListosRondaCuatro[solicitud.responseId] = true;
         foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => persona.EsBot))
@@ -573,11 +614,6 @@ app.MapGet("/", (HttpContext ctx) => {
         bool todosListos = ParticipantesLobby.Values
             .Where(participante => !participante.EsBot)
             .All(participante => ParticipantesListosRondaCuatro.ContainsKey(participante.ResponseId));
-        if (todosListos)
-        {
-            lock (CandadoLobby)
-                EtapaRondaUno = 8;
-        }
         return Results.Json(new { estado = "ok", listo = true, rondaLista = todosListos });
     });
 
@@ -585,7 +621,7 @@ app.MapGet("/", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
         if (!adminPreview && ObtenerEtapaRondaUno() != "ronda-2") return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(responseId, out _, out _)) return Results.NotFound();
 
         RoundTwoParticipantState estado = EstadosRondaDos.GetOrAdd(
             ClaveEstadoRondaDos(responseId, adminPreview),
@@ -621,7 +657,7 @@ app.MapGet("/", (HttpContext ctx) => {
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) || solicitud.indice is < 0 or > 1)
             return Results.BadRequest();
         if (!adminPreview && ObtenerEtapaRondaUno() != "ronda-2") return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
         if (!EstadosRondaDos.TryGetValue(ClaveEstadoRondaDos(solicitud.responseId, adminPreview), out RoundTwoParticipantState estado))
             return Results.Conflict();
 
@@ -644,7 +680,7 @@ app.MapGet("/", (HttpContext ctx) => {
             solicitud.indice is < 0 or > 1)
             return Results.BadRequest();
         if (!adminPreview && ObtenerEtapaRondaUno() != "ronda-2") return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
         if (!EstadosRondaDos.TryGetValue(ClaveEstadoRondaDos(solicitud.responseId, adminPreview), out RoundTwoParticipantState estado))
             return Results.Conflict();
 
@@ -679,7 +715,7 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/api/ronda-2/leaderboard", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        if (!GrupoPorParticipante.ContainsKey(responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(responseId, out _, out _)) return Results.NotFound();
         string clave = ClaveEstadoRondaDos(responseId, adminPreview);
         RoundTwoParticipantState estado = adminPreview
             ? EstadosRondaDos.GetOrAdd(clave, _ => CrearEstadoRondaDos(responseId))
@@ -690,7 +726,7 @@ app.MapGet("/", (HttpContext ctx) => {
             if (!adminPreview && estado.Challenges.Any(desafio => !desafio.Answered))
                 return Results.Conflict();
 
-        RoundTeam equipoPropio = EquiposPreRonda[GrupoPorParticipante[responseId] - 1];
+        TryObtenerEquipoRonda(responseId, out _, out RoundTeam equipoPropio);
         var equipos = EquiposPreRonda.Select(equipo =>
         {
             int[] puntuaciones = equipo.ParticipantIds
@@ -707,7 +743,25 @@ app.MapGet("/", (HttpContext ctx) => {
                     ? 0
                     : (int)Math.Round(puntuaciones.Average(), MidpointRounding.AwayFromZero)
             };
-        }).OrderByDescending(equipo => equipo.puntos).ThenBy(equipo => equipo.numero).ToArray();
+        }).ToList();
+        if (ParticipantesEspectador.ContainsKey(responseId))
+        {
+            RoundTeam equipoEspectador = EquiposEspectadorPorParticipante[responseId];
+            int[] puntuaciones = equipoEspectador.ParticipantIds
+                .Where(id => PuntajesRondaDos.ContainsKey(id))
+                .Select(id => PuntajesRondaDos[id])
+                .ToArray();
+            equipos.Add(new
+            {
+                numero = equipoEspectador.GroupNumber,
+                color = equipoEspectador.Color,
+                colorTexto = equipoEspectador.TextColor,
+                cantidadPuntajes = puntuaciones.Length,
+                puntos = puntuaciones.Length == 0 ? 0
+                    : (int)Math.Round(puntuaciones.Average(), MidpointRounding.AwayFromZero)
+            });
+        }
+        var equiposOrdenados = equipos.OrderByDescending(equipo => equipo.puntos).ThenBy(equipo => equipo.numero).ToArray();
         int listosRondaTres = EquiposPreRonda.Sum(equipo => equipo.ParticipantIds.Count(id =>
             ParticipantesLobby.TryGetValue(id, out var participante) &&
             (participante.EsBot || ParticipantesListosRondaTres.ContainsKey(id))));
@@ -716,7 +770,7 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Json(new
         {
             equipoPropio = equipoPropio.GroupNumber,
-            equipos,
+            equipos = equiposOrdenados,
             listoContinuar,
             listosContinuar = listosRondaTres,
             totalParticipantes,
@@ -774,9 +828,15 @@ app.MapGet("/", (HttpContext ctx) => {
 
     app.MapGet("/api/admin/sesion", () => {
         LimpiarParticipantesLobby();
+        _ = ObtenerEtapaRondaUno();
         var participantes = ParticipantesLobby.Values
             .OrderBy(participante => participante.Nombre, StringComparer.OrdinalIgnoreCase)
             .Select(participante => new { id = participante.ResponseId, nombre = participante.Nombre, esBot = participante.EsBot });
+        LobbyParticipant[] participantesReales = ParticipantesLobby.Values
+            .Concat(ParticipantesEspectador.Values)
+            .Where(participante => !participante.EsBot)
+            .DistinctBy(participante => participante.ResponseId)
+            .ToArray();
         var equipos = EquiposPreRonda.Select(equipo => new
         {
             numero = equipo.GroupNumber,
@@ -786,11 +846,27 @@ app.MapGet("/", (HttpContext ctx) => {
             integrantes = equipo.ParticipantIds.Select(id =>
             {
                 if (!ParticipantesLobby.TryGetValue(id, out var integrante))
-                    return new { id, nombre = id, esBot = false, listo = false, efigie = "" };
+                    return new { id, nombre = id, esBot = false, listo = false };
                 bool listo = ParticipantesListos.TryGetValue(id, out bool marcado) && marcado;
-                return new { id, nombre = integrante.Nombre, esBot = integrante.EsBot, listo, efigie = integrante.Svg };
+                return new { id, nombre = integrante.Nombre, esBot = integrante.EsBot, listo };
             }).ToArray()
         }).ToArray();
+        int listosEtapa = EtapaRondaUno switch
+        {
+            0 or 1 => participantesReales.Count(participante => ParticipantesListos.ContainsKey(participante.ResponseId)),
+            3 => participantesReales.Count(participante => ParticipantesListosSiguienteRonda.ContainsKey(participante.ResponseId)),
+            4 => participantesReales.Count(participante => ParticipantesListosRondaTres.ContainsKey(participante.ResponseId)),
+            7 => participantesReales.Count(participante => ParticipantesListosRondaCuatro.ContainsKey(participante.ResponseId)),
+            _ => 0
+        };
+        int respondieronEtapa = EtapaRondaUno switch
+        {
+            2 => participantesReales.Count(participante => PuntajesRondaUno.ContainsKey(participante.ResponseId)),
+            6 => participantesReales.Count(participante =>
+                EstadosRondaTres.TryGetValue(participante.ResponseId, out RoundThreeParticipantState estado) &&
+                estado.Answers.All(respuesta => !string.IsNullOrWhiteSpace(respuesta))),
+            _ => 0
+        };
         return Results.Json(new
         {
             cantidad = ParticipantesLobby.Count,
@@ -800,6 +876,9 @@ app.MapGet("/", (HttpContext ctx) => {
             previewIniciada = PreviewRondaIniciada,
             etapaRondaUno = ObtenerEtapaRondaUno(),
             segundosRestantesRondaUno = ObtenerSegundosRestantesRondaUno(),
+            totalParticipantesReales = participantesReales.Length,
+            listosEtapa,
+            respondieronEtapa,
             participantes,
             equipos
         });
@@ -811,12 +890,11 @@ app.MapGet("/", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         if (!RondaIniciada)
             return Results.Json(new { rondaIniciada = false, previewIniciada = false });
-        if (!GrupoPorParticipante.TryGetValue(responseId, out int numeroGrupo)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out RoundTeam equipo)) return Results.NotFound();
 
-        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
         bool listo = ParticipantesListos.TryGetValue(responseId, out bool marcado) && marcado;
         int cantidadListos = equipo.ParticipantIds.Count(id =>
-            ParticipantesLobby.TryGetValue(id, out var participante) &&
+            TryObtenerParticipanteRonda(id, out var participante) &&
             ParticipantesListos.TryGetValue(id, out bool estaListo) && estaListo);
         return Results.Json(new
         {
@@ -828,7 +906,7 @@ app.MapGet("/", (HttpContext ctx) => {
             colorTexto = equipo.TextColor,
             listo,
             cantidadListos,
-            total = 3
+            total = equipo.ParticipantIds.Length
         });
     });
 
@@ -836,18 +914,19 @@ app.MapGet("/", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         if (!RondaIniciada)
             return Results.Json(new { rondaIniciada = false, previewIniciada = false, etapaRondaUno = "pre-ronda" });
-        if (!GrupoPorParticipante.TryGetValue(responseId, out int numeroGrupo)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out RoundTeam equipo)) return Results.NotFound();
 
-        ActualizarEtapaRondaUno();
-        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
         bool incluirEfigies = ctx.Request.Query["incluirEfigies"] == "1";
         var integrantes = equipo.ParticipantIds.Select(id =>
         {
-            if (!ParticipantesLobby.TryGetValue(id, out var integrante))
+            if (!TryObtenerParticipanteRonda(id, out var integrante))
                 return new { id, nombre = id, efigie = "" };
             return new { id, nombre = integrante.Nombre, efigie = incluirEfigies ? integrante.Svg : "" };
         }).ToArray();
-        var opciones = ParticipantesLobby.Values
+        IEnumerable<LobbyParticipant> participantesDisponibles = ParticipantesEspectador.ContainsKey(responseId)
+            ? EquiposEspectadorPorParticipante[responseId].ParticipantIds.Select(ObtenerParticipanteRonda)
+            : ParticipantesLobby.Values;
+        var opciones = participantesDisponibles
             .Where(participante => participante.ResponseId != responseId)
             .OrderBy(participante => participante.Nombre, StringComparer.OrdinalIgnoreCase)
             .Select(participante => new { id = participante.ResponseId, nombre = participante.Nombre, efigie = incluirEfigies ? participante.Svg : "" })
@@ -858,13 +937,26 @@ app.MapGet("/", (HttpContext ctx) => {
             double promedio = grupo.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id, 0));
             int puntos = (int)Math.Round(promedio, MidpointRounding.AwayFromZero);
             return new { numero = grupo.GroupNumber, color = grupo.Color, colorTexto = grupo.TextColor, puntos };
-        }).OrderByDescending(grupo => grupo.puntos).ThenBy(grupo => grupo.numero).ToArray();
+        }).ToList();
+        if (ParticipantesEspectador.ContainsKey(responseId))
+        {
+            RoundTeam equipoEspectador = EquiposEspectadorPorParticipante[responseId];
+            double promedio = equipoEspectador.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id, 0));
+            equipos.Add(new
+            {
+                numero = equipoEspectador.GroupNumber,
+                color = equipoEspectador.Color,
+                colorTexto = equipoEspectador.TextColor,
+                puntos = (int)Math.Round(promedio, MidpointRounding.AwayFromZero)
+            });
+        }
+        var equiposOrdenados = equipos.OrderByDescending(grupo => grupo.puntos).ThenBy(grupo => grupo.numero).ToArray();
         bool listoSiguiente = ParticipantesListosSiguienteRonda.ContainsKey(responseId);
         bool equipoListoSiguiente = equipo.ParticipantIds.All(id =>
-            ParticipantesLobby.TryGetValue(id, out var participante) &&
+            TryObtenerParticipanteRonda(id, out var participante) &&
             (participante.EsBot || ParticipantesListosSiguienteRonda.ContainsKey(id)));
         int cantidadListosEquipoSiguiente = equipo.ParticipantIds.Count(id =>
-            ParticipantesLobby.TryGetValue(id, out var participante) &&
+            TryObtenerParticipanteRonda(id, out var participante) &&
             (participante.EsBot || ParticipantesListosSiguienteRonda.ContainsKey(id)));
         return Results.Json(new
         {
@@ -880,7 +972,7 @@ app.MapGet("/", (HttpContext ctx) => {
             equipoListoSiguiente,
             cantidadListosSiguiente = cantidadListosEquipoSiguiente,
             totalParticipantes = equipo.ParticipantIds.Length,
-            equipos
+            equipos = equiposOrdenados
         });
     });
 
@@ -892,18 +984,15 @@ app.MapGet("/", (HttpContext ctx) => {
             solicitud.seleccionadas.Distinct(StringComparer.Ordinal).Count() != 2)
             return Results.BadRequest();
 
-        ActualizarEtapaRondaUno();
         if (EtapaRondaUno != 2) return Results.Conflict();
-        if (!GrupoPorParticipante.TryGetValue(solicitud.responseId, out int numeroGrupo)) return Results.NotFound();
-        if (solicitud.seleccionadas.Any(id => id == solicitud.responseId || !ParticipantesLobby.ContainsKey(id)))
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out RoundTeam equipo)) return Results.NotFound();
+        if (solicitud.seleccionadas.Any(id => id == solicitud.responseId || !TryObtenerParticipanteRonda(id, out _)))
             return Results.BadRequest();
         if (PuntajesRondaUno.ContainsKey(solicitud.responseId)) return Results.Conflict();
 
-        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
         int aciertos = solicitud.seleccionadas.Count(id =>
             equipo.ParticipantIds.Contains(id, StringComparer.Ordinal) && id != solicitud.responseId);
-        int segundosRestantes = ObtenerSegundosRestantesRondaUno();
-        int puntos = CalcularPuntajeRondaUno(aciertos, segundosRestantes);
+        int puntos = CalcularPuntajeRondaUno(aciertos);
         if (!PuntajesRondaUno.TryAdd(solicitud.responseId, puntos)) return Results.Conflict();
         return Results.Json(new { estado = "ok", aciertos, puntos, etapaRondaUno = ObtenerEtapaRondaUno() });
     });
@@ -912,31 +1001,20 @@ app.MapGet("/", (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<PrerondaRequest>();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId))
             return Results.BadRequest();
-        ActualizarEtapaRondaUno();
         if (EtapaRondaUno != 3) return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out RoundTeam equipoParticipante)) return Results.NotFound();
 
         ParticipantesListosSiguienteRonda[solicitud.responseId] = true;
-        foreach (RoundTeam equipo in EquiposPreRonda)
-            foreach (string id in equipo.ParticipantIds)
-                if (ParticipantesLobby.TryGetValue(id, out var participante) && participante.EsBot)
-                    ParticipantesListosSiguienteRonda[id] = true;
+        foreach (string id in equipoParticipante.ParticipantIds)
+            if (TryObtenerParticipanteRonda(id, out var participante) && participante.EsBot)
+                ParticipantesListosSiguienteRonda[id] = true;
 
         bool todosListos = EquiposPreRonda.All(equipo => equipo.ParticipantIds.All(id =>
             ParticipantesLobby.TryGetValue(id, out var participante) &&
             (participante.EsBot || ParticipantesListosSiguienteRonda.ContainsKey(id))));
-        RoundTeam equipoParticipante = EquiposPreRonda[GrupoPorParticipante[solicitud.responseId] - 1];
         bool equipoListo = equipoParticipante.ParticipantIds.All(id =>
-            ParticipantesLobby.TryGetValue(id, out var participante) &&
+            TryObtenerParticipanteRonda(id, out var participante) &&
             (participante.EsBot || ParticipantesListosSiguienteRonda.ContainsKey(id)));
-        if (todosListos)
-        {
-            lock (CandadoLobby)
-            {
-                EtapaRondaUno = 4;
-                SimularResultadosRondaDosBots();
-            }
-        }
         return Results.Json(new
         {
             estado = "ok",
@@ -951,32 +1029,20 @@ app.MapGet("/", (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<PrerondaRequest>();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId))
             return Results.BadRequest();
-        ActualizarEtapaRondaUno();
         if (EtapaRondaUno != 4) return Results.Conflict();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out RoundTeam equipoRondaTres)) return Results.NotFound();
 
         ParticipantesListosRondaTres[solicitud.responseId] = true;
-        foreach (RoundTeam equipo in EquiposPreRonda)
-            foreach (string id in equipo.ParticipantIds)
-                if (ParticipantesLobby.TryGetValue(id, out var participante) && participante.EsBot)
-                    ParticipantesListosRondaTres[id] = true;
+        foreach (string id in equipoRondaTres.ParticipantIds)
+            if (TryObtenerParticipanteRonda(id, out var participante) && participante.EsBot)
+                ParticipantesListosRondaTres[id] = true;
 
         bool todosListosRondaTres = EquiposPreRonda.All(equipo => equipo.ParticipantIds.All(id =>
             ParticipantesLobby.TryGetValue(id, out var participante) &&
             (participante.EsBot || ParticipantesListosRondaTres.ContainsKey(id))));
-        RoundTeam equipoRondaTres = EquiposPreRonda[GrupoPorParticipante[solicitud.responseId] - 1];
         bool equipoListoRondaTres = equipoRondaTres.ParticipantIds.All(id =>
-            ParticipantesLobby.TryGetValue(id, out var participante) &&
+            TryObtenerParticipanteRonda(id, out var participante) &&
             (participante.EsBot || ParticipantesListosRondaTres.ContainsKey(id)));
-        if (todosListosRondaTres)
-        {
-            lock (CandadoLobby)
-            {
-                EtapaRondaUno = 5;
-                InicioEtapaRondaUnoUtc = DateTime.UtcNow;
-                InicializarEstadosRondaTres();
-            }
-        }
         return Results.Json(new
         {
             estado = "ok",
@@ -991,10 +1057,9 @@ app.MapGet("/", (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<PrerondaRequest>();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) || !RondaIniciada)
             return Results.BadRequest();
-        if (!GrupoPorParticipante.ContainsKey(solicitud.responseId)) return Results.NotFound();
+        if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
 
         ParticipantesListos[solicitud.responseId] = true;
-        EvaluarAvancePreview();
         return Results.Json(new { estado = "ok", previewIniciada = PreviewRondaIniciada });
     });
 
@@ -1017,7 +1082,7 @@ app.MapGet("/", (HttpContext ctx) => {
 
     app.MapPost("/api/admin/sesion/simular", () => IniciarPreRonda(completarConBots: true, botsListos: false));
 
-    app.MapPost("/api/admin/sesion/iniciar", () => IniciarPreRonda(completarConBots: false, botsListos: false));
+    app.MapPost("/api/admin/sesion/iniciar", () => IniciarPreRonda(completarConBots: true, botsListos: false));
 
     app.MapPost("/api/admin/sesion/forzar-inicio", () => IniciarPreRonda(completarConBots: true, botsListos: true));
 
@@ -1036,21 +1101,58 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/admin/ronda-1/agregar-tiempo", () => {
         lock (CandadoLobby)
         {
-            ActualizarEtapaRondaUno();
-            if (EtapaRondaUno != 1) return Results.Conflict();
+            if (EtapaRondaUno is not (1 or 2)) return Results.Conflict();
             SegundosExtraRondaUno += 20;
             return Results.Json(new { estado = "ok", segundosRestantes = ObtenerSegundosRestantesRondaUno() });
+        }
+    });
+
+    app.MapPost("/api/admin/ronda-1/saltar-tiempo", () => {
+        lock (CandadoLobby)
+        {
+            if (EtapaRondaUno == 1)
+            {
+                EtapaRondaUno = 2;
+                InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+                SegundosExtraRondaUno = 0;
+                return Results.Json(new { estado = "ok", etapaRondaUno = "adivinanza" });
+            }
+            if (EtapaRondaUno == 2)
+            {
+                SimularRespuestasBots();
+                EtapaRondaUno = 3;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+                return Results.Json(new { estado = "ok", etapaRondaUno = "leaderboard" });
+            }
+            if (EtapaRondaUno == 5)
+            {
+                EtapaRondaUno = 6;
+                InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+                SegundosExtraRondaUno = 0;
+                InicializarRespuestasBotsRondaTres();
+                return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-identificacion" });
+            }
+            if (EtapaRondaUno == 6)
+            {
+                CompletarRespuestasRondaTresPorForzarAvance();
+                EtapaRondaUno = 7;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+                return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-leaderboard" });
+            }
+            return Results.Conflict();
         }
     });
 
     app.MapPost("/api/admin/ronda-1/forzar-leaderboard", () => {
         lock (CandadoLobby)
         {
-            ActualizarEtapaRondaUno();
             if (EtapaRondaUno != 2) return Results.Conflict();
             SimularRespuestasBots();
             EtapaRondaUno = 3;
-            InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+            InicioEtapaRondaUnoUtc = null;
+            SegundosExtraRondaUno = 0;
             return Results.Json(new { estado = "ok", etapaRondaUno = "leaderboard" });
         }
     });
@@ -1058,13 +1160,14 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/admin/ronda-1/forzar-siguiente", () => {
         lock (CandadoLobby)
         {
-            ActualizarEtapaRondaUno();
             if (EtapaRondaUno == 3)
             {
                 foreach (RoundTeam equipo in EquiposPreRonda)
                     foreach (string id in equipo.ParticipantIds)
                         ParticipantesListosSiguienteRonda[id] = true;
                 EtapaRondaUno = 4;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
                 SimularResultadosRondaDosBots();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-2" });
             }
@@ -1075,6 +1178,7 @@ app.MapGet("/", (HttpContext ctx) => {
                         ParticipantesListosRondaTres[id] = true;
                 EtapaRondaUno = 5;
                 InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+                SegundosExtraRondaUno = 0;
                 InicializarEstadosRondaTres();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-notas" });
             }
@@ -1082,21 +1186,25 @@ app.MapGet("/", (HttpContext ctx) => {
             {
                 EtapaRondaUno = 6;
                 InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+                SegundosExtraRondaUno = 0;
                 InicializarRespuestasBotsRondaTres();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-identificacion" });
             }
             if (EtapaRondaUno == 6)
             {
-                CompletarRespuestasRondaTresPorTiempo();
+                CompletarRespuestasRondaTresPorForzarAvance();
                 EtapaRondaUno = 7;
                 InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-leaderboard" });
             }
             if (EtapaRondaUno == 7)
             {
-                foreach (LobbyParticipant participante in ParticipantesLobby.Values)
+                foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values))
                     ParticipantesListosRondaCuatro[participante.ResponseId] = true;
                 EtapaRondaUno = 8;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-4" });
             }
             return Results.Conflict();
@@ -1107,6 +1215,58 @@ app.MapGet("/", (HttpContext ctx) => {
     {
         lock (CandadoLobby)
         {
+            if (RondaIniciada && EtapaRondaUno > 0)
+            {
+                string rutaAnterior = EtapaRondaUno switch
+                {
+                    1 => "/pre-ronda-1?id=",
+                    2 => "/ronda-1-preview?id=",
+                    3 => "/ronda-1-adivinar?id=",
+                    4 => "/ronda-1-leaderboard?id=",
+                    5 => "/ronda-2-leaderboard?id=",
+                    6 => "/ronda-3?id=",
+                    7 => "/ronda-3-identificacion?id=",
+                    8 => "/ronda-3-leaderboard?id=",
+                    _ => null
+                };
+                if (rutaAnterior == null)
+                    return Results.Conflict();
+
+                int etapaAnterior = EtapaRondaUno - 1;
+                foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => !persona.EsBot))
+                    NavegacionesAdmin[participante.ResponseId] =
+                        $"{rutaAnterior}{Uri.EscapeDataString(participante.ResponseId)}";
+
+                EtapaRondaUno = etapaAnterior;
+                PreviewRondaIniciada = etapaAnterior > 0;
+                InicioEtapaRondaUnoUtc = etapaAnterior is 1 or 2 or 5 or 6 ? DateTime.UtcNow : null;
+                SegundosExtraRondaUno = 0;
+                if (etapaAnterior is 5 or 6)
+                {
+                    foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values))
+                    {
+                        if (!EstadosRondaTres.TryGetValue(
+                            ClaveEstadoRondaTres(participante.ResponseId, adminPreview: false),
+                            out RoundThreeParticipantState estado))
+                            continue;
+                        lock (estado.SyncRoot)
+                        {
+                            estado.Submitted = false;
+                            estado.Points = 0;
+                            if (participante.EsBot)
+                                estado.Answers = Enumerable.Repeat("", estado.Questions.Length).ToArray();
+                        }
+                    }
+                    PuntajesRondaTres.Clear();
+                }
+                return Results.Json(new
+                {
+                    estado = "ok",
+                    etapaAnterior = EtapasRondaUno[etapaAnterior],
+                    cambio = true
+                });
+            }
+
             if (PreviewRondaIniciada)
             {
                 EnviarNavegacionATodos("/pre-ronda-1?id=");
@@ -1467,6 +1627,114 @@ app.MapGet("/", (HttpContext ctx) => {
         };
     }
 
+    SpectatorSession ObtenerOCrearEspectador(string sessionId)
+    {
+        lock (CandadoLobby)
+        {
+            if (SesionesEspectador.TryGetValue(sessionId, out SpectatorSession existente))
+                return existente;
+
+            var equiposActivos = SesionesEspectador.Values
+                .Select(sesion => EquiposEspectadorPorParticipante[sesion.ResponseId])
+                .DistinctBy(equipo => equipo.GroupNumber)
+                .OrderBy(equipo => equipo.GroupNumber);
+            RoundTeam equipo = equiposActivos.FirstOrDefault(equipo =>
+                SesionesEspectador.Values.Count(sesion =>
+                    EquiposEspectadorPorParticipante[sesion.ResponseId].GroupNumber == equipo.GroupNumber) < 3);
+            int numeroEquipo = equipo?.GroupNumber ?? (equiposActivos.Select(e => e.GroupNumber).DefaultIfEmpty(5).Max() + 1);
+            string idJugador = $"esp:{sessionId}:player";
+            var sesionesEquipo = SesionesEspectador.Values
+                .Where(sesion => equipo != null
+                    ? EquiposEspectadorPorParticipante[sesion.ResponseId].GroupNumber == numeroEquipo
+                    : false)
+                .ToList();
+            sesionesEquipo.Add(new SpectatorSession(sessionId, idJugador));
+            var integrantes = new List<LobbyParticipant>();
+            foreach (SpectatorSession sesion in sesionesEquipo)
+            {
+                DatosRespuesta datos = CrearDatosBot("ESP");
+                datos.id = sesion.ResponseId;
+                datos.nombre = "ESP";
+                string svg = GeneradorEfigie.GenerarSVG(datos, LeerConfig(rutaConfig), incluirMarcoYNombre: false);
+                integrantes.Add(new LobbyParticipant(sesion.ResponseId, "", "ESP", svg, DateTime.UtcNow, false, datos));
+            }
+            int cantidadBots = 3 - integrantes.Count;
+            for (int indice = 1; indice <= cantidadBots; indice++)
+            {
+                string idBot = $"esp-bot:{numeroEquipo}:{indice}";
+                DatosRespuesta datos = CrearDatosBot($"Bot {indice}");
+                datos.id = idBot;
+                datos.nombre = $"Bot {indice}";
+                string svg = GeneradorEfigie.GenerarSVG(datos, LeerConfig(rutaConfig), incluirMarcoYNombre: false);
+                integrantes.Add(new LobbyParticipant(idBot, "", datos.nombre, svg, DateTime.UtcNow, true, datos));
+            }
+
+            string[] ids = integrantes.Select(persona => persona.ResponseId).ToArray();
+            var (puntaje, posibilidades) = EvaluarTrio(integrantes);
+            var nuevoEquipo = new RoundTeam(numeroEquipo, ColoresGrupo[(numeroEquipo - 1) % ColoresGrupo.Length],
+                ColoresTextoGrupo[(numeroEquipo - 1) % ColoresTextoGrupo.Length], ids, posibilidades, puntaje);
+            var idsActuales = ids.ToHashSet(StringComparer.Ordinal);
+            if (equipo != null)
+            {
+                foreach (string idBotAnterior in equipo.ParticipantIds.Where(id => id.StartsWith("esp-bot:", StringComparison.Ordinal)))
+                {
+                    if (idsActuales.Contains(idBotAnterior)) continue;
+                    ParticipantesEspectador.TryRemove(idBotAnterior, out _);
+                    EquiposEspectadorPorParticipante.TryRemove(idBotAnterior, out _);
+                    EstadosRondaDos.TryRemove(ClaveEstadoRondaDos(idBotAnterior, false), out _);
+                    EstadosRondaTres.TryRemove(ClaveEstadoRondaTres(idBotAnterior, false), out _);
+                    PuntajesRondaDos.TryRemove(idBotAnterior, out _);
+                    PuntajesRondaTres.TryRemove(idBotAnterior, out _);
+                }
+            }
+            foreach (LobbyParticipant integrante in integrantes)
+            {
+                ParticipantesEspectador[integrante.ResponseId] = integrante;
+                EquiposEspectadorPorParticipante[integrante.ResponseId] = nuevoEquipo;
+                if (integrante.EsBot)
+                {
+                    ParticipantesListos[integrante.ResponseId] = true;
+                    ParticipantesListosSiguienteRonda[integrante.ResponseId] = true;
+                    ParticipantesListosRondaTres[integrante.ResponseId] = true;
+                    ParticipantesListosRondaCuatro[integrante.ResponseId] = true;
+                }
+            }
+            if (equipo != null && PreguntasRondaTresPorEquipo.TryGetValue(FirmaEquipo(equipo), out RoundThreeQuestion[] preguntasEquipo))
+                PreguntasRondaTresPorEquipo.TryAdd(FirmaEquipo(nuevoEquipo), preguntasEquipo);
+            SesionesEspectador[sessionId] = new SpectatorSession(sessionId, idJugador);
+            return SesionesEspectador[sessionId];
+        }
+    }
+
+    bool TryObtenerParticipanteRonda(string responseId, out LobbyParticipant participante)
+    {
+        if (ParticipantesLobby.TryGetValue(responseId, out participante)) return true;
+        return ParticipantesEspectador.TryGetValue(responseId, out participante);
+    }
+
+    bool TryObtenerEquipoRonda(string responseId, out int numeroGrupo, out RoundTeam equipo)
+    {
+        if (GrupoPorParticipante.TryGetValue(responseId, out numeroGrupo) &&
+            numeroGrupo > 0 && numeroGrupo <= EquiposPreRonda.Count)
+        {
+            equipo = EquiposPreRonda[numeroGrupo - 1];
+            return true;
+        }
+        if (EquiposEspectadorPorParticipante.TryGetValue(responseId, out equipo))
+        {
+            numeroGrupo = equipo.GroupNumber;
+            return true;
+        }
+        numeroGrupo = 0;
+        equipo = null;
+        return false;
+    }
+
+    LobbyParticipant ObtenerParticipanteRonda(string responseId) =>
+        TryObtenerParticipanteRonda(responseId, out LobbyParticipant participante)
+            ? participante
+            : throw new InvalidOperationException($"No se encontró al integrante {responseId}.");
+
     IResult IniciarPreRonda(bool completarConBots, bool botsListos)
     {
         lock (CandadoLobby)
@@ -1499,6 +1767,8 @@ app.MapGet("/", (HttpContext ctx) => {
                         ParticipantesListos[id] = true;
                 }
             }
+            foreach (LobbyParticipant participante in ParticipantesEspectador.Values.Where(persona => persona.EsBot))
+                ParticipantesListos[participante.ResponseId] = true;
 
             PreviewRondaIniciada = false;
             EtapaRondaUno = 0;
@@ -1516,7 +1786,6 @@ app.MapGet("/", (HttpContext ctx) => {
             RespuestasQueVuelvenAEncuesta.Clear();
             RondaIniciada = true;
         }
-        EvaluarAvancePreview();
         return Results.Json(new { estado = "ok", rondaIniciada = true, equipos = 5, participantes = 15 });
     }
 
@@ -1621,19 +1890,6 @@ app.MapGet("/", (HttpContext ctx) => {
         return $"{(anio < 2000 ? "petalos" : "poligono")}-{dosDigitos:D2}";
     }
 
-    void EvaluarAvancePreview()
-    {
-        lock (CandadoLobby)
-        {
-            if (!RondaIniciada || EquiposPreRonda.Count != 5) return;
-            bool todosListos = EquiposPreRonda
-                .SelectMany(equipo => equipo.ParticipantIds)
-                .All(id => ParticipantesListos.TryGetValue(id, out bool listo) && listo);
-            if (todosListos)
-                IniciarRondaUno();
-        }
-    }
-
     void IniciarRondaUno()
     {
         if (PreviewRondaIniciada) return;
@@ -1641,43 +1897,6 @@ app.MapGet("/", (HttpContext ctx) => {
         EtapaRondaUno = 1;
         SegundosExtraRondaUno = 0;
         PreviewRondaIniciada = true;
-    }
-
-    void ActualizarEtapaRondaUno()
-    {
-        lock (CandadoLobby)
-        {
-            while (InicioEtapaRondaUnoUtc.HasValue && EtapaRondaUno is 1 or 2 or 5 or 6)
-            {
-                int duracion = EtapaRondaUno switch
-                {
-                    1 => 30 + SegundosExtraRondaUno,
-                    2 => 120,
-                    5 => 120,
-                    6 => 180,
-                    _ => 0
-                };
-                DateTime finEtapa = InicioEtapaRondaUnoUtc.Value.AddSeconds(duracion);
-                if (DateTime.UtcNow < finEtapa) break;
-                if (EtapaRondaUno == 5)
-                {
-                    EtapaRondaUno = 6;
-                    InicializarRespuestasBotsRondaTres();
-                }
-                else if (EtapaRondaUno == 6)
-                {
-                    CompletarRespuestasRondaTresPorTiempo();
-                    EtapaRondaUno = 7;
-                }
-                else
-                {
-                    EtapaRondaUno++;
-                }
-                InicioEtapaRondaUnoUtc = finEtapa;
-                if (EtapaRondaUno == 3)
-                    SimularRespuestasBots();
-            }
-        }
     }
 
     void SimularRespuestasBots()
@@ -1691,30 +1910,26 @@ app.MapGet("/", (HttpContext ctx) => {
                     PuntajesRondaUno.ContainsKey(id))
                     continue;
 
-                int segundosRestantesSimulados = Random.Shared.Next(0, 121);
-                int puntos = CalcularPuntajeRondaUno(2, segundosRestantesSimulados);
+                int puntos = CalcularPuntajeRondaUno(Random.Shared.Next(0, 3));
                 PuntajesRondaUno.TryAdd(id, puntos);
             }
         }
+        foreach (LobbyParticipant participante in ParticipantesEspectador.Values.Where(persona => persona.EsBot))
+        {
+            PuntajesRondaUno.TryAdd(participante.ResponseId, CalcularPuntajeRondaUno(Random.Shared.Next(0, 3)));
+        }
     }
 
-    int CalcularPuntajeRondaUno(int aciertos, int segundosRestantes)
-    {
-        int puntosPorAciertos = aciertos * 50;
-        int puntosPorRapidez = (int)Math.Round(100.0 * segundosRestantes / 120, MidpointRounding.AwayFromZero);
-        return puntosPorAciertos + puntosPorRapidez;
-    }
+    int CalcularPuntajeRondaUno(int aciertos) => aciertos * 50;
 
     string ObtenerEtapaRondaUno()
     {
-        ActualizarEtapaRondaUno();
         lock (CandadoLobby)
             return EtapasRondaUno[Math.Clamp(EtapaRondaUno, 0, EtapasRondaUno.Length - 1)];
     }
 
     int ObtenerSegundosRestantesRondaUno()
     {
-        ActualizarEtapaRondaUno();
         lock (CandadoLobby)
         {
             return ObtenerSegundosRestantesEtapaActual();
@@ -1727,9 +1942,9 @@ app.MapGet("/", (HttpContext ctx) => {
         int duracion = EtapaRondaUno switch
         {
             1 => 30 + SegundosExtraRondaUno,
-            2 => 120,
-            5 => 120,
-            6 => 180,
+            2 => 120 + SegundosExtraRondaUno,
+            5 => 30,
+            6 => 0,
             _ => 0
         };
         int transcurridos = (int)Math.Ceiling((DateTime.UtcNow - InicioEtapaRondaUnoUtc.Value).TotalSeconds);
@@ -1742,10 +1957,16 @@ app.MapGet("/", (HttpContext ctx) => {
     string ClaveEstadoRondaTres(string responseId, bool adminPreview) =>
         adminPreview ? $"admin-preview:{responseId}" : responseId;
 
+    string FirmaEquipo(RoundTeam equipo) =>
+        string.Join("|", equipo.ParticipantIds.OrderBy(id => id, StringComparer.Ordinal));
+
     RoundThreeParticipantState ObtenerEstadoRondaTres(string responseId, bool adminPreview) =>
-        EstadosRondaTres.GetOrAdd(ClaveEstadoRondaTres(responseId, adminPreview), _ =>
+        EstadosRondaTres.GetOrAdd(ClaveEstadoRondaTres(responseId, adminPreview), claveEstado =>
         {
-            RoundThreeQuestion[] preguntas = PreguntasRondaTres.OrderBy(_ => Random.Shared.Next()).ToArray();
+            if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out RoundTeam equipo))
+                throw new InvalidOperationException($"No se encontró el equipo del integrante {responseId}.");
+            RoundThreeQuestion[] preguntas = PreguntasRondaTresPorEquipo.GetOrAdd(
+                FirmaEquipo(equipo), firmaEquipo => PreguntasRondaTres.OrderBy(_ => Random.Shared.Next()).ToArray());
             return new RoundThreeParticipantState
             {
                 Questions = preguntas,
@@ -1757,6 +1978,7 @@ app.MapGet("/", (HttpContext ctx) => {
     {
         EstadosRondaTres.Clear();
         PuntajesRondaTres.Clear();
+        PreguntasRondaTresPorEquipo.Clear();
         ParticipantesListosRondaCuatro.Clear();
         foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => !persona.EsBot))
             _ = ObtenerEstadoRondaTres(participante.ResponseId, adminPreview: false);
@@ -1766,39 +1988,91 @@ app.MapGet("/", (HttpContext ctx) => {
         estado.Answers.Select((respuesta, indice) =>
             respuesta == estado.Questions[indice].Answer).Count(correcto => correcto);
 
-    int CalcularPuntajeRondaTres(RoundThreeParticipantState estado, int segundosRestantes)
-    {
-        int aciertos = ContarAciertosRondaTres(estado);
-        int puntosVelocidad = aciertos == 0 ? 0
-            : (int)Math.Round(100.0 * Math.Clamp(segundosRestantes, 0, 180) / 180, MidpointRounding.AwayFromZero);
-        return aciertos * 100 + puntosVelocidad;
-    }
+    int CalcularPuntajeRondaTres(RoundThreeParticipantState estado) =>
+        ContarAciertosRondaTres(estado) * 100;
 
     void FinalizarRespuestasRondaTres(string responseId, RoundThreeParticipantState estado, bool adminPreview)
     {
         estado.Submitted = true;
-        estado.Points = CalcularPuntajeRondaTres(estado, adminPreview ? 0 : ObtenerSegundosRestantesEtapaActual());
+        estado.Points = CalcularPuntajeRondaTres(estado);
         if (!adminPreview)
             PuntajesRondaTres[responseId] = estado.Points;
     }
 
     void InicializarRespuestasBotsRondaTres()
     {
-        foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => persona.EsBot))
+        foreach (RoundTeam equipo in EquiposPreRonda.Concat(EquiposEspectadorPorParticipante.Values
+            .DistinctBy(equipo => equipo.GroupNumber)))
         {
-            RoundThreeParticipantState estado = ObtenerEstadoRondaTres(participante.ResponseId, adminPreview: false);
-            lock (estado.SyncRoot)
+            LobbyParticipant[] integrantes = equipo.ParticipantIds
+                .Select(id => TryObtenerParticipanteRonda(id, out LobbyParticipant participante) ? participante : null)
+                .OfType<LobbyParticipant>()
+                .ToArray();
+            if (integrantes.Any(participante => !participante.EsBot)) continue;
+            foreach (LobbyParticipant participante in integrantes)
             {
-                if (estado.Submitted) continue;
-                estado.Answers = estado.Questions.Select(_ => OpcionesRondaTres[Random.Shared.Next(OpcionesRondaTres.Length)]).ToArray();
-                FinalizarRespuestasRondaTres(participante.ResponseId, estado, adminPreview: false);
+                RoundThreeParticipantState estado = ObtenerEstadoRondaTres(participante.ResponseId, adminPreview: false);
+                lock (estado.SyncRoot)
+                {
+                    if (estado.Submitted) continue;
+                    estado.Answers = estado.Questions.Select(_ =>
+                        OpcionesRondaTres[Random.Shared.Next(OpcionesRondaTres.Length)]).ToArray();
+                    estado.Submitted = true;
+                    estado.Points = Random.Shared.Next(0, 601);
+                    PuntajesRondaTres[participante.ResponseId] = estado.Points;
+                }
             }
         }
     }
 
-    void CompletarRespuestasRondaTresPorTiempo()
+    bool IntentarCompletarConsensoEquipo(string responseId, bool adminPreview)
     {
-        foreach (LobbyParticipant participante in ParticipantesLobby.Values)
+        if (adminPreview || !TryObtenerEquipoRonda(responseId, out _, out RoundTeam equipo))
+            return false;
+        LobbyParticipant[] participantesReales = equipo.ParticipantIds
+            .Select(id => TryObtenerParticipanteRonda(id, out LobbyParticipant participante) ? participante : null)
+            .Where(participante => participante != null && !participante.EsBot)
+            .ToArray()!;
+        if (participantesReales.Length == 0) return false;
+        RoundThreeParticipantState[] estados = participantesReales
+            .Select(participante => ObtenerEstadoRondaTres(participante!.ResponseId, adminPreview: false))
+            .ToArray();
+        int adquiridos = 0;
+        try
+        {
+            foreach (RoundThreeParticipantState estado in estados)
+            {
+                Monitor.Enter(estado.SyncRoot);
+                adquiridos++;
+            }
+            string[] respuestasConsensuadas = estados[0].Answers;
+            if (respuestasConsensuadas.Any(string.IsNullOrWhiteSpace) ||
+                estados.Any(estado => !estado.Answers.SequenceEqual(respuestasConsensuadas, StringComparer.Ordinal)))
+                return false;
+
+            foreach (string id in equipo.ParticipantIds)
+            {
+                if (!TryObtenerParticipanteRonda(id, out LobbyParticipant participante)) continue;
+                RoundThreeParticipantState estado = ObtenerEstadoRondaTres(id, adminPreview: false);
+                lock (estado.SyncRoot)
+                {
+                    if (participante.EsBot)
+                        estado.Answers = respuestasConsensuadas.ToArray();
+                    FinalizarRespuestasRondaTres(id, estado, adminPreview: false);
+                }
+            }
+            return true;
+        }
+        finally
+        {
+            for (int indice = adquiridos - 1; indice >= 0; indice--)
+                Monitor.Exit(estados[indice].SyncRoot);
+        }
+    }
+
+    void CompletarRespuestasRondaTresPorForzarAvance()
+    {
+        foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values))
         {
             RoundThreeParticipantState estado = ObtenerEstadoRondaTres(participante.ResponseId, adminPreview: false);
             lock (estado.SyncRoot)
@@ -1813,17 +2087,17 @@ app.MapGet("/", (HttpContext ctx) => {
     {
         foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => persona.EsBot))
             PuntajesRondaDos.TryAdd(participante.ResponseId, Random.Shared.Next(401));
+        foreach (LobbyParticipant participante in ParticipantesEspectador.Values.Where(persona => persona.EsBot))
+            PuntajesRondaDos.TryAdd(participante.ResponseId, Random.Shared.Next(401));
     }
 
     RoundTwoParticipantState CrearEstadoRondaDos(string responseId)
     {
-        int numeroGrupo = GrupoPorParticipante[responseId];
-        RoundTeam equipo = EquiposPreRonda[numeroGrupo - 1];
+        if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out RoundTeam equipo))
+            throw new InvalidOperationException($"No se encontró el equipo del integrante {responseId}.");
         LobbyParticipant[] companeros = equipo.ParticipantIds
             .Where(id => id != responseId)
-            .Select(id => ParticipantesLobby.TryGetValue(id, out LobbyParticipant participante)
-                ? participante
-                : throw new InvalidOperationException($"No se encontró al integrante {id} del equipo {numeroGrupo}."))
+            .Select(ObtenerParticipanteRonda)
             .OrderBy(_ => Random.Shared.Next())
             .ToArray();
         if (companeros.Length != 2)

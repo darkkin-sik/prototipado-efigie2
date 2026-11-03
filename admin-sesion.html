@@ -14,6 +14,8 @@
         h1 { margin: 0; text-align: center; font-size: clamp(1.35rem, 4vw, 1.8rem); }
         .estado { margin: 10px 0 0; color: var(--muted); font-size: 1rem; }
         .lista { flex: 1; margin: 0; padding: 0; list-style: none; }
+        .controlador-usuarios { margin-top: 24px; }
+        .controlador-usuarios h2 { margin: 0 0 8px; font-size: 1.05rem; }
         .participante { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
         .identidad { display: flex; align-items: center; gap: 10px; min-width: 0; overflow-wrap: anywhere; }
         .marca-bot { padding: 3px 7px; background: #dcebe2; color: #355a46; font-size: 0.75rem; }
@@ -21,20 +23,16 @@
         .expulsar:hover { background: #e6ece8; }
         .equipos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
         .equipo { min-width: 0; padding: 12px; border-top: 4px solid var(--color-equipo); background: #ffffff; }
-        .efigies-integrantes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: min(100%, 600px); margin: 0 auto 12px; }
-        .efigie-integrante { min-width: 0; margin: 0; text-align: center; }
-        .efigie-dibujo { width: min(100%, 180px); aspect-ratio: 1; margin: 0 auto; }
-        .efigie-dibujo svg { display: block; width: 100%; height: 100%; background: #fff; }
-        .nombre-integrante { min-height: 2.4em; margin: 5px 0 2px; overflow-wrap: anywhere; font-size: 0.85rem; }
-        .listo-integrante { margin: 0; color: var(--muted); font-size: 0.8rem; }
-        .listo-integrante[data-listo="true"] { color: #286547; font-weight: 700; }
         .equipo h2 { margin: 0 0 6px; text-align: center; font-size: 1rem; }
         .equipo p { margin: 0 0 8px; color: var(--muted); font-size: 0.85rem; }
         .integrantes { margin: 0; padding: 0; list-style: none; }
-        .integrante { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.9rem; }
-        .estado-listo { flex: 0 0 auto; color: var(--muted); }
-        .estado-listo[data-listo="true"] { color: #286547; font-weight: 700; }
+        .integrante { display: flex; justify-content: space-between; gap: 10px; padding: 8px; border-top: 1px solid var(--line); font-size: 0.9rem; }
+        .integrante[data-listo="false"] { background: #fff0ef; color: #a3211b; }
+        .integrante[data-listo="true"] { background: #e8f5ec; color: #21643b; }
+        .estado-listo { flex: 0 0 auto; font-weight: 700; }
         .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding-top: 30px; }
+        .contadores-acciones { min-height: 1.4em; margin: 6px 0 0; text-align: center; color: var(--muted); font-size: 0.88rem; }
+        .temporizador-guia { min-height: 1.5em; margin: 8px 0 0; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
         .accion { min-height: 48px; padding: 11px 17px; border: 0; border-radius: 4px; background: var(--green); color: #101a15; font: inherit; font-weight: 600; cursor: pointer; }
         a.accion { display: grid; place-items: center; text-align: center; text-decoration: none; }
         .accion-volver { background: #dcebe2; }
@@ -57,41 +55,50 @@
             <img class="logo" src="/efigie-logo.svg" alt="Efigie">
             <h1>Administración de sesión</h1>
             <p class="estado" id="estadoSesion" aria-live="polite">Esperando participantes... 0/15</p>
-            <p class="estado" id="tiempoRonda" hidden></p>
         </header>
-        <ul class="lista" id="participantes" aria-label="Participantes en espera"></ul>
         <div class="equipos" id="equipos" aria-label="Equipos de la pre-ronda" hidden></div>
+        <footer class="acciones">
+            <button type="button" class="accion" id="simular">Simular ronda</button>
+            <button type="button" class="accion" id="comenzar" disabled>Comenzar ronda</button>
+            <button type="button" class="accion" id="forzarListo" hidden>Forzar listo</button>
+            <button type="button" class="accion" id="agregarTiempo" hidden>Agregar 20 seg</button>
+            <button type="button" class="accion" id="saltarTiempo" hidden>Saltar tiempo</button>
+            <button type="button" class="accion" id="forzarLeaderboard" hidden>Forzar leaderboard (simular bots)</button>
+            <button type="button" class="accion" id="forzarSiguiente" hidden>Forzar avance desde leaderboard</button>
+            <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
+        </footer>
+        <div class="contadores-acciones" aria-live="polite">
+            <p id="contadorForzar" hidden></p>
+            <p id="contadorLeaderboard" hidden></p>
+        </div>
+        <p class="temporizador-guia" id="temporizadorGuia" role="timer" aria-live="polite" hidden></p>
         <section class="pruebas" id="pruebas" hidden aria-label="Accesos directos de prueba">
             <h2>Ir a una parte de la experiencia</h2>
             <label for="participantePrueba">Participante para visualizar</label>
             <select id="participantePrueba"></select>
             <nav class="accesos-prueba" id="accesosPrueba" aria-label="Partes de la experiencia"></nav>
         </section>
+        <section class="controlador-usuarios" aria-label="Controlador de usuarios">
+            <h2>Controlador de usuarios</h2>
+            <ul class="lista" id="participantes" aria-label="Participantes de la sesión"></ul>
+        </section>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
-        <footer class="acciones">
-            <button type="button" class="accion" id="simular">Simular ronda</button>
-            <button type="button" class="accion" id="comenzar" disabled>Comenzar ronda</button>
-            <button type="button" class="accion" id="forzar">Forzar comienzo ronda</button>
-            <button type="button" class="accion" id="forzarListo" hidden>Forzar listo</button>
-            <button type="button" class="accion" id="agregarTiempo" hidden>Agregar 20 seg</button>
-            <button type="button" class="accion" id="forzarLeaderboard" hidden>Forzar leaderboard (simular bots)</button>
-            <button type="button" class="accion" id="forzarSiguiente" hidden>Forzar avance desde leaderboard</button>
-            <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
-        </footer>
     </main>
     <script>
         const lista = document.getElementById('participantes');
         const listaEquipos = document.getElementById('equipos');
         const estado = document.getElementById('estadoSesion');
-        const tiempoRonda = document.getElementById('tiempoRonda');
+        const temporizadorGuia = document.getElementById('temporizadorGuia');
         const mensaje = document.getElementById('mensaje');
         const botonSimular = document.getElementById('simular');
         const botonComenzar = document.getElementById('comenzar');
-        const botonForzar = document.getElementById('forzar');
         const botonForzarListo = document.getElementById('forzarListo');
         const botonAgregarTiempo = document.getElementById('agregarTiempo');
+        const botonSaltarTiempo = document.getElementById('saltarTiempo');
         const botonForzarLeaderboard = document.getElementById('forzarLeaderboard');
         const botonForzarSiguiente = document.getElementById('forzarSiguiente');
+        const contadorForzar = document.getElementById('contadorForzar');
+        const contadorLeaderboard = document.getElementById('contadorLeaderboard');
         const botonVolver = document.getElementById('volver');
         const panelPruebas = document.getElementById('pruebas');
         const participantePrueba = document.getElementById('participantePrueba');
@@ -99,6 +106,15 @@
         let rondaIniciada = false;
         let participantesParaPrueba = [];
         let firmaParticipantesPrueba = '';
+        let etapaTemporizadorGuia = '';
+        let finTemporizadorGuia = 0;
+        const duracionesGuia = {
+            memoria: 30,
+            adivinanza: 120,
+            'ronda-2': 90,
+            'ronda-3-notas': 30,
+            'ronda-3-identificacion': 180
+        };
         const etapasPrueba = [
             { clave: 'encuesta', nombre: 'Encuesta', ruta: () => '/encuesta?nueva=1' },
             { clave: 'efigie', nombre: 'Efigie', ruta: id => `/efigie/${encodeURIComponent(id)}` },
@@ -175,11 +191,31 @@
             }
         }
 
+        function actualizarTemporizadorGuia(etapa, segundosServidor = 0) {
+            const duracion = duracionesGuia[etapa];
+            temporizadorGuia.hidden = !duracion;
+            if (!duracion) {
+                etapaTemporizadorGuia = '';
+                finTemporizadorGuia = 0;
+                return;
+            }
+            if (etapa !== etapaTemporizadorGuia) {
+                etapaTemporizadorGuia = etapa;
+                finTemporizadorGuia = Date.now() + duracion * 1000;
+            }
+            if (segundosServidor > 0 && ['memoria', 'adivinanza', 'ronda-3-notas'].includes(etapa))
+                finTemporizadorGuia = Date.now() + segundosServidor * 1000;
+            const segundos = Math.max(0, Math.ceil((finTemporizadorGuia - Date.now()) / 1000));
+            const tiempo = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+            temporizadorGuia.textContent = `Tiempo orientativo: ${tiempo}${segundos === 0 ? ' · Podés avanzar' : ''}`;
+        }
+
         async function cargarEstado() {
             try {
                 const respuesta = await fetch('/api/admin/sesion', { cache: 'no-store' });
                 if (!respuesta.ok) throw new Error('No se pudo consultar la sesión.');
                 const sesion = await respuesta.json();
+                const participantes = sesion.participantes || [];
                 rondaIniciada = sesion.rondaIniciada;
                 const preRondaActiva = sesion.preRondaActiva;
                 const nombresEtapa = {
@@ -193,19 +229,15 @@
                     'ronda-4': 'Ronda 4 · Borrador'
                 };
                 estado.textContent = sesion.previewIniciada ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1') : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
-                tiempoRonda.hidden = !['memoria', 'adivinanza', 'ronda-3-notas', 'ronda-3-identificacion'].includes(sesion.etapaRondaUno);
-                if (!tiempoRonda.hidden) {
-                    const restantes = sesion.segundosRestantesRondaUno;
-                    tiempoRonda.textContent = `Tiempo restante ${Math.floor(restantes / 60)}:${String(restantes % 60).padStart(2, '0')}`;
-                }
-                lista.hidden = preRondaActiva;
+                actualizarTemporizadorGuia(sesion.etapaRondaUno, sesion.segundosRestantesRondaUno);
+                lista.hidden = participantes.length === 0;
                 listaEquipos.hidden = !preRondaActiva;
                 botonSimular.hidden = rondaIniciada;
                 botonComenzar.hidden = rondaIniciada;
-                botonForzar.hidden = rondaIniciada;
-                botonComenzar.disabled = sesion.cantidad !== sesion.capacidad;
+                botonComenzar.disabled = sesion.cantidad === 0;
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
-                botonAgregarTiempo.hidden = sesion.etapaRondaUno !== 'memoria';
+                botonAgregarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
+                botonSaltarTiempo.hidden = !['memoria', 'adivinanza', 'ronda-3-notas'].includes(sesion.etapaRondaUno);
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
                 botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2', 'ronda-3-notas', 'ronda-3-identificacion', 'ronda-3-leaderboard'].includes(sesion.etapaRondaUno);
                 const nombresForzar = {
@@ -215,7 +247,20 @@
                     'ronda-3-identificacion': 'Forzar avance a resultados de ronda 3',
                     'ronda-3-leaderboard': 'Forzar avance a ronda 4'
                 };
+                const totalReales = Number(sesion.totalParticipantesReales) || 0;
+                const respondieron = Number(sesion.respondieronEtapa) || 0;
+                const listos = Number(sesion.listosEtapa) || 0;
+                const contador = ['adivinanza', 'ronda-3-identificacion'].includes(sesion.etapaRondaUno)
+                    ? `${respondieron}/${totalReales} participantes respondieron.`
+                    : sesion.etapaRondaUno === 'ronda-3-notas'
+                        ? 'El avance de esta etapa se controla desde administración.'
+                        : `${listos}/${totalReales} participantes listos.`;
                 botonForzarSiguiente.textContent = nombresForzar[sesion.etapaRondaUno] || 'Forzar avance';
+                botonForzarLeaderboard.textContent = 'Forzar leaderboard (simular bots)';
+                contadorForzar.hidden = botonForzarSiguiente.hidden;
+                contadorForzar.textContent = contador;
+                contadorLeaderboard.hidden = botonForzarLeaderboard.hidden;
+                contadorLeaderboard.textContent = `${respondieron}/${totalReales} participantes respondieron.`;
                 actualizarAccesosPrueba(sesion.participantes);
                 lista.replaceChildren();
                 listaEquipos.replaceChildren();
@@ -224,31 +269,25 @@
                     const tarjeta = document.createElement('section');
                     tarjeta.className = 'equipo';
                     tarjeta.style.setProperty('--color-equipo', equipo.color);
-                    const efigies = document.createElement('div');
-                    efigies.className = 'efigies-integrantes';
-                    for (const integrante of equipo.integrantes) {
-                        const figura = document.createElement('figure');
-                        figura.className = 'efigie-integrante';
-                        const dibujo = document.createElement('div');
-                        dibujo.className = 'efigie-dibujo';
-                        dibujo.setAttribute('role', 'img');
-                        dibujo.setAttribute('aria-label', `Efigie de ${integrante.nombre}`);
-                        dibujo.innerHTML = integrante.efigie;
-                        const nombre = document.createElement('figcaption');
-                        nombre.className = 'nombre-integrante';
-                        nombre.textContent = integrante.nombre + (integrante.esBot ? ' (simulado)' : '');
-                        const listo = document.createElement('p');
-                        listo.className = 'listo-integrante';
-                        listo.dataset.listo = String(integrante.listo);
-                        listo.textContent = integrante.listo ? 'Listo' : 'Esperando';
-                        figura.append(dibujo, nombre, listo);
-                        efigies.append(figura);
-                    }
                     const titulo = document.createElement('h2');
                     titulo.textContent = `Equipo ${equipo.numero}`;
                     const puntaje = document.createElement('p');
                     puntaje.textContent = `${equipo.posibilidades}/7 posibilidades de triangulación · Puntaje ${equipo.puntaje}`;
-                    tarjeta.append(efigies, titulo, puntaje);
+                    const integrantes = document.createElement('ul');
+                    integrantes.className = 'integrantes';
+                    for (const integrante of equipo.integrantes) {
+                        const fila = document.createElement('li');
+                        fila.className = 'integrante';
+                        fila.dataset.listo = String(integrante.listo);
+                        const nombre = document.createElement('span');
+                        nombre.textContent = integrante.nombre + (integrante.esBot ? ' (simulado)' : '');
+                        const listo = document.createElement('span');
+                        listo.className = 'estado-listo';
+                        listo.textContent = integrante.listo ? 'Listo' : 'Esperando';
+                        fila.append(nombre, listo);
+                        integrantes.append(fila);
+                    }
+                    tarjeta.append(titulo, puntaje, integrantes);
                     listaEquipos.append(tarjeta);
                 }
 
@@ -291,7 +330,7 @@
         async function enviarInicio(ruta, confirmacion) {
             if (!window.confirm(confirmacion)) return;
             const respuesta = await fetch(ruta, { method: 'POST' });
-            mensaje.textContent = respuesta.ok ? 'Pre-ronda 1 iniciada.' : 'Se necesitan 15 participantes para comenzar.';
+            mensaje.textContent = respuesta.ok ? 'Pre-ronda 1 iniciada.' : 'No se pudo comenzar la ronda.';
             await cargarEstado();
         }
 
@@ -302,8 +341,7 @@
             await cargarEstado();
         });
 
-        botonComenzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/iniciar', '¿Comenzar la pre-ronda con los 15 participantes?'));
-        botonForzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/forzar-inicio', '¿Forzar el comienzo completando los lugares vacíos con bots?'));
+        botonComenzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/iniciar', '¿Comenzar la ronda? Los lugares vacíos se completarán con bots.'));
 
         botonForzarListo.addEventListener('click', async () => {
             botonForzarListo.disabled = true;
@@ -333,6 +371,13 @@
                 botonAgregarTiempo.disabled = false;
             }
         });
+
+        botonSaltarTiempo.addEventListener('click', () => forzarEtapa(
+            botonSaltarTiempo,
+            '/api/admin/ronda-1/saltar-tiempo',
+            '¿Saltar el tiempo de esta etapa y avanzar?',
+            'Se saltó el tiempo y se avanzó a la siguiente etapa.'
+        ));
 
         async function forzarEtapa(boton, ruta, confirmacion, exito) {
             if (confirmacion && !window.confirm(confirmacion)) return;
@@ -368,7 +413,19 @@
             const respuesta = await fetch('/api/admin/sesion/retroceder', { method: 'POST' });
             if (respuesta.ok) {
                 const resultado = await respuesta.json();
-                mensaje.textContent = !resultado.cambio ? 'La sesión ya está en el lobby.' : resultado.etapaAnterior === 'pre-ronda-1' ? 'Todos regresan a la pre-ronda.' : 'Todos regresan al lobby.';
+                const nombresEtapa = {
+                    'pre-ronda': 'la pre-ronda',
+                    memoria: 'memoria de la ronda 1',
+                    adivinanza: 'la adivinanza de la ronda 1',
+                    leaderboard: 'los resultados de la ronda 1',
+                    'ronda-2': 'la ronda 2',
+                    'ronda-3-notas': 'las notas de la ronda 3',
+                    'ronda-3-identificacion': 'la identificación de la ronda 3',
+                    'ronda-3-leaderboard': 'los resultados de la ronda 3'
+                };
+                mensaje.textContent = !resultado.cambio
+                    ? 'La sesión ya está en el lobby.'
+                    : `Todos regresan a ${nombresEtapa[resultado.etapaAnterior] || 'la etapa anterior'}.`;
             } else {
                 mensaje.textContent = 'No se pudo retroceder la sesión.';
             }
@@ -378,7 +435,11 @@
 
         cargarEstado();
         const intervalo = setInterval(cargarEstado, 2500);
-        window.addEventListener('pagehide', () => clearInterval(intervalo));
+        const intervaloTemporizador = setInterval(() => actualizarTemporizadorGuia(etapaTemporizadorGuia), 1000);
+        window.addEventListener('pagehide', () => {
+            clearInterval(intervalo);
+            clearInterval(intervaloTemporizador);
+        });
     </script>
 </body>
 </html>

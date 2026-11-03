@@ -39,7 +39,7 @@
 </head>
 <body>
     <main>
-        <div class="temporizador" id="temporizador" role="timer" aria-label="Tiempo restante">
+        <div class="temporizador" id="temporizador" hidden aria-hidden="true">
             <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
             <span id="tiempo">0:10</span>
         </div>
@@ -118,7 +118,6 @@
             body.classList.remove('intermedio');
             pantallaNegra.hidden = true;
             pantalla.hidden = false;
-            temporizador.hidden = false;
             titulo.textContent = '¡Algo cambió!';
             instruccion.textContent = 'Elegí cuál de las cuatro capas es diferente.';
             mostrarEfigie(desafio.efigieCambiada, desafio.targetName);
@@ -188,7 +187,6 @@
                 body.classList.remove('intermedio');
                 pantallaNegra.hidden = true;
                 pantalla.hidden = false;
-                temporizador.hidden = false;
                 titulo.textContent = '¡Atención!';
                 instruccion.textContent = 'Observá la efigie de tu compañero.';
                 zonaEleccion.hidden = true;

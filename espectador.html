@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modo espectador - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #f3f6f3; --ink: #101a15; --muted: #53615b; --green: #6EB392; }
+        * { box-sizing: border-box; }
+        body { min-height: 100vh; margin: 0; padding: 24px; display: grid; place-items: center; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 520px); text-align: center; }
+        img { width: min(177px, 54vw); height: auto; margin-bottom: 28px; }
+        h1 { margin: 0 0 12px; font-size: clamp(1.4rem, 5vw, 1.8rem); }
+        p { color: var(--muted); line-height: 1.5; }
+        #estado { font-weight: 700; color: var(--ink); }
+    </style>
+</head>
+<body>
+    <main>
+        <img src="/efigie-logo.svg" alt="Efigie">
+        <h1>Modo espectador</h1>
+        <p id="estado" aria-live="polite">Conectando con la sesión...</p>
+        <p>Esta vista sigue la etapa actual de la experiencia y se sincroniza con administración.</p>
+    </main>
+    <script>
+        const estado = document.getElementById('estado');
+        const parametros = new URLSearchParams(location.search);
+        function obtenerSesionGuardada() {
+            try {
+                return sessionStorage.getItem('efigie_espectador_sesion');
+            } catch (error) {
+                console.warn('El almacenamiento de sesión no está disponible en este navegador.', error);
+                return null;
+            }
+        }
+        function guardarSesion(clave, valor) {
+            try {
+                sessionStorage.setItem(clave, valor);
+            } catch (error) {
+                console.warn('El almacenamiento de sesión no está disponible en este navegador.', error);
+            }
+        }
+        function crearIdentificadorSesion() {
+            const bytes = new Uint8Array(16);
+            if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+                window.crypto.getRandomValues(bytes);
+            } else {
+                for (let indice = 0; indice < bytes.length; indice++)
+                    bytes[indice] = Math.floor(Math.random() * 256);
+            }
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+        const sessionId = parametros.get('sesion') || obtenerSesionGuardada()
+            || crearIdentificadorSesion();
+        guardarSesion('efigie_espectador_sesion', sessionId);
+
+        const destinos = {
+            'pre-ronda': '/pre-ronda-1',
+            'memoria': '/ronda-1-preview',
+            'adivinanza': '/ronda-1-adivinar',
+            'leaderboard': '/ronda-1-leaderboard',
+            'ronda-2': '/ronda-2',
+            'ronda-3-notas': '/ronda-3',
+            'ronda-3-identificacion': '/ronda-3-identificacion',
+            'ronda-3-leaderboard': '/ronda-3-leaderboard',
+            'ronda-4': '/ronda-4'
+        };
+
+        async function consultarSesion() {
+            try {
+                const respuesta = await fetch(`/api/espectador/estado?sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo consultar la sesión de espectador.');
+                const sesion = await respuesta.json();
+                guardarSesion('efigie_espectador_id', sesion.responseId);
+                if (!sesion.rondaIniciada) {
+                    estado.textContent = 'Esperando a que administración comience la ronda...';
+                    return;
+                }
+                const destino = destinos[sesion.etapaRondaUno] || destinos['pre-ronda'];
+                const query = new URLSearchParams({
+                    id: sesion.responseId,
+                    espectador: '1',
+                    sesion: sessionId
+                });
+                location.replace(`${destino}?${query}`);
+            } catch (error) {
+                estado.textContent = 'No se pudo conectar con la sesión. Reintentando...';
+                console.error(error);
+            }
+        }
+
+        consultarSesion();
+        const intervalo = setInterval(consultarSesion, 1500);
+        window.addEventListener('pagehide', () => clearInterval(intervalo));
+    </script>
+</body>
+</html>

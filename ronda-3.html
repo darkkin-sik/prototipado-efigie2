@@ -3,20 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#eaf3f0">
+    <meta name="theme-color" content="#ffffff">
     <title>Ronda 3 · Notas - Efigie</title>
     <style>
-        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --blue: #133463; --selected: #d7e5df; }
+        :root { color-scheme: light; --paper: #fff; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --selected: #dcebe2; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
         body { min-height: 100vh; padding: 18px 16px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
         main { width: min(100%, 620px); margin: 0 auto; }
-        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
         h1 { margin: 14px 0 4px; text-align: center; font-size: clamp(1.45rem, 5vw, 1.9rem); font-weight: 500; }
         .instruccion { margin: 0 0 14px; text-align: center; color: var(--muted); line-height: 1.4; }
         .efigie-principal { width: min(72vw, 310px); aspect-ratio: 1; margin: 0 auto 8px; }
-        .efigie-principal svg, .efigie-companero svg { display: block; width: 100%; height: 100%; }
+        .efigie-principal svg, .efigie-companero svg { display: block; width: 100%; height: 100%; background: transparent !important; }
         .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: min(100%, 380px); margin: 0 auto 16px; }
         .companero { min-width: 0; margin: 0; text-align: center; }
         .efigie-companero { width: min(100%, 170px); aspect-ratio: 1; margin: auto; }
@@ -42,10 +40,6 @@
 </head>
 <body>
     <main>
-        <div class="temporizador" role="timer" aria-label="Tiempo restante">
-            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
-            <span id="tiempo">2:00</span>
-        </div>
         <h1>¡Hay pistas a simple vista!</h1>
         <p class="instruccion">Observá las efigies de tu equipo y anotá lo que quieras recordar. Cada nota puede tener hasta 15 caracteres.</p>
         <div class="efigie-principal" id="efigiePropia" role="img" aria-label="Tu efigie"></div>
@@ -57,27 +51,14 @@
         const parametros = new URLSearchParams(location.search);
         const responseId = parametros.get('id');
         const adminPreview = parametros.get('adminPreview') === '1';
-        const queryVista = adminPreview ? '&adminPreview=1' : '';
+        const consulta = parametros.get('consulta') === '1';
         const listaNotas = document.getElementById('notas');
         const mensaje = document.getElementById('mensaje');
-        const tiempo = document.getElementById('tiempo');
         const claveNotas = `ronda-3-notas:${responseId}`;
         let notas = [];
         let cargando = false;
         let contenidoCargado = false;
         let guardado = Promise.resolve();
-        let finEtapa = Date.now() + 120000;
-
-        function mostrarTiempo(segundos) {
-            finEtapa = Date.now() + segundos * 1000;
-            actualizarTemporizador();
-        }
-
-        function actualizarTemporizador() {
-            const segundos = Math.max(0, Math.ceil((finEtapa - Date.now()) / 1000));
-            tiempo.textContent = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
-            document.querySelector('.temporizador').setAttribute('aria-label', `Tiempo restante: ${tiempo.textContent}`);
-        }
 
         function renderizarEfigies(efigies) {
             const propia = efigies.find(efigie => efigie.propia);
@@ -113,11 +94,13 @@
                 entrada.maxLength = 15;
                 entrada.value = texto;
                 entrada.placeholder = 'Añadir nota';
+                entrada.readOnly = consulta;
                 entrada.setAttribute('aria-label', `Nota ${indice + 1}, máximo 15 caracteres`);
                 entrada.addEventListener('keydown', evento => {
                     if (evento.key === 'Enter') evento.preventDefault();
                 });
                 entrada.addEventListener('input', () => {
+                    if (consulta) return;
                     entrada.value = entrada.value.replace(/[\r\n]/g, '').slice(0, 15);
                     notas[indice] = entrada.value;
                     if (entrada.value && indice === notas.length - 1) {
@@ -134,6 +117,7 @@
                 eliminar.hidden = indice === notas.length - 1 && texto === '';
                 eliminar.textContent = '×';
                 eliminar.setAttribute('aria-label', `Eliminar nota ${indice + 1}`);
+                eliminar.hidden = consulta || eliminar.hidden;
                 eliminar.addEventListener('click', () => {
                     notas.splice(indice, 1);
                     if (!notas.length || notas[notas.length - 1] !== '') notas.push('');
@@ -153,9 +137,13 @@
         }
 
         function guardarNotas() {
+            if (consulta) return;
             const guardables = notas.filter(nota => nota.length > 0);
             guardado = guardado.then(async () => {
-                const respuesta = await fetch(`/api/ronda-3/notas${adminPreview ? '?adminPreview=1' : ''}`, {
+                const parametrosApi = new URLSearchParams();
+                if (adminPreview) parametrosApi.set('adminPreview', '1');
+                if (consulta) parametrosApi.set('consulta', '1');
+                const respuesta = await fetch(`/api/ronda-3/notas?${parametrosApi}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ responseId, notes: guardables })
@@ -168,6 +156,7 @@
         }
 
         async function redirigirSegunEtapa() {
+            if (consulta) return;
             const respuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
             if (!respuesta.ok) return;
             const estado = await respuesta.json();
@@ -185,8 +174,11 @@
             if (cargando || !responseId) return;
             cargando = true;
             try {
-                const respuesta = await fetch(`/api/ronda-3/notas?responseId=${encodeURIComponent(responseId)}${queryVista}`, { cache: 'no-store' });
-                if (respuesta.status === 409 && !adminPreview) {
+                const parametrosApi = new URLSearchParams({ responseId });
+                if (adminPreview) parametrosApi.set('adminPreview', '1');
+                if (consulta) parametrosApi.set('consulta', '1');
+                const respuesta = await fetch(`/api/ronda-3/notas?${parametrosApi}`, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview && !consulta) {
                     await redirigirSegunEtapa();
                     return;
                 }
@@ -199,7 +191,6 @@
                     dibujarNotas();
                     contenidoCargado = true;
                 }
-                mostrarTiempo(estado.segundosRestantes);
                 mensaje.textContent = '';
             } catch (error) {
                 mensaje.textContent = error.message || 'No se pudo conectar con la ronda. Reintentando...';
@@ -214,13 +205,18 @@
         } else {
             actualizarEstado();
             const intervalo = setInterval(actualizarEstado, 1200);
-            const reloj = setInterval(actualizarTemporizador, 250);
             window.addEventListener('pagehide', () => {
                 clearInterval(intervalo);
-                clearInterval(reloj);
             });
         }
     </script>
-    <script src="/admin-navigation.js" defer></script>
+    <script>
+        if (!consulta) {
+            const navegacionAdmin = document.createElement('script');
+            navegacionAdmin.src = '/admin-navigation.js';
+            navegacionAdmin.defer = true;
+            document.body.append(navegacionAdmin);
+        }
+    </script>
 </body>
 </html>

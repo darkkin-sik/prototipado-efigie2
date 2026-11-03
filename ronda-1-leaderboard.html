@@ -25,11 +25,16 @@
         const mensaje = document.getElementById('mensaje');
         let cargando = false;
         let listo = false;
+        let firmaTabla = '';
 
         function renderizar(equipos, equipoPropio) {
+            const firmaActual = JSON.stringify({ equipos, equipoPropio });
+            if (firmaActual === firmaTabla) return;
+            firmaTabla = firmaActual;
             const posicionesAnteriores = new Map(
                 [...listaEquipos.children].map(fila => [fila.dataset.equipo, fila.getBoundingClientRect().top])
             );
+            const ordenAnterior = [...listaEquipos.children].map(elemento => elemento.dataset.equipo);
             equipos.forEach((equipo, indice) => {
                 let fila = [...listaEquipos.children].find(elemento => elemento.dataset.equipo === String(equipo.numero));
                 if (!fila) {
@@ -55,7 +60,8 @@
                     marcaPropia?.remove();
                 }
                 fila.querySelector('.puntos').textContent = `${equipo.puntos} pts`;
-                listaEquipos.append(fila);
+                if (ordenAnterior[indice] !== String(equipo.numero))
+                    listaEquipos.insertBefore(fila, listaEquipos.children[indice] || null);
             });
             for (const fila of [...listaEquipos.children]) {
                 const topAnterior = posicionesAnteriores.get(fila.dataset.equipo);
@@ -148,7 +154,7 @@
 
         botonListo.addEventListener('click', marcarListo);
         actualizarEstado();
-        const intervalo = setInterval(actualizarEstado, 1200);
+        const intervalo = setInterval(actualizarEstado, 2500);
         window.addEventListener('pagehide', () => clearInterval(intervalo));
     </script>
     <script src="/admin-navigation.js" defer></script>

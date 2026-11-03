@@ -3,45 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#eaf3f0">
+    <meta name="theme-color" content="#ffffff">
     <title>Ronda 3 · Identificación - Efigie</title>
     <style>
-        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --blue: #133463; --selected: #d7e5df; }
+        :root { color-scheme: light; --paper: #fff; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --green: #6eb392; --green-dark: #4a896b; --selected: #dcebe2; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
-        body { min-height: 100vh; padding: 18px 20px max(96px, calc(80px + env(safe-area-inset-bottom))); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        body { min-height: 100vh; padding: 18px 20px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
         main { width: min(100%, 620px); margin: 0 auto; }
-        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
         h1 { margin: 10px 0 4px; text-align: center; font-size: clamp(1.3rem, 5vw, 1.65rem); line-height: 1.2; font-weight: 500; }
         .instruccion { margin: 0; text-align: center; color: var(--muted); line-height: 1.4; }
-        .efigie { width: min(88vw, 470px); aspect-ratio: 1; margin: 0 auto 2px; }
-        .efigie svg { display: block; width: 100%; height: 100%; overflow: visible; }
+        .efigie { width: min(88vw, 470px); aspect-ratio: 1; margin: 8px auto 10px; }
+        .efigie svg { display: block; width: 100%; height: 100%; overflow: visible; background: transparent !important; }
         .efigie [data-capa].resaltada { filter: drop-shadow(0 0 2px #e53920); }
         .efigie [data-capa].resaltada, .efigie [data-capa].resaltada * { stroke: #e53920 !important; stroke-width: 1.15 !important; }
         .progreso { display: flex; justify-content: center; gap: 9px; margin: 0 0 8px; }
         .paso { width: 10px; height: 10px; border: 1px solid #53615b; border-radius: 50%; background: transparent; }
-        .paso.activo { background: var(--blue); border-color: var(--blue); }
+        .paso.activo { background: var(--green-dark); border-color: var(--green-dark); }
         .paso.completo { background: #6eb392; border-color: #286547; }
         .pregunta { width: min(100%, 500px); margin: 0 auto; }
         .pregunta h2 { margin: 0 0 6px; text-align: center; font-size: 1rem; font-weight: 500; }
         .opciones select { display: block; width: 100%; min-height: 48px; padding: 9px 12px; border: 1px solid #87938c; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }
-        .opciones select:focus-visible, .navegacion button:focus-visible, #continuar:focus-visible, .notas-consulta summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .opciones option.utilizada { color: #929a95; }
+        .opciones select:focus-visible, .navegacion button:focus-visible, .notas-consulta summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
         .navegacion { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
-        .navegacion button { min-width: 120px; min-height: 44px; padding: 9px 14px; border: 0; border-radius: 5px; background: #d7e5df; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+        .navegacion button { min-width: 120px; min-height: 44px; padding: 9px 14px; border: 0; border-radius: 5px; background: var(--green); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+        .navegacion button:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
         .navegacion button:disabled { opacity: 0.5; cursor: default; }
-        .acciones { position: fixed; z-index: 3; right: 0; bottom: max(14px, env(safe-area-inset-bottom)); left: 0; display: flex; justify-content: center; pointer-events: none; }
-        #continuar { min-width: min(82vw, 300px); min-height: 54px; padding: 12px 20px; border: 0; border-radius: 5px; background: var(--blue); color: #fff; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgb(16 26 21 / 18%); pointer-events: auto; }
-        #continuar:disabled { opacity: 0.5; cursor: default; }
         .mensaje { min-height: 1.4em; margin: 6px 0 0; text-align: center; color: var(--muted); }
-        .notas-consulta { position: fixed; z-index: 4; bottom: max(16px, env(safe-area-inset-bottom)); left: max(16px, env(safe-area-inset-left)); }
-        .notas-consulta[open] { display: flex; flex-direction: column-reverse; align-items: flex-start; }
-        .notas-consulta summary { display: inline-flex; align-items: center; min-height: 46px; padding: 10px 14px; border: 1px solid #b6c9bf; border-radius: 5px; background: var(--selected); color: var(--ink); font-size: .9rem; font-weight: 600; cursor: pointer; list-style: none; }
+        .notas-consulta { position: fixed; z-index: 4; top: 50%; left: 0; transform: translateY(-50%); }
+        .notas-consulta summary { display: inline-flex; align-items: center; min-height: 52px; padding: 12px 10px; border: 1px solid #b6c9bf; border-left: 0; border-radius: 0 8px 8px 0; background: var(--green); color: var(--ink); font-size: .9rem; font-weight: 700; cursor: pointer; list-style: none; writing-mode: vertical-rl; transition: background-color 180ms ease, padding 180ms ease; animation: indicar-notas 900ms ease-in-out 2 500ms; }
+        .notas-consulta summary::after { content: " ◀"; }
+        .notas-consulta[open] summary::after { content: " ▶"; }
+        .notas-consulta summary:hover { padding-inline: 14px; background: var(--green-dark); color: #fff; }
         .notas-consulta summary::-webkit-details-marker { display: none; }
-        .notas-panel { width: min(82vw, 340px); max-height: 45vh; overflow-y: auto; margin-bottom: 8px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); box-shadow: 0 4px 14px rgb(16 26 21 / 18%); }
-        .notas-panel h2 { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
-        .notas-panel ul { display: grid; gap: 5px; margin: 0; padding-left: 20px; }
-        .notas-panel li { overflow-wrap: anywhere; }
+        .notas-panel { position: absolute; top: 50%; left: 100%; width: min(84vw, 420px); height: min(72vh, 680px); margin-left: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgb(16 26 21 / 20%); opacity: 0; transform: translate(-12px, -50%); transition: opacity 220ms ease, transform 220ms ease; pointer-events: none; }
+        .notas-consulta[open] .notas-panel { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+        .notas-panel iframe { display: block; width: 100%; height: 100%; border: 0; }
+        @keyframes indicar-notas { 50% { box-shadow: 0 0 0 5px rgb(74 137 107 / 30%); } }
         [hidden] { display: none !important; }
         @media (max-height: 720px) {
             body { padding-top: 10px; }
@@ -54,15 +53,13 @@
             .efigie { width: min(90vw, 440px); }
             .navegacion button { min-width: 110px; }
         }
-        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+        }
     </style>
 </head>
 <body>
     <main>
-        <div class="temporizador" role="timer" aria-label="Tiempo restante">
-            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8.5"></circle><path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path></svg>
-            <span id="tiempo">3:00</span>
-        </div>
         <h1>Relacioná cada parte con lo que representa</h1>
         <p class="instruccion">Elegí una opción para cada parte resaltada.</p>
         <div class="efigie" id="efigie" role="img" aria-label="Tu efigie con una parte resaltada"></div>
@@ -77,17 +74,12 @@
                 <button type="button" id="siguiente">Siguiente</button>
             </div>
         </section>
-        <div class="acciones">
-            <button type="button" id="continuar" hidden disabled>Continuar</button>
-        </div>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
     </main>
     <details class="notas-consulta">
-        <summary>Consultar mis notas</summary>
+        <summary aria-label="Abrir o cerrar la primera parte de la ronda">Notas</summary>
         <div class="notas-panel">
-            <h2>Mis notas</h2>
-            <ul id="listaNotas"></ul>
-            <p id="sinNotas">Todavía no escribiste notas.</p>
+            <iframe id="vistaNotas" title="Primera parte de la ronda 3: efigies y notas"></iframe>
         </div>
     </details>
     <script>
@@ -101,36 +93,27 @@
         const progreso = document.getElementById('progreso');
         const botonAnterior = document.getElementById('anterior');
         const botonSiguiente = document.getElementById('siguiente');
-        const botonContinuar = document.getElementById('continuar');
-        const temporizador = document.getElementById('tiempo');
         const mensaje = document.getElementById('mensaje');
-        const listaNotas = document.getElementById('listaNotas');
-        const sinNotas = document.getElementById('sinNotas');
-        const claveNotas = `ronda-3-notas:${responseId}`;
+        const vistaNotas = document.getElementById('vistaNotas');
         let preguntas = [];
         let respuestas = [];
         let indiceActual = 0;
         let cargando = false;
         let enviando = false;
-        let temporizadorInicializado = false;
-        let finEtapa = Date.now() + 180000;
 
-        function mostrarTiempo(segundos) {
-            finEtapa = Date.now() + segundos * 1000;
-            actualizarTemporizador();
-        }
-
-        function actualizarTemporizador() {
-            const segundos = Math.max(0, Math.ceil((finEtapa - Date.now()) / 1000));
-            temporizador.textContent = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+        function urlEtapa(destino) {
+            const query = new URLSearchParams({ id: responseId });
+            for (const clave of ['espectador', 'sesion']) {
+                const valor = parametros.get(clave);
+                if (valor) query.set(clave, valor);
+            }
+            if (adminPreview) query.set('adminPreview', '1');
+            return `${destino}?${query}`;
         }
 
         function actualizarControles() {
             botonAnterior.disabled = indiceActual === 0 || enviando;
             botonSiguiente.disabled = indiceActual === preguntas.length - 1 || enviando;
-            const completo = respuestas.length === preguntas.length && respuestas.every(Boolean);
-            botonContinuar.hidden = !completo;
-            botonContinuar.disabled = !completo || enviando;
             progreso.querySelectorAll('.paso').forEach((paso, indice) => {
                 paso.classList.toggle('activo', indice === indiceActual);
                 paso.classList.toggle('completo', Boolean(respuestas[indice]));
@@ -149,26 +132,22 @@
             placeholder.value = '';
             placeholder.textContent = 'Seleccioná una opción';
             opciones.append(placeholder);
-            pregunta.opciones.forEach(opcion => {
+            const opcionesUsadas = new Set(respuestas.slice(0, indiceActual).filter(Boolean));
+            const opcionesOrdenadas = [
+                ...pregunta.opciones.filter(opcion => !opcionesUsadas.has(opcion)),
+                ...pregunta.opciones.filter(opcion => opcionesUsadas.has(opcion))
+            ];
+            opcionesOrdenadas.forEach(opcion => {
                 const opcionElemento = document.createElement('option');
                 opcionElemento.value = opcion;
                 opcionElemento.textContent = opcion;
+                if (opcionesUsadas.has(opcion)) opcionElemento.classList.add('utilizada');
                 opciones.append(opcionElemento);
             });
             opciones.value = respuestas[indiceActual] || '';
             opciones.disabled = enviando;
             document.getElementById('tituloPregunta').textContent = `¿Qué representa esta parte? (${indiceActual + 1} de ${preguntas.length})`;
             actualizarControles();
-        }
-
-        function renderizarNotas(notas) {
-            listaNotas.replaceChildren(...notas.map(nota => {
-                const elemento = document.createElement('li');
-                elemento.textContent = nota;
-                return elemento;
-            }));
-            listaNotas.hidden = notas.length === 0;
-            sinNotas.hidden = notas.length > 0;
         }
 
         async function seleccionarRespuesta(opcion) {
@@ -190,6 +169,7 @@
                 console.error(error);
             } finally {
                 enviando = false;
+                opciones.disabled = false;
                 actualizarControles();
             }
         }
@@ -199,13 +179,18 @@
             if (!respuesta.ok) return;
             const estado = await respuesta.json();
             const destinos = {
+                'pre-ronda': '/pre-ronda-1',
+                memoria: '/ronda-1-preview',
+                adivinanza: '/ronda-1-adivinar',
+                leaderboard: '/ronda-1-leaderboard',
+                'ronda-2': '/ronda-2',
                 'ronda-3-notas': '/ronda-3',
                 'ronda-3-leaderboard': '/ronda-3-leaderboard',
                 'ronda-4': '/ronda-4'
             };
             const destino = destinos[estado.etapaRondaUno];
             if (destino && !adminPreview)
-                location.replace(`${destino}?id=${encodeURIComponent(responseId)}`);
+                location.replace(urlEtapa(destino));
         }
 
         async function cargarEstado() {
@@ -234,32 +219,15 @@
                     respuestas = [...estado.respuestas];
                     actualizarControles();
                 }
-                let notas = estado.notas || [];
-                const notasGuardadas = sessionStorage.getItem(claveNotas);
-                if (notasGuardadas) {
-                    try {
-                        const notasLocales = JSON.parse(notasGuardadas);
-                        if (Array.isArray(notasLocales) && notasLocales.every(nota => typeof nota === 'string'))
-                            notas = notasLocales;
-                        else
-                            console.error('El formato de las notas locales no es válido.');
-                    } catch (error) {
-                        console.error('No se pudieron leer las notas guardadas en este dispositivo.', error);
-                    }
-                }
-                renderizarNotas(notas);
-                if (!temporizadorInicializado) {
-                    mostrarTiempo(estado.segundosRestantes);
-                    temporizadorInicializado = true;
-                }
                 if (estado.respondido) {
                     botonAnterior.disabled = true;
                     botonSiguiente.disabled = true;
                     opciones.disabled = true;
-                    botonContinuar.hidden = true;
-                    mensaje.textContent = adminPreview
-                        ? 'Respuestas completas en la vista de prueba.'
-                        : 'Respuestas enviadas. Esperando al resto de los participantes.';
+                    mensaje.textContent = adminPreview ? 'Respuestas completas en la vista de prueba.' : 'El equipo coincidió en sus respuestas.';
+                    if (!adminPreview)
+                        location.replace(urlEtapa('/ronda-3-leaderboard'));
+                } else if (estado.respuestasCompletas) {
+                    mensaje.textContent = 'Respuestas guardadas. Esperando que el equipo coincida en las seis preguntas.';
                 }
             } catch (error) {
                 mensaje.textContent = error.message || 'No se pudo conectar con la ronda. Reintentando...';
@@ -282,41 +250,14 @@
             }
         });
         opciones.addEventListener('change', () => seleccionarRespuesta(opciones.value));
-        botonContinuar.addEventListener('click', async () => {
-            if (enviando || respuestas.some(respuesta => !respuesta)) return;
-            enviando = true;
-            actualizarControles();
-            try {
-                const respuesta = await fetch(`/api/ronda-3/responder${apiVista}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ responseId, answers: respuestas, finalizar: true })
-                });
-                if (!respuesta.ok) throw new Error('No se pudieron confirmar las respuestas.');
-                if (adminPreview) {
-                    mensaje.textContent = 'Respuestas completas en la vista de prueba.';
-                    enviando = false;
-                    await cargarEstado();
-                } else {
-                    location.replace(`/ronda-3-leaderboard?id=${encodeURIComponent(responseId)}`);
-                }
-            } catch (error) {
-                mensaje.textContent = error.message || 'No se pudieron confirmar las respuestas.';
-                console.error(error);
-                enviando = false;
-                actualizarControles();
-            }
-        });
-
         if (!responseId) {
             mensaje.textContent = 'Falta el identificador de participante.';
         } else {
+            vistaNotas.src = `/ronda-3?id=${encodeURIComponent(responseId)}${adminPreview ? '&adminPreview=1' : ''}&consulta=1`;
             cargarEstado();
             const intervalo = setInterval(cargarEstado, 900);
-            const reloj = setInterval(actualizarTemporizador, 250);
             window.addEventListener('pagehide', () => {
                 clearInterval(intervalo);
-                clearInterval(reloj);
             });
         }
     </script>

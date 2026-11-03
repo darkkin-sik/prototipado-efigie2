@@ -11,8 +11,6 @@
         html, body { min-height: 100%; margin: 0; }
         body { min-height: 100vh; padding: 18px 20px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
         main { width: min(100%, 520px); min-height: calc(100vh - 42px); margin: 0 auto; display: flex; flex-direction: column; }
-        .temporizador { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 30px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-        .reloj { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
         h1 { max-width: 390px; margin: 30px auto 28px; text-align: center; font-size: clamp(1.25rem, 5vw, 1.7rem); line-height: 1.2; font-weight: 500; }
         .efigie-principal { width: min(76vw, 290px); margin: 0 auto; text-align: center; }
         .dibujo-principal { width: 100%; aspect-ratio: 1; }
@@ -30,13 +28,6 @@
 </head>
 <body>
     <main>
-        <div class="temporizador" role="timer" aria-label="Tiempo restante">
-            <svg class="reloj" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="13" r="8.5"></circle>
-                <path d="M12 8v5l3 2M8 2l-2 2M16 2l2 2"></path>
-            </svg>
-            <span id="tiempo">0:30</span>
-        </div>
         <h1>¿Qué tan buena es tu memoria?</h1>
         <section class="efigie-principal" aria-label="Tu efigie">
             <div class="dibujo-principal" id="efigiePropia"></div>
@@ -52,26 +43,9 @@
     <script>
         const responseId = new URLSearchParams(window.location.search).get('id');
         const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
-        const tiempo = document.getElementById('tiempo');
         const mensaje = document.getElementById('mensajeRonda');
-        let finRondaMs = Date.now() + 30000;
         let cargando = false;
         let contenidoRenderizado = false;
-
-        function formatearTiempo(segundos) {
-            return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
-        }
-
-        function mostrarTiempo(segundos) {
-            finRondaMs = Date.now() + segundos * 1000;
-            tiempo.textContent = formatearTiempo(segundos);
-        }
-
-        function actualizarTemporizador() {
-            const restantes = Math.max(0, Math.ceil((finRondaMs - Date.now()) / 1000));
-            tiempo.textContent = formatearTiempo(restantes);
-            if (restantes === 0) tiempo.setAttribute('aria-label', 'Tiempo terminado');
-        }
 
         async function actualizarRonda() {
             if (cargando) return;
@@ -96,7 +70,6 @@
                     window.location.replace((destinos[etapaActiva] || '/pre-ronda-1') + '?id=' + encodeURIComponent(responseId));
                     return;
                 }
-                mostrarTiempo(ronda.segundosRestantes);
                 if (!contenidoRenderizado) {
                     const propios = ronda.integrantes.find(integrante => integrante.id === responseId);
                     if (!propios) throw new Error('No se encontró tu efigie.');
@@ -133,10 +106,8 @@
 
         actualizarRonda();
         const intervaloEstado = setInterval(actualizarRonda, 1000);
-        const intervaloTemporizador = setInterval(actualizarTemporizador, 250);
         window.addEventListener('pagehide', () => {
             clearInterval(intervaloEstado);
-            clearInterval(intervaloTemporizador);
         });
     </script>
     <script src="/admin-navigation.js" defer></script>
