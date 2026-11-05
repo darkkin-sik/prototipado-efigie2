@@ -56,6 +56,23 @@ class Program
         public string HintText { get; set; }
         public bool HintDelivered { get; set; }
     }
+    private sealed record RoundFourTrait(string Property, Func<DatosRespuesta, string> GetValue);
+    private sealed class RoundFourTask
+    {
+        public string Property { get; init; } = "";
+        public string Prompt { get; init; } = "";
+        public string Value { get; init; } = "";
+        public string SelectedParticipantId { get; set; } = "";
+    }
+    private sealed class RoundFourParticipantState
+    {
+        public RoundFourTask[] Tasks { get; init; } = Array.Empty<RoundFourTask>();
+        public bool Submitted { get; set; }
+        public int Position { get; set; }
+        public int Points { get; set; }
+    }
+    private sealed record RoundFourAnswerRequest(string responseId, string[] participantIds);
+    private sealed record RoundFourSubmitRequest(string responseId);
     private sealed record RoundThreeNotesRequest(string responseId, string[] notes);
     private sealed record RoundThreeAnswerRequest(string responseId, int indice, string respuesta);
     private sealed record RoundThreeNavigationRequest(string responseId, string accion);
@@ -84,6 +101,8 @@ class Program
     private static readonly ConcurrentDictionary<string, int> PuntajesRondaTres = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, RoundThreeQuestion[]> PreguntasRondaTresPorEquipo = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, RoundThreeTeamProgress> ProgresoEquipoRondaTres = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, RoundFourParticipantState> EstadosRondaCuatro = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, int> PuntajesRondaCuatro = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, int> GrupoPorParticipante = new(StringComparer.Ordinal);
     private static readonly string[] ColoresGrupo = { "#133463", "#7C171F", "#6064A3", "#84B444", "#E27646" };
     private static readonly string[] ColoresTextoGrupo = { "#ffffff", "#ffffff", "#ffffff", "#101a15", "#101a15" };
@@ -94,7 +113,7 @@ class Program
     private static int EtapaRondaUno;
     private static DateTime? InicioEtapaRondaUnoUtc;
     private static int SegundosExtraRondaUno;
-    private static readonly string[] EtapasRondaUno = { "pre-ronda", "memoria", "adivinanza", "leaderboard", "ronda-2-antigua", "ronda-2-representante", "ronda-2-identificacion", "ronda-2-leaderboard", "ronda-3" };
+    private static readonly string[] EtapasRondaUno = { "pre-ronda", "memoria", "adivinanza", "leaderboard", "ronda-2-antigua", "ronda-2-representante", "ronda-2-identificacion", "ronda-2-leaderboard", "ronda-3", "ronda-3-leaderboard" };
     private static readonly RoundThreeQuestion[] PreguntasRondaTres =
     {
         new("anio", "Año de nacimiento", "No dice cuántos años tenés, pero permite calcularlos. Son cuatro números que señalan cuándo empezó tu historia."),
@@ -386,7 +405,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 if (estado.expulsado) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/'); return; }}
                 if (estado.rondaIniciada) {{
                     if (adminPreview) {{ document.getElementById('estadoLobby').textContent = 'Vista de prueba · Lobby'; return; }}
-                    const destinos = {{ 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2-representante': '/ronda-2-representante?ronda=2', 'ronda-2-identificacion': '/ronda-2', 'ronda-2-leaderboard': '/ronda-2-leaderboard', 'ronda-3': '/ronda-3' }};
+                    const destinos = {{ 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2-representante': '/ronda-2-representante?ronda=2', 'ronda-2-identificacion': '/ronda-2', 'ronda-2-leaderboard': '/ronda-2-leaderboard', 'ronda-3': '/ronda-3', 'ronda-3-leaderboard': '/ronda-3-leaderboard' }};
                     const destino = destinos[estado.etapaRondaUno] || '/pre-ronda-1';
                     window.location.replace(`${{destino}}${{destino.includes('?') ? '&' : '?'}}id=${{encodeURIComponent(responseId)}}`);
                     return;
@@ -416,10 +435,11 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/ronda-1-leaderboard", () => Results.File(Path.Combine(dirActual, "ronda-1-leaderboard.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-2", () => Results.File(Path.Combine(dirActual, "ronda-3-identificacion.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-2-equipo", () => Results.File(Path.Combine(dirActual, "ronda-3.html"), "text/html; charset=utf-8"));
+    app.MapGet("/ronda-3-equipo", () => Results.File(Path.Combine(dirActual, "ronda-3.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-2-leaderboard", () => Results.File(Path.Combine(dirActual, "ronda-3-leaderboard.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-3", () => Results.File(Path.Combine(dirActual, "ronda-4.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-3-identificacion", () => Results.Redirect("/ronda-2"));
-    app.MapGet("/ronda-3-leaderboard", () => Results.Redirect("/ronda-2-leaderboard"));
+    app.MapGet("/ronda-3-leaderboard", () => Results.File(Path.Combine(dirActual, "ronda-3-final-leaderboard.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-4", () => Results.Redirect("/ronda-3"));
     app.MapGet("/espectador", () => Results.File(Path.Combine(dirActual, "espectador.html"), "text/html; charset=utf-8"));
 
@@ -766,16 +786,209 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/ronda-3/listo-siguiente", async (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<PrerondaRequest>();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId)) return Results.BadRequest();
-        if (EtapaRondaUno != 7) return Results.Conflict();
         if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
 
-        ParticipantesListosRondaCuatro[solicitud.responseId] = true;
-        foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => persona.EsBot))
-            ParticipantesListosRondaCuatro[participante.ResponseId] = true;
-        bool todosListos = ParticipantesLobby.Values
-            .Where(participante => !participante.EsBot)
-            .All(participante => ParticipantesListosRondaCuatro.ContainsKey(participante.ResponseId));
-        return Results.Json(new { estado = "ok", listo = true, rondaLista = todosListos });
+        lock (CandadoLobby)
+        {
+            if (EtapaRondaUno != 7) return Results.Conflict();
+            ParticipantesListosRondaCuatro[solicitud.responseId] = true;
+            foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => persona.EsBot))
+                ParticipantesListosRondaCuatro[participante.ResponseId] = true;
+            bool todosListos = ParticipantesLobby.Values
+                .Where(participante => !participante.EsBot)
+                .All(participante => ParticipantesListosRondaCuatro.ContainsKey(participante.ResponseId));
+            if (todosListos)
+            {
+                EtapaRondaUno = 8;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+                InicializarRondaCuatro();
+            }
+            return Results.Json(new { estado = "ok", listo = true, rondaLista = todosListos });
+        }
+    });
+
+    app.MapGet("/api/ronda-4/juego", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
+        if (EtapaRondaUno is not (8 or 9)) return Results.Conflict();
+        if (!ParticipantesLobby.TryGetValue(responseId, out LobbyParticipant participante) ||
+            participante.EsBot)
+            return Results.Json(new { participa = false, esBot = participante?.EsBot ?? false });
+        if (!EstadosRondaCuatro.TryGetValue(responseId, out RoundFourParticipantState estado))
+            return Results.Conflict();
+
+        return Results.Json(new
+        {
+            participa = true,
+            enviado = estado.Submitted,
+            equipo = TryObtenerEquipoRonda(responseId, out int numeroGrupo, out _) ? numeroGrupo : 0,
+            nombre = participante.Nombre,
+            opciones = ParticipantesLobby.Values
+                .Where(opcion => opcion.ResponseId != responseId)
+                .OrderBy(opcion => opcion.Nombre, StringComparer.OrdinalIgnoreCase)
+                .Select(opcion => new { id = opcion.ResponseId, nombre = opcion.Nombre, esBot = opcion.EsBot })
+                .ToArray(),
+            consignas = estado.Tasks.Select((tarea, indice) => new
+            {
+                indice,
+                consigna = tarea.Prompt,
+                seleccionado = tarea.SelectedParticipantId
+            }).ToArray(),
+            puntos = estado.Points,
+            posicion = estado.Position,
+            adminPreview
+        });
+    });
+
+    app.MapPost("/api/ronda-4/responder", async (HttpContext ctx) => {
+        var solicitud = await ctx.Request.ReadFromJsonAsync<RoundFourAnswerRequest>();
+        if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) ||
+            solicitud.participantIds == null || solicitud.participantIds.Length != 3 ||
+            solicitud.participantIds.Any(string.IsNullOrWhiteSpace))
+            return Results.BadRequest();
+        if (EtapaRondaUno != 8) return Results.Conflict();
+        if (!ParticipantesLobby.TryGetValue(solicitud.responseId, out LobbyParticipant participante) ||
+            participante.EsBot)
+            return Results.NotFound();
+        LobbyParticipant[] respuestas = new LobbyParticipant[solicitud.participantIds.Length];
+        for (int indice = 0; indice < solicitud.participantIds.Length; indice++)
+        {
+            string participantId = solicitud.participantIds[indice];
+            if (participantId == solicitud.responseId ||
+                !ParticipantesLobby.TryGetValue(participantId, out respuestas[indice]))
+                return Results.BadRequest();
+        }
+        if (!EstadosRondaCuatro.TryGetValue(solicitud.responseId, out RoundFourParticipantState estado))
+            return Results.Conflict();
+
+        lock (CandadoLobby)
+        {
+            if (estado.Submitted) return Results.Conflict();
+            bool correcto = estado.Tasks.Select((tarea, indice) =>
+                StringComparer.OrdinalIgnoreCase.Equals(
+                    ValorRasgoRondaCuatro(tarea.Property, respuestas[indice].Datos),
+                    tarea.Value)).All(acierto => acierto);
+            if (!correcto)
+                return Results.Json(new { correcto = false });
+
+            for (int indice = 0; indice < estado.Tasks.Length; indice++)
+                estado.Tasks[indice].SelectedParticipantId = respuestas[indice].ResponseId;
+            estado.Position = EstadosRondaCuatro.Values.Count(item => item.Submitted) + 1;
+            estado.Points = CalcularPuntajeRondaCuatro(estado.Position);
+            estado.Submitted = true;
+            PuntajesRondaCuatro[solicitud.responseId] = estado.Points;
+
+            bool todosTerminaron = ParticipantesLobby.Values
+                .Where(item => !item.EsBot)
+                .All(item => EstadosRondaCuatro.TryGetValue(item.ResponseId, out var estadoJugador) &&
+                    estadoJugador.Submitted);
+            if (todosTerminaron)
+                EtapaRondaUno = 9;
+
+            return Results.Json(new
+            {
+                correcto = true,
+                posicion = estado.Position,
+                puntos = estado.Points,
+                todosTerminaron
+            });
+        }
+    });
+
+    app.MapPost("/api/ronda-4/enviar", async (HttpContext ctx) => {
+        var solicitud = await ctx.Request.ReadFromJsonAsync<RoundFourSubmitRequest>();
+        if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId))
+            return Results.BadRequest();
+        if (EtapaRondaUno != 8) return Results.Conflict();
+        if (!ParticipantesLobby.TryGetValue(solicitud.responseId, out LobbyParticipant participante) ||
+            participante.EsBot)
+            return Results.NotFound();
+        if (!EstadosRondaCuatro.TryGetValue(solicitud.responseId, out RoundFourParticipantState estado))
+            return Results.Conflict();
+
+        lock (CandadoLobby)
+        {
+            if (estado.Submitted) return Results.Conflict();
+            if (estado.Tasks.Any(tarea => string.IsNullOrEmpty(tarea.SelectedParticipantId)))
+                return Results.Conflict();
+
+            estado.Position = EstadosRondaCuatro.Values.Count(item => item.Submitted) + 1;
+            estado.Points = CalcularPuntajeRondaCuatro(estado.Position);
+            estado.Submitted = true;
+            PuntajesRondaCuatro[solicitud.responseId] = estado.Points;
+
+            bool todosTerminaron = ParticipantesLobby.Values
+                .Where(item => !item.EsBot)
+                .All(item => EstadosRondaCuatro.TryGetValue(item.ResponseId, out var estadoJugador) &&
+                    estadoJugador.Submitted);
+            if (todosTerminaron)
+                EtapaRondaUno = 9;
+
+            return Results.Json(new
+            {
+                estado = "ok",
+                posicion = estado.Position,
+                puntos = estado.Points,
+                todosTerminaron
+            });
+        }
+    });
+
+    app.MapGet("/api/ronda-4/leaderboard", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
+        if (EtapaRondaUno is not (8 or 9)) return Results.Conflict();
+        if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out _))
+            return Results.NotFound();
+        if (!adminPreview && EtapaRondaUno == 8 &&
+            ParticipantesLobby.TryGetValue(responseId, out LobbyParticipant jugador) &&
+            !jugador.EsBot &&
+            (!EstadosRondaCuatro.TryGetValue(responseId, out RoundFourParticipantState estadoJugador) ||
+                !estadoJugador.Submitted))
+            return Results.Conflict();
+
+        var equipos = EquiposPreRonda.Select(equipo =>
+        {
+            int puntosRondaUno = equipo.ParticipantIds.Length == 0 ? 0
+                : (int)Math.Round(equipo.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id)), MidpointRounding.AwayFromZero);
+            int[] puntosRondaDos = equipo.ParticipantIds
+                .Where(id => PuntajesRondaDos.ContainsKey(id))
+                .Select(id => PuntajesRondaDos[id])
+                .ToArray();
+            int promedioRondaDos = puntosRondaDos.Length == 0 ? 0
+                : (int)Math.Round(puntosRondaDos.Average(), MidpointRounding.AwayFromZero);
+            int puntosRondaCuatro = equipo.ParticipantIds
+                .Where(id => ParticipantesLobby.TryGetValue(id, out LobbyParticipant miembro) && !miembro.EsBot)
+                .Sum(id => PuntajesRondaCuatro.GetValueOrDefault(id));
+            int terminaron = equipo.ParticipantIds.Count(id =>
+                EstadosRondaCuatro.TryGetValue(id, out RoundFourParticipantState estadoEquipo) &&
+                estadoEquipo.Submitted);
+            return new
+            {
+                numero = equipo.GroupNumber,
+                color = equipo.Color,
+                colorTexto = equipo.TextColor,
+                ronda1 = puntosRondaUno,
+                ronda2 = promedioRondaDos,
+                ronda3 = puntosRondaCuatro,
+                puntos = puntosRondaUno + promedioRondaDos + puntosRondaCuatro,
+                terminaron
+            };
+        }).OrderByDescending(equipo => equipo.puntos).ThenBy(equipo => equipo.numero).ToArray();
+        int total = ParticipantesLobby.Values.Count(item => !item.EsBot);
+        int respondidos = EstadosRondaCuatro.Values.Count(item => item.Submitted);
+        if (ParticipantesEspectador.ContainsKey(responseId))
+            numeroGrupo = 0;
+        return Results.Json(new
+        {
+            equipoPropio = numeroGrupo,
+            equipos,
+            participantesRespondidos = respondidos,
+            totalParticipantes = total,
+            etapaRondaUno = ObtenerEtapaRondaUno(),
+            rondaCompletada = EtapaRondaUno == 9
+        });
     });
 
     app.MapGet("/api/ronda-2/estado", (HttpContext ctx) => {
@@ -1043,6 +1256,9 @@ app.MapGet("/", (HttpContext ctx) => {
             6 => participantesReales.Count(participante =>
                 EstadosRondaTres.TryGetValue(participante.ResponseId, out RoundThreeParticipantState estado) &&
                 estado.Answers.Any(respuesta => !string.IsNullOrWhiteSpace(respuesta))),
+            8 => participantesReales.Count(participante =>
+                EstadosRondaCuatro.TryGetValue(participante.ResponseId, out RoundFourParticipantState estado) &&
+                estado.Submitted),
             _ => 0
         };
         return Results.Json(new
@@ -1452,7 +1668,18 @@ app.MapGet("/", (HttpContext ctx) => {
                 EtapaRondaUno = 8;
                 InicioEtapaRondaUnoUtc = null;
                 SegundosExtraRondaUno = 0;
+                InicializarRondaCuatro();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3" });
+            }
+            if (EtapaRondaUno == 8)
+            {
+                EtapaRondaUno = 9;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+                foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => !persona.EsBot))
+                    NavegacionesAdmin[participante.ResponseId] =
+                        $"/ronda-3-leaderboard?id={Uri.EscapeDataString(participante.ResponseId)}";
+                return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-leaderboard" });
             }
             return Results.Conflict();
         }
@@ -1474,6 +1701,7 @@ app.MapGet("/", (HttpContext ctx) => {
                     6 => "/ronda-2-representante?ronda=2&id=",
                     7 => "/ronda-2?id=",
                     8 => "/ronda-2-leaderboard?id=",
+                    9 => "/ronda-3?id=",
                     _ => null
                 };
                 if (rutaAnterior == null)
@@ -1488,6 +1716,16 @@ app.MapGet("/", (HttpContext ctx) => {
                 PreviewRondaIniciada = etapaAnterior > 0;
                 InicioEtapaRondaUnoUtc = etapaAnterior is 1 or 2 or 5 ? DateTime.UtcNow : null;
                 SegundosExtraRondaUno = 0;
+                if (etapaAnterior == 8)
+                {
+                    PuntajesRondaCuatro.Clear();
+                    foreach (RoundFourParticipantState estado in EstadosRondaCuatro.Values)
+                    {
+                        estado.Submitted = false;
+                        estado.Position = 0;
+                        estado.Points = 0;
+                    }
+                }
                 if (etapaAnterior is 5 or 6)
                 {
                     foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values))
@@ -1534,6 +1772,8 @@ app.MapGet("/", (HttpContext ctx) => {
                 VotosRepresentanteRondaUno.Clear();
                 PuntajesRondaDos.Clear();
                 PuntajesRondaTres.Clear();
+                EstadosRondaCuatro.Clear();
+                PuntajesRondaCuatro.Clear();
                 EstadosRondaDos.Clear();
                 EstadosRondaTres.Clear();
                 return Results.Json(new { estado = "ok", etapaAnterior = "pre-ronda-1", cambio = true });
@@ -1556,6 +1796,8 @@ app.MapGet("/", (HttpContext ctx) => {
                 VotosRepresentanteRondaUno.Clear();
                 PuntajesRondaDos.Clear();
                 PuntajesRondaTres.Clear();
+                EstadosRondaCuatro.Clear();
+                PuntajesRondaCuatro.Clear();
                 EstadosRondaDos.Clear();
                 EstadosRondaTres.Clear();
                 return Results.Json(new { estado = "ok", etapaAnterior = "lobby", cambio = true });
@@ -1631,6 +1873,8 @@ app.MapGet("/", (HttpContext ctx) => {
             PuntajesRondaUno.Clear();
             PuntajesRondaDos.Clear();
             PuntajesRondaTres.Clear();
+            EstadosRondaCuatro.Clear();
+            PuntajesRondaCuatro.Clear();
             EstadosRondaDos.Clear();
             EstadosRondaTres.Clear();
             PreguntasRondaTresPorEquipo.Clear();
@@ -2157,6 +2401,8 @@ app.MapGet("/", (HttpContext ctx) => {
             PuntajesRondaUno.Clear();
             PuntajesRondaDos.Clear();
             PuntajesRondaTres.Clear();
+            EstadosRondaCuatro.Clear();
+            PuntajesRondaCuatro.Clear();
             EstadosRondaDos.Clear();
             EstadosRondaTres.Clear();
             RespuestasQueVuelvenAEncuesta.Clear();
@@ -2335,6 +2581,116 @@ app.MapGet("/", (HttpContext ctx) => {
     }
 
     int CalcularPuntajeRondaUno(int aciertos) => aciertos * 50;
+
+    void InicializarRondaCuatro()
+    {
+        EstadosRondaCuatro.Clear();
+        PuntajesRondaCuatro.Clear();
+        LobbyParticipant[] participantesReales = ParticipantesLobby.Values
+            .Where(participante => !participante.EsBot)
+            .OrderBy(participante => participante.ResponseId, StringComparer.Ordinal)
+            .ToArray();
+        RoundFourTrait[] rasgos = RasgosRondaCuatro();
+
+        foreach (LobbyParticipant participante in participantesReales)
+        {
+            if (!TryObtenerEquipoRonda(participante.ResponseId, out _, out RoundTeam equipo))
+                continue;
+            var opcionesPorRasgo = rasgos.Select(rasgo =>
+            {
+                var grupos = participantesReales
+                    .Select(persona => new { Persona = persona, Valor = rasgo.GetValue(persona.Datos).Trim() })
+                    .Where(item => !string.IsNullOrWhiteSpace(item.Valor))
+                    .GroupBy(item => item.Valor, StringComparer.OrdinalIgnoreCase)
+                    .Select(grupo => new
+                    {
+                        Valor = grupo.First().Valor,
+                        Integrantes = grupo.Select(item => item.Persona).ToArray()
+                    })
+                    .ToArray();
+                var valoresExternos = grupos
+                    .Where(grupo => grupo.Integrantes.Any(persona =>
+                        !equipo.ParticipantIds.Contains(persona.ResponseId, StringComparer.Ordinal)))
+                    .ToArray();
+                var valoresDeCompaneros = grupos
+                    .Where(grupo => grupo.Integrantes.Any(persona =>
+                        persona.ResponseId != participante.ResponseId))
+                    .ToArray();
+                var valoresPropios = grupos
+                    .Where(grupo => grupo.Integrantes.Any(persona =>
+                        persona.ResponseId == participante.ResponseId))
+                    .ToArray();
+                var candidatos = valoresExternos.Length > 0
+                    ? valoresExternos
+                    : valoresDeCompaneros.Length > 0
+                        ? valoresDeCompaneros
+                        : valoresPropios;
+                return new
+                {
+                    Rasgo = rasgo,
+                    Prioridad = valoresExternos.Length > 0 ? 0 : valoresDeCompaneros.Length > 0 ? 1 : 2,
+                    Valores = candidatos
+                };
+            })
+            .Where(item => item.Valores.Length > 0)
+            .OrderBy(item => item.Prioridad)
+            .ThenBy(_ => Random.Shared.Next())
+            .Take(3)
+            .ToArray();
+
+            if (opcionesPorRasgo.Length != 3)
+                throw new InvalidOperationException($"No se pudieron crear tres consignas válidas para {participante.Nombre}.");
+
+            RoundFourTask[] tareas = opcionesPorRasgo.Select(item =>
+            {
+                var valor = item.Valores[Random.Shared.Next(item.Valores.Length)];
+                return new RoundFourTask
+                {
+                    Property = item.Rasgo.Property,
+                    Prompt = FormatearConsignaRondaCuatro(item.Rasgo.Property, valor.Valor),
+                    Value = valor.Valor
+                };
+            }).ToArray();
+            EstadosRondaCuatro[participante.ResponseId] = new RoundFourParticipantState { Tasks = tareas };
+        }
+    }
+
+    RoundFourTrait[] RasgosRondaCuatro() =>
+    new[]
+    {
+        new RoundFourTrait("anio", datos => datos.anio),
+        new RoundFourTrait("facultad", datos => datos.facultad),
+        new RoundFourTrait("etapa", datos => datos.etapa),
+        new RoundFourTrait("estacion", datos => datos.estacion),
+        new RoundFourTrait("grupal", datos => datos.grupal),
+        new RoundFourTrait("formato", datos => datos.formato),
+        new RoundFourTrait("rol", datos => datos.rol)
+    };
+
+    string FormatearConsignaRondaCuatro(string propiedad, string valor) =>
+        propiedad switch
+        {
+            "anio" => $"Encontrá a alguien que haya nacido en {valor}.",
+            "facultad" => $"Encontrá a alguien que pertenezca a la facultad «{valor}».",
+            "etapa" => $"Encontrá a alguien cuya etapa de carrera o rol sea «{valor}».",
+            "estacion" => $"Encontrá a alguien cuya estación favorita sea «{valor}».",
+            "grupal" => $"Encontrá a alguien que prefiera trabajar «{valor}».",
+            "formato" => $"Encontrá a alguien que prefiera disfrutar historias en formato «{valor}».",
+            "rol" => $"Encontrá a alguien cuyo rol en un trabajo grupal sea «{valor}».",
+            _ => throw new InvalidOperationException($"Rasgo de ronda 3 desconocido: {propiedad}.")
+        };
+
+    string ValorRasgoRondaCuatro(string propiedad, DatosRespuesta datos) =>
+        RasgosRondaCuatro().First(rasgo => rasgo.Property == propiedad).GetValue(datos).Trim();
+
+    int CalcularPuntajeRondaCuatro(int posicion) =>
+        posicion switch
+        {
+            1 => 250,
+            2 => 200,
+            3 => 150,
+            _ => Math.Max(0, 50 - ((posicion - 4) * 5))
+        };
 
     string ObtenerEtapaRondaUno()
     {

@@ -18,6 +18,8 @@
         .efigie-companero { width: min(100%, 185px); aspect-ratio: 1; margin: auto; }
         figcaption { margin-top: 2px; overflow-wrap: anywhere; color: var(--muted); font-size: 0.72rem; }
         .mensaje { display: none; }
+        body.solo-propia main { min-height: calc(72vh - 18px); }
+        body.solo-propia .efigie-principal { width: min(94vw, 420px, calc(72vh - 30px)); }
         @media (max-height: 560px) {
             main { gap: 4px; }
             .efigie-principal { width: min(82vw, 300px, calc(72vh - 170px)); }
@@ -36,6 +38,11 @@
         const responseId = parametros.get('id');
         const adminPreview = parametros.get('adminPreview') === '1';
         const consulta = parametros.get('consulta') === '1';
+        const soloPropia = parametros.get('soloPropia') === '1';
+        if (soloPropia) {
+            document.body.classList.add('solo-propia');
+            document.querySelector('.companeros').hidden = true;
+        }
         const mensaje = document.getElementById('mensaje');
         let cargando = false;
         let contenidoCargado = false;
@@ -48,7 +55,7 @@
             dibujoPropio.setAttribute('aria-label', `Efigie de ${propia.nombre}`);
             const companeros = document.getElementById('companeros');
             companeros.replaceChildren();
-            for (const efigie of efigies.filter(persona => !persona.propia)) {
+            for (const efigie of efigies.filter(persona => !persona.propia && !soloPropia)) {
                 const figura = document.createElement('figure');
                 figura.className = 'companero';
                 const dibujo = document.createElement('div');

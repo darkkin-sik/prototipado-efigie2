@@ -8,23 +8,24 @@ Aplicación web local para responder una encuesta, generar una efigie visual a p
 2. **Lobby y equipos:** los participantes se reúnen en `/lobby/{id}`. La sesión admite de 3 a 15 jugadores en múltiplos de tres. Los equipos se forman buscando diferencias útiles entre las respuestas, para que las efigies y sus capas puedan distinguirse durante el juego. En una simulación, se agrupan primero los dispositivos reales en la menor cantidad posible de equipos y los bots completan los lugares restantes priorizando la compatibilidad de esos grupos.
 3. **Elección del representante:** antes de cada ronda, los tres integrantes votan desde sus dispositivos. El representante se asigna al coincidir los tres votos. Si cambian de opinión, pueden volver a votar hasta que cierre la elección.
 4. **Ronda 1 — recordar y reconocer:** primero, todos observan las efigies de su equipo durante la etapa de memoria. Luego, solo el representante responde desde su dispositivo y selecciona las tres efigies de su equipo entre las de toda la sala; los otros dos integrantes ven «Mira la pantalla de tu representante». Cada acierto suma 50 puntos.
-5. **Leaderboard de la Ronda 1:** se muestran los resultados y puntajes de los equipos. La administración controla el avance a la siguiente ronda.
+5. **Leaderboard de la Ronda 1:** se muestran los resultados y puntajes de los equipos. Cada participante confirma cuándo está listo para continuar; administración también puede forzar el avance.
 6. **Elección del representante de la Ronda 2:** el equipo vuelve a elegir por unanimidad quién coordinará esta ronda.
 7. **Ronda 2 — interpretar las capas:** cada integrante identifica las seis capas de la efigie desde su propio dispositivo. El representante controla el cambio de pregunta; puede avanzar cuando los integrantes reales del equipo coinciden en la respuesta. También puede volver a la pregunta anterior sin esperar consenso. Si solicita una pista, esta aparece en un dispositivo real de otro integrante y la pregunta vale la mitad de puntos. Cada acierto suma 100 puntos, o 50 si se usó la pista.
-8. **Leaderboard de la Ronda 2:** se presentan los puntajes y se puede continuar a la Ronda 3, cuya mecánica todavía está por definir.
-9. **Ronda 3 y cierre:** la pantalla actual es solo un borrador; todavía no hay una dinámica de juego implementada.
+8. **Leaderboard de la Ronda 2:** se presentan los puntajes. Al estar todos listos, comienza automáticamente la Ronda 3; administración puede forzar el avance.
+9. **Ronda 3 — encontrar personas:** los tres integrantes juegan simultáneamente desde sus dispositivos, sin representante. Cada uno resuelve tres consignas buscando participantes que coincidan con características de la encuesta (año de nacimiento, facultad, etapa o rol, estación favorita, forma de trabajo, formato de historia o rol grupal). Las opciones muestran a todos los integrantes de la sala, incluidos los simulados; las consignas se generan a partir de respuestas existentes de participantes reales y priorizan personas de otros equipos. La misma persona puede servir para más de una consigna. Al completar las tres, aparece «Enviar» y se asignan puntos por orden global de finalización: 250, 200 y 150 a los tres primeros; desde el cuarto lugar, 50 puntos, restando 5 por cada posición posterior hasta llegar a cero. Solo los jugadores reales envían desafíos y suman puntos; cada puntaje individual se agrega al total de su equipo.
+10. **Leaderboard final:** se actualiza a medida que terminan los jugadores y muestra el acumulado de las tres rondas. Combina el puntaje de la Ronda 1, el promedio por equipo de la Ronda 2 y la suma de los puntos individuales reales de la Ronda 3. Al completar el desafío todos los participantes, la sesión pasa a resultados finales.
 
 ## Administración y soporte
 
 El panel de administración está en `/admin-sesion`. Permite observar el lobby, expulsar participantes antes de iniciar, comenzar o simular una sesión, inspeccionar etapas y controlar avances. Las vistas de prueba con `adminPreview=1` no alteran la etapa compartida ni los puntajes reales. «Forzar retroceso» vuelve a la etapa anterior; «Kill all active sessions» devuelve los dispositivos activos a la pantalla de bienvenida anterior a la encuesta.
 
-Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo propio y actualizan los puntajes en tiempo real. Los temporizadores del panel son orientativos; la administración controla las transiciones de etapa.
+Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo propio y actualizan los puntajes en tiempo real. Los temporizadores del panel son orientativos; el avance entre etapas depende de las reglas de cada ronda y administración puede forzarlo.
 
 **Problema conocido:** las sesiones espectadoras (`ESP`) y su navegación todavía pueden fallar en algunos dispositivos Android.
 
 ## Cambios futuros y necesarios
 
-- **Diseñar e implementar la Ronda 3:** definir su objetivo, reglas, interacción, puntaje y transición a resultados. Evaluar si el juego termina con tres rondas o si necesita rondas adicionales.
+- **Evaluar rondas adicionales:** decidir si la experiencia termina con estas tres rondas o si necesita más.
 - **Pulir detalles de interfaz:** revisar las pantallas en distintos tamaños de celular, legibilidad, márgenes seguros, estados de espera y error, accesibilidad y consistencia visual entre rondas, leaderboards y administración.
 - **Mejorar el sistema de enlace:** simplificar cómo se comparte y abre la experiencia en los celulares; revisar enlaces de ingreso, recuperación al reconectar, persistencia/cambio de dispositivo y el acceso de espectadores. Evaluar QR o códigos de sesión y validar el flujo con ngrok y distintos navegadores móviles.
 
@@ -77,9 +78,10 @@ ngrok no es necesario para usar la aplicación desde la misma computadora. Sí r
 - `ronda-3.html`: vista de las tres efigies del equipo, accesible desde la pestaña lateral de la ronda 2.
 - `ronda-3-identificacion.html`: interfaz de respuestas de la ronda 2.
 - `ronda-3-leaderboard.html`: resultados animados de la ronda 2 y avance compartido.
-- `ronda-4.html`: pantalla borrador de la ronda 3.
+- `ronda-4.html`: interfaz de desafíos de la Ronda 3.
+- `ronda-3-final-leaderboard.html`: leaderboard final con puntajes acumulados.
 - `admin-sesion.html`: panel de administración.
 - La sesión puede comenzar con entre 3 y 15 participantes, siempre que el total sea múltiplo de tres.
 - En la ronda 2, cada integrante responde desde su dispositivo; el representante controla la navegación y el consenso habilita el avance.
 - `respuestas_app.csv`: respuestas guardadas por la aplicación.
-- `Program.cs` sirve `/ronda-2` desde `ronda-3-identificacion.html` y `/ronda-2-leaderboard` desde `ronda-3-leaderboard.html`.
+- `Program.cs` sirve `/ronda-2` desde `ronda-3-identificacion.html`, `/ronda-2-leaderboard` desde `ronda-3-leaderboard.html`, `/ronda-3` desde `ronda-4.html` y `/ronda-3-leaderboard` desde `ronda-3-final-leaderboard.html`.

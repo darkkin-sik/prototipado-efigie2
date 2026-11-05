@@ -9,21 +9,195 @@
         :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --blue: #133463; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
-        body { display: grid; min-height: 100vh; place-items: center; padding: 20px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
-        main { width: min(100%, 520px); text-align: center; }
-        .logo { display: block; width: min(38vw, 150px); margin: 0 auto 30px; }
-        .etiqueta { margin: 0 0 12px; color: var(--muted); font-size: .82rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-        h1 { margin: 0; font-size: clamp(2.2rem, 11vw, 4rem); line-height: 1; }
-        p { max-width: 34ch; margin: 18px auto 0; color: var(--muted); font-size: 1.1rem; line-height: 1.55; }
+        body { min-height: 100vh; padding: 18px 16px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 560px); margin: 0 auto; }
+        .encabezado { text-align: center; }
+        .etiqueta { margin: 8px 0; color: var(--muted); font-size: .82rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+        h1 { margin: 0; font-size: clamp(2rem, 9vw, 3rem); }
+        .subtitulo { margin: 12px auto 22px; color: var(--muted); line-height: 1.5; }
+        .equipo { display: inline-block; margin: 0 0 4px; padding: 6px 12px; border-radius: 999px; background: var(--blue); color: #fff; font-size: .9rem; font-weight: 700; }
+        .desafios { display: grid; gap: 12px; }
+        .desafio { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 2px 9px rgb(16 26 21 / 6%); }
+        .numero { margin: 0 0 8px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .consigna { margin: 0 0 14px; font-size: 1.08rem; font-weight: 650; line-height: 1.45; }
+        select { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid #87958d; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }
+        select:focus-visible { outline: 3px solid #e6ad3f; outline-offset: 2px; }
+        select:disabled { opacity: .8; }
+        .progreso { margin: 16px 0 0; color: var(--muted); text-align: center; }
+        .mensaje { min-height: 1.5em; margin: 12px 0 0; color: var(--muted); text-align: center; }
+        .error { color: #8c2525; }
+        .tab-equipo { position: fixed; z-index: 4; top: 50%; left: 0; transform: translateY(-50%); }
+        .tab-equipo summary { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 6px; border: 1px solid #b6c9bf; border-left: 0; border-radius: 0 6px 6px 0; background: #6eb392; color: var(--ink); font-size: .76rem; font-weight: 700; cursor: pointer; list-style: none; writing-mode: vertical-rl; transition: background-color 180ms ease; }
+        .tab-equipo summary:hover { background: #4a896b; color: #fff; }
+        .tab-equipo summary::-webkit-details-marker { display: none; }
+        .panel-equipo { position: absolute; top: 50%; left: 100%; width: min(84vw, 420px); height: min(72vh, 680px); margin-left: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgb(16 26 21 / 20%); opacity: 0; transform: translate(-12px, -50%); transition: opacity 220ms ease, transform 220ms ease; pointer-events: none; }
+        .tab-equipo[open] .panel-equipo { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+        .panel-equipo iframe { display: block; width: 100%; height: 100%; border: 0; }
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body>
     <main>
-        <img class="logo" src="/efigie-logo.svg" alt="Efigie">
-        <p class="etiqueta">Ronda 3</p>
-        <h1>Muy pronto</h1>
-        <p>La próxima parte de la experiencia está en preparación.</p>
+        <header class="encabezado">
+            <p class="etiqueta">Ronda 3 · Desafío individual por equipos</p>
+            <h1>Encontrá a alguien</h1>
+            <p class="subtitulo">Cada integrante juega desde su dispositivo. Completá las tres consignas; el puntaje se suma al de tu equipo.</p>
+            <p class="equipo" id="equipo" hidden></p>
+        </header>
+        <section class="desafios" id="desafios" aria-label="Consignas"></section>
+        <p class="progreso" id="progreso" aria-live="polite"></p>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
     </main>
+    <details class="tab-equipo" id="tabEquipo">
+        <summary aria-label="Ver tu efigie">Equipo</summary>
+        <div class="panel-equipo">
+            <iframe id="vistaEfigie" title="Tu efigie"></iframe>
+        </div>
+    </details>
+    <script>
+        const parametros = new URLSearchParams(location.search);
+        const responseId = parametros.get('id') || localStorage.getItem('mi_efigie_id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const desafios = document.getElementById('desafios');
+        const progreso = document.getElementById('progreso');
+        const mensaje = document.getElementById('mensaje');
+        const vistaEfigie = document.getElementById('vistaEfigie');
+        let enviandoRespuesta = false;
+        let selectores = [];
+
+        function urlResultados() {
+            const query = new URLSearchParams({ id: responseId });
+            for (const clave of ['espectador', 'sesion']) {
+                const valor = parametros.get(clave);
+                if (valor) query.set(clave, valor);
+            }
+            if (adminPreview) query.set('adminPreview', '1');
+            return `/ronda-3-leaderboard?${query}`;
+        }
+
+        function mostrarNoParticipante(esBot) {
+            desafios.replaceChildren();
+            progreso.textContent = '';
+            mensaje.textContent = esBot
+                ? 'Las sesiones simuladas no participan en esta ronda.'
+                : 'Esta ronda está disponible para participantes con respuestas reales de la encuesta.';
+        }
+
+        function renderizar(estado) {
+            const etiquetaEquipo = document.getElementById('equipo');
+            etiquetaEquipo.textContent = `Equipo ${estado.equipo}`;
+            etiquetaEquipo.hidden = !estado.equipo;
+
+            if (estado.enviado && !adminPreview) {
+                location.replace(urlResultados());
+                return;
+            }
+            desafios.replaceChildren();
+            selectores = [];
+            estado.consignas.forEach(consigna => {
+                const tarjeta = document.createElement('article');
+                tarjeta.className = 'desafio';
+                const numero = document.createElement('p');
+                numero.className = 'numero';
+                numero.textContent = `Consigna ${consigna.indice + 1}`;
+                const texto = document.createElement('p');
+                texto.className = 'consigna';
+                texto.textContent = consigna.consigna;
+                const selector = document.createElement('select');
+                selector.setAttribute('aria-label', `Persona para la consigna ${consigna.indice + 1}`);
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = 'Elegí una persona';
+                selector.append(placeholder);
+                for (const opcion of estado.opciones) {
+                    const item = document.createElement('option');
+                    item.value = opcion.id;
+                    item.textContent = `${opcion.nombre}${opcion.esBot ? ' (simulado)' : ''}`;
+                    selector.append(item);
+                }
+                selector.value = consigna.seleccionado || '';
+                selector.disabled = adminPreview || enviandoRespuesta;
+                selector.addEventListener('change', responder);
+                selectores.push(selector);
+                tarjeta.append(numero, texto, selector);
+                desafios.append(tarjeta);
+            });
+            progreso.textContent = 'Elegí una persona para cada consigna.';
+        }
+
+        async function cargarJuego() {
+            if (!responseId) {
+                mensaje.textContent = 'Falta el identificador de participante.';
+                return;
+            }
+            try {
+                const vista = adminPreview ? '&adminPreview=1' : '';
+                const respuesta = await fetch(`/api/ronda-4/juego?responseId=${encodeURIComponent(responseId)}${vista}`, { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo cargar el desafío.');
+                const estado = await respuesta.json();
+                if (!estado.participa) {
+                    mostrarNoParticipante(estado.esBot);
+                    return;
+                }
+                mensaje.textContent = adminPreview ? 'Vista de prueba: las respuestas no se guardan.' : '';
+                mensaje.classList.remove('error');
+                renderizar(estado);
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo cargar el desafío.';
+                mensaje.classList.add('error');
+                console.error(error);
+            }
+        }
+
+        async function responder() {
+            if (enviandoRespuesta || adminPreview ||
+                selectores.length !== 3 || selectores.some(selector => !selector.value))
+                return;
+
+            enviandoRespuesta = true;
+            selectores.forEach(selector => { selector.disabled = true; });
+            mensaje.textContent = 'Comprobando las tres opciones...';
+            mensaje.classList.remove('error');
+            try {
+                const respuesta = await fetch('/api/ronda-4/responder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        responseId,
+                        participantIds: selectores.map(selector => selector.value)
+                    })
+                });
+                if (!respuesta.ok) throw new Error('No se pudieron comprobar las respuestas.');
+                const resultado = await respuesta.json();
+                if (!resultado.correcto) {
+                    selectores.forEach(selector => {
+                        selector.value = '';
+                        selector.disabled = adminPreview;
+                    });
+                    mensaje.textContent = 'Una está mal. Revisá las tres opciones.';
+                    mensaje.classList.add('error');
+                } else {
+                    location.replace(urlResultados());
+                }
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudieron comprobar las respuestas.';
+                mensaje.classList.add('error');
+                console.error(error);
+                selectores.forEach(selector => { selector.disabled = adminPreview; });
+            } finally {
+                enviandoRespuesta = false;
+            }
+        }
+
+        const queryEfigie = new URLSearchParams({
+            id: responseId,
+            consulta: '1',
+            soloPropia: '1'
+        });
+        if (adminPreview) queryEfigie.set('adminPreview', '1');
+        vistaEfigie.src = `/ronda-3-equipo?${queryEfigie}`;
+        cargarJuego();
+    </script>
     <script src="/admin-navigation.js" defer></script>
 </body>
 </html>

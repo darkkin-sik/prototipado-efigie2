@@ -128,7 +128,8 @@
             { clave: 'ronda-2-equipo', nombre: 'Ronda 2 · Efigies del equipo', ruta: id => `/ronda-2-equipo?id=${encodeURIComponent(id)}&adminPreview=1&consulta=1` },
             { clave: 'ronda-2', nombre: 'Ronda 2 · Identificación', ruta: id => `/ronda-2?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-2-resultados', nombre: 'Ronda 2 · Resultados', ruta: id => `/ronda-2-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-3', nombre: 'Ronda 3 · Borrador', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` }
+            { clave: 'ronda-3', nombre: 'Ronda 3 · Desafío', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-3-resultados', nombre: 'Ronda 3 · Resultados finales', ruta: id => `/ronda-3-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` }
         ];
 
         function actualizarAccesosPrueba(participantes) {
@@ -226,7 +227,8 @@
                     'ronda-2-representante': 'Ronda 2 · Representantes',
                     'ronda-2-identificacion': 'Ronda 2 · Identificación',
                     'ronda-2-leaderboard': 'Ronda 2 · Resultados',
-                    'ronda-3': 'Ronda 3 · Borrador'
+                    'ronda-3': 'Ronda 3 · Desafío',
+                    'ronda-3-leaderboard': 'Resultados finales'
                 };
                 estado.textContent = sesion.previewIniciada
                     ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1')
@@ -243,17 +245,18 @@
                 botonAgregarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
                 botonSaltarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
-                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2-representante', 'ronda-2-identificacion', 'ronda-2-leaderboard'].includes(sesion.etapaRondaUno);
+                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2-representante', 'ronda-2-identificacion', 'ronda-2-leaderboard', 'ronda-3'].includes(sesion.etapaRondaUno);
                 const nombresForzar = {
                     leaderboard: 'Forzar avance a ronda 2',
                     'ronda-2-representante': 'Forzar avance a identificación',
                     'ronda-2-identificacion': 'Forzar avance a resultados',
-                    'ronda-2-leaderboard': 'Forzar avance a ronda 3'
+                    'ronda-2-leaderboard': 'Forzar avance a ronda 3',
+                    'ronda-3': 'Forzar resultados finales'
                 };
                 const totalReales = Number(sesion.totalParticipantesReales) || 0;
                 const respondieron = Number(sesion.respondieronEtapa) || 0;
                 const listos = Number(sesion.listosEtapa) || 0;
-                const contador = ['adivinanza', 'ronda-2-identificacion'].includes(sesion.etapaRondaUno)
+                const contador = ['adivinanza', 'ronda-2-identificacion', 'ronda-3'].includes(sesion.etapaRondaUno)
                     ? `${respondieron}/${totalReales} participantes respondieron.`
                     : sesion.etapaRondaUno === 'ronda-2-representante'
                         ? `${listos}/${totalReales} participantes eligieron representante.`
