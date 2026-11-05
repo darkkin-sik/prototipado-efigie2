@@ -36,6 +36,8 @@
         .accion { min-height: 48px; padding: 11px 17px; border: 0; border-radius: 4px; background: var(--green); color: #101a15; font: inherit; font-weight: 600; cursor: pointer; }
         a.accion { display: grid; place-items: center; text-align: center; text-decoration: none; }
         .accion-volver { background: #dcebe2; }
+        .accion-terminar { background: #b42318; color: #fff; }
+        .accion.accion-terminar:hover:not(:disabled) { background: #8f1d15; color: #fff; }
         .accion:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
         .pruebas { margin-top: 24px; padding: 16px; border: 1px solid var(--line); background: #fff; }
         .pruebas h2 { margin: 0 0 10px; font-size: 1.05rem; }
@@ -60,12 +62,13 @@
         <footer class="acciones">
             <button type="button" class="accion" id="simular">Simular ronda</button>
             <button type="button" class="accion" id="comenzar" disabled>Comenzar ronda</button>
-            <button type="button" class="accion" id="forzarListo" hidden>Forzar listo</button>
+            <button type="button" class="accion" id="forzarListo" hidden>Avanzar a memoria</button>
             <button type="button" class="accion" id="agregarTiempo" hidden>Agregar 20 seg</button>
             <button type="button" class="accion" id="saltarTiempo" hidden>Saltar tiempo</button>
             <button type="button" class="accion" id="forzarLeaderboard" hidden>Forzar leaderboard (simular bots)</button>
             <button type="button" class="accion" id="forzarSiguiente" hidden>Forzar avance desde leaderboard</button>
             <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
+            <button type="button" class="accion accion-terminar" id="terminarSesiones">Kill all active sessions</button>
         </footer>
         <div class="contadores-acciones" aria-live="polite">
             <p id="contadorForzar" hidden></p>
@@ -100,6 +103,7 @@
         const contadorForzar = document.getElementById('contadorForzar');
         const contadorLeaderboard = document.getElementById('contadorLeaderboard');
         const botonVolver = document.getElementById('volver');
+        const botonTerminarSesiones = document.getElementById('terminarSesiones');
         const panelPruebas = document.getElementById('pruebas');
         const participantePrueba = document.getElementById('participantePrueba');
         const accesosPrueba = document.getElementById('accesosPrueba');
@@ -111,9 +115,6 @@
         const duracionesGuia = {
             memoria: 30,
             adivinanza: 120,
-            'ronda-2': 90,
-            'ronda-3-notas': 30,
-            'ronda-3-identificacion': 180
         };
         const etapasPrueba = [
             { clave: 'encuesta', nombre: 'Encuesta', ruta: () => '/encuesta?nueva=1' },
@@ -123,12 +124,11 @@
             { clave: 'ronda-1-memoria', nombre: 'Ronda 1 · Memoria', ruta: id => `/ronda-1-preview?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-1-adivinanza', nombre: 'Ronda 1 · Adivinanza', ruta: id => `/ronda-1-adivinar?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-1-resultados', nombre: 'Ronda 1 · Resultados', ruta: id => `/ronda-1-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-2', nombre: 'Ronda 2', ruta: id => `/ronda-2?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-2-resultados', nombre: 'Resultados · Ronda 2', ruta: id => `/ronda-2-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-3', nombre: 'Ronda 3 · Notas', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-3-identificacion', nombre: 'Ronda 3 · Identificación', ruta: id => `/ronda-3-identificacion?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-3-resultados', nombre: 'Ronda 3 · Resultados', ruta: id => `/ronda-3-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
-            { clave: 'ronda-4', nombre: 'Ronda 4 · Borrador', ruta: id => `/ronda-4?id=${encodeURIComponent(id)}&adminPreview=1` }
+            { clave: 'ronda-2-representante', nombre: 'Ronda 2 · Representantes', ruta: id => `/ronda-2-representante?ronda=2&id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-2-equipo', nombre: 'Ronda 2 · Efigies del equipo', ruta: id => `/ronda-2-equipo?id=${encodeURIComponent(id)}&adminPreview=1&consulta=1` },
+            { clave: 'ronda-2', nombre: 'Ronda 2 · Identificación', ruta: id => `/ronda-2?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-2-resultados', nombre: 'Ronda 2 · Resultados', ruta: id => `/ronda-2-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-3', nombre: 'Ronda 3 · Borrador', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` }
         ];
 
         function actualizarAccesosPrueba(participantes) {
@@ -203,7 +203,7 @@
                 etapaTemporizadorGuia = etapa;
                 finTemporizadorGuia = Date.now() + duracion * 1000;
             }
-            if (segundosServidor > 0 && ['memoria', 'adivinanza', 'ronda-3-notas'].includes(etapa))
+            if (segundosServidor > 0 && ['memoria', 'adivinanza'].includes(etapa))
                 finTemporizadorGuia = Date.now() + segundosServidor * 1000;
             const segundos = Math.max(0, Math.ceil((finTemporizadorGuia - Date.now()) / 1000));
             const tiempo = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
@@ -218,42 +218,45 @@
                 const participantes = sesion.participantes || [];
                 rondaIniciada = sesion.rondaIniciada;
                 const preRondaActiva = sesion.preRondaActiva;
+                const cantidadValida = sesion.cantidad >= 3 && sesion.cantidad <= 15 && sesion.cantidad % 3 === 0;
                 const nombresEtapa = {
                     'memoria': 'Ronda 1 · Memoria',
                     'adivinanza': 'Ronda 1 · Adivinanza',
                     'leaderboard': 'Ronda 1 · Resultados',
-                    'ronda-2': 'Ronda 2',
-                    'ronda-3-notas': 'Ronda 3 · Notas',
-                    'ronda-3-identificacion': 'Ronda 3 · Identificación',
-                    'ronda-3-leaderboard': 'Ronda 3 · Resultados',
-                    'ronda-4': 'Ronda 4 · Borrador'
+                    'ronda-2-representante': 'Ronda 2 · Representantes',
+                    'ronda-2-identificacion': 'Ronda 2 · Identificación',
+                    'ronda-2-leaderboard': 'Ronda 2 · Resultados',
+                    'ronda-3': 'Ronda 3 · Borrador'
                 };
-                estado.textContent = sesion.previewIniciada ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1') : preRondaActiva ? 'Pre-ronda 1' : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}`;
+                estado.textContent = sesion.previewIniciada
+                    ? (nombresEtapa[sesion.etapaRondaUno] || 'Ronda 1')
+                    : preRondaActiva
+                        ? 'Pre-ronda 1'
+                        : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}${cantidadValida ? '' : ' · Se inicia con múltiplos de 3'}`;
                 actualizarTemporizadorGuia(sesion.etapaRondaUno, sesion.segundosRestantesRondaUno);
                 lista.hidden = participantes.length === 0;
                 listaEquipos.hidden = !preRondaActiva;
                 botonSimular.hidden = rondaIniciada;
                 botonComenzar.hidden = rondaIniciada;
-                botonComenzar.disabled = sesion.cantidad === 0;
+                botonComenzar.disabled = !cantidadValida;
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
                 botonAgregarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
-                botonSaltarTiempo.hidden = !['memoria', 'adivinanza', 'ronda-3-notas'].includes(sesion.etapaRondaUno);
+                botonSaltarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
-                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2', 'ronda-3-notas', 'ronda-3-identificacion', 'ronda-3-leaderboard'].includes(sesion.etapaRondaUno);
+                botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2-representante', 'ronda-2-identificacion', 'ronda-2-leaderboard'].includes(sesion.etapaRondaUno);
                 const nombresForzar = {
                     leaderboard: 'Forzar avance a ronda 2',
-                    'ronda-2': 'Forzar avance a ronda 3',
-                    'ronda-3-notas': 'Forzar avance a identificación',
-                    'ronda-3-identificacion': 'Forzar avance a resultados de ronda 3',
-                    'ronda-3-leaderboard': 'Forzar avance a ronda 4'
+                    'ronda-2-representante': 'Forzar avance a identificación',
+                    'ronda-2-identificacion': 'Forzar avance a resultados',
+                    'ronda-2-leaderboard': 'Forzar avance a ronda 3'
                 };
                 const totalReales = Number(sesion.totalParticipantesReales) || 0;
                 const respondieron = Number(sesion.respondieronEtapa) || 0;
                 const listos = Number(sesion.listosEtapa) || 0;
-                const contador = ['adivinanza', 'ronda-3-identificacion'].includes(sesion.etapaRondaUno)
+                const contador = ['adivinanza', 'ronda-2-identificacion'].includes(sesion.etapaRondaUno)
                     ? `${respondieron}/${totalReales} participantes respondieron.`
-                    : sesion.etapaRondaUno === 'ronda-3-notas'
-                        ? 'El avance de esta etapa se controla desde administración.'
+                    : sesion.etapaRondaUno === 'ronda-2-representante'
+                        ? `${listos}/${totalReales} participantes eligieron representante.`
                         : `${listos}/${totalReales} participantes listos.`;
                 botonForzarSiguiente.textContent = nombresForzar[sesion.etapaRondaUno] || 'Forzar avance';
                 botonForzarLeaderboard.textContent = 'Forzar leaderboard (simular bots)';
@@ -270,7 +273,9 @@
                     tarjeta.className = 'equipo';
                     tarjeta.style.setProperty('--color-equipo', equipo.color);
                     const titulo = document.createElement('h2');
-                    titulo.textContent = `Equipo ${equipo.numero}`;
+                    titulo.textContent = equipo.representanteNombre
+                        ? `Equipo ${equipo.numero} · Representante: ${equipo.representanteNombre}`
+                        : `Equipo ${equipo.numero}`;
                     const puntaje = document.createElement('p');
                     puntaje.textContent = `${equipo.posibilidades}/7 posibilidades de triangulación · Puntaje ${equipo.puntaje}`;
                     const integrantes = document.createElement('ul');
@@ -278,12 +283,16 @@
                     for (const integrante of equipo.integrantes) {
                         const fila = document.createElement('li');
                         fila.className = 'integrante';
-                        fila.dataset.listo = String(integrante.listo);
+                        fila.dataset.listo = String(Boolean(integrante.votoRepresentanteNombre));
                         const nombre = document.createElement('span');
                         nombre.textContent = integrante.nombre + (integrante.esBot ? ' (simulado)' : '');
                         const listo = document.createElement('span');
                         listo.className = 'estado-listo';
-                        listo.textContent = integrante.listo ? 'Listo' : 'Esperando';
+                        listo.textContent = equipo.representanteId === integrante.id
+                            ? 'Representante'
+                            : integrante.votoRepresentanteNombre
+                                ? `Eligió: ${integrante.votoRepresentanteNombre}`
+                                : 'Sin elegir';
                         fila.append(nombre, listo);
                         integrantes.append(fila);
                     }
@@ -330,7 +339,9 @@
         async function enviarInicio(ruta, confirmacion) {
             if (!window.confirm(confirmacion)) return;
             const respuesta = await fetch(ruta, { method: 'POST' });
-            mensaje.textContent = respuesta.ok ? 'Pre-ronda 1 iniciada.' : 'No se pudo comenzar la ronda.';
+            mensaje.textContent = respuesta.ok
+                ? 'Pre-ronda 1 iniciada.'
+                : 'No se pudo comenzar. Se necesitan entre 3 y 15 participantes, en grupos de tres.';
             await cargarEstado();
         }
 
@@ -341,14 +352,16 @@
             await cargarEstado();
         });
 
-        botonComenzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/iniciar', '¿Comenzar la ronda? Los lugares vacíos se completarán con bots.'));
+        botonComenzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/iniciar', '¿Comenzar la ronda con los participantes actuales? Se requiere un grupo completo por cada tres personas.'));
 
         botonForzarListo.addEventListener('click', async () => {
             botonForzarListo.disabled = true;
             try {
                 const respuesta = await fetch('/api/admin/preronda/forzar-listo', { method: 'POST' });
-                if (!respuesta.ok) throw new Error('No se pudo forzar el avance. Verificá que la pre-ronda esté activa.');
-                mensaje.textContent = 'Avance forzado. Los participantes pasarán a la etapa de memoria.';
+                if (!respuesta.ok) throw new Error(respuesta.status === 409
+                    ? 'Cada equipo debe coincidir en un representante antes de avanzar.'
+                    : 'No se pudo avanzar. Verificá que la pre-ronda esté activa.');
+                mensaje.textContent = 'Los participantes pasarán a la etapa de memoria.';
                 await cargarEstado();
             } catch (error) {
                 mensaje.textContent = error.message || 'No se pudo conectar con el servidor para forzar el avance.';
@@ -418,10 +431,9 @@
                     memoria: 'memoria de la ronda 1',
                     adivinanza: 'la adivinanza de la ronda 1',
                     leaderboard: 'los resultados de la ronda 1',
-                    'ronda-2': 'la ronda 2',
-                    'ronda-3-notas': 'las notas de la ronda 3',
-                    'ronda-3-identificacion': 'la identificación de la ronda 3',
-                    'ronda-3-leaderboard': 'los resultados de la ronda 3'
+                    'ronda-2-representante': 'la elección de representante de la ronda 2',
+                    'ronda-2-identificacion': 'la identificación de la ronda 2',
+                    'ronda-2-leaderboard': 'los resultados de la ronda 2'
                 };
                 mensaje.textContent = !resultado.cambio
                     ? 'La sesión ya está en el lobby.'
@@ -431,6 +443,23 @@
             }
             botonVolver.disabled = false;
             await cargarEstado();
+        });
+
+        botonTerminarSesiones.addEventListener('click', async () => {
+            if (!window.confirm('¿Finalizar todas las sesiones activas y devolver a los usuarios a la pantalla previa a la encuesta?')) return;
+            botonTerminarSesiones.disabled = true;
+            try {
+                const respuesta = await fetch('/api/admin/sesion/terminar-todas', { method: 'POST' });
+                if (!respuesta.ok) throw new Error('No se pudieron finalizar las sesiones activas.');
+                const resultado = await respuesta.json();
+                mensaje.textContent = `${resultado.participantes} usuarios volverán a la pantalla de bienvenida.`;
+                await cargarEstado();
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con el servidor.';
+                console.error(error);
+            } finally {
+                botonTerminarSesiones.disabled = false;
+            }
         });
 
         cargarEstado();

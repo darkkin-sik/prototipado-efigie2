@@ -26,6 +26,22 @@
         || (Boolean(sesionEspectador) && responseId === idEspectador);
     if (!responseId) return;
 
+    function seguirNavegacion(destino) {
+        const url = new URL(destino, window.location.origin);
+        if (url.searchParams.has('reinicioSesion')) {
+            try {
+                localStorage.removeItem('mi_efigie_id');
+                sessionStorage.removeItem('efigie_espectador_sesion');
+                sessionStorage.removeItem('efigie_espectador_id');
+            } catch (error) {
+                console.warn('No se pudo limpiar el almacenamiento de la sesión.', error);
+            }
+            window.location.replace('/');
+            return;
+        }
+        window.location.replace(destino);
+    }
+
     if (esEspectador) {
         guardarSesion('efigie_espectador_sesion', sesionEspectador);
         guardarSesion('efigie_espectador_id', responseId);
@@ -43,16 +59,25 @@
             'memoria': '/ronda-1-preview',
             'adivinanza': '/ronda-1-adivinar',
             'leaderboard': '/ronda-1-leaderboard',
-            'ronda-2': '/ronda-2',
-            'ronda-3-notas': '/ronda-3',
-            'ronda-3-identificacion': '/ronda-3-identificacion',
-            'ronda-3-leaderboard': '/ronda-3-leaderboard',
-            'ronda-4': '/ronda-4'
+            'ronda-2-representante': '/ronda-2-representante?ronda=2',
+            'ronda-2-identificacion': '/ronda-2',
+            'ronda-2-leaderboard': '/ronda-2-leaderboard',
+            'ronda-3': '/ronda-3'
         };
         let sincronizando = false;
         async function sincronizarEtapa() {
             if (sincronizando) return;
             try {
+                const navegacion = await fetch(`/api/participante/navegacion?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+                if (navegacion.status !== 204) {
+                    if (!navegacion.ok) throw new Error('No se pudo consultar la navegación enviada por administración.');
+                    const comando = await navegacion.json();
+                    if (typeof comando.destino === 'string' && comando.destino.startsWith('/')) {
+                        sincronizando = true;
+                        seguirNavegacion(comando.destino);
+                        return;
+                    }
+                }
                 const respuesta = await fetch(`/api/espectador/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
                 if (!respuesta.ok) throw new Error('No se pudo consultar la sesión de espectador.');
                 const sesion = await respuesta.json();
@@ -69,7 +94,10 @@
                     espectador: '1',
                     sesion: sesionEspectador
                 });
-                window.location.replace(`${destino}?${query}`);
+                const urlDestino = new URL(destino, window.location.origin);
+                for (const [clave, valor] of query)
+                    urlDestino.searchParams.set(clave, valor);
+                window.location.replace(urlDestino);
             } catch (error) {
                 console.error(error);
             }
@@ -91,7 +119,7 @@
             const comando = await respuesta.json();
             if (typeof comando.destino !== 'string' || !comando.destino.startsWith('/')) return;
             navegando = true;
-            window.location.replace(comando.destino);
+            seguirNavegacion(comando.destino);
         } catch (error) {
             console.error(error);
         }

@@ -59,11 +59,10 @@
             'memoria': '/ronda-1-preview',
             'adivinanza': '/ronda-1-adivinar',
             'leaderboard': '/ronda-1-leaderboard',
-            'ronda-2': '/ronda-2',
-            'ronda-3-notas': '/ronda-3',
-            'ronda-3-identificacion': '/ronda-3-identificacion',
-            'ronda-3-leaderboard': '/ronda-3-leaderboard',
-            'ronda-4': '/ronda-4'
+            'ronda-2-representante': '/ronda-2-representante?ronda=2',
+            'ronda-2-identificacion': '/ronda-2',
+            'ronda-2-leaderboard': '/ronda-2-leaderboard',
+            'ronda-3': '/ronda-3'
         };
 
         async function consultarSesion() {
@@ -82,7 +81,10 @@
                     espectador: '1',
                     sesion: sessionId
                 });
-                location.replace(`${destino}?${query}`);
+                const urlDestino = new URL(destino, location.origin);
+                for (const [clave, valor] of query)
+                    urlDestino.searchParams.set(clave, valor);
+                location.replace(urlDestino);
             } catch (error) {
                 estado.textContent = 'No se pudo conectar con la sesión. Reintentando...';
                 console.error(error);

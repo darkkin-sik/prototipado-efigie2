@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#eaf3f0">
     <title>Ronda 1 - Adivinanza - Efigie</title>
     <style>
-        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --selected: #d7e5df; }
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; --selected: #d7e5df; --equipo: #133463; --tinta-equipo: #ffffff; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
         body { min-height: 100vh; padding: 18px 20px max(110px, calc(90px + env(safe-area-inset-bottom))); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
@@ -22,17 +22,30 @@
         #listo { min-width: min(82vw, 300px); min-height: 54px; padding: 12px 20px; border: 0; border-radius: 5px; background: #133463; color: #fff; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgb(16 26 21 / 18%); pointer-events: auto; }
         #listo:disabled { opacity: 0.45; cursor: default; }
         .mensaje { min-height: 1.5em; margin: 10px 0 0; padding: 4px 10px; border-radius: 5px; background: var(--paper); text-align: center; color: #53615b; font-size: 0.85rem; pointer-events: auto; }
+        .espera { width: min(100%, 520px); text-align: center; }
+        .logo { width: min(177px, 54vw); height: auto; margin: 0 auto 34px; filter: brightness(0) invert(1); }
+        .espera h1 { margin-bottom: 12px; }
+        .espera p { margin: 0; }
+        body.espera-representante { display: grid; place-items: center; padding: 24px; background: var(--equipo); color: var(--tinta-equipo); }
+        body.espera-representante main { display: none; }
+        body.espera-representante .espera { display: block; }
+        .espera[hidden] { display: none; }
         [hidden] { display: none !important; }
         @media (max-width: 380px) { body { padding-inline: 14px; } h1 { margin-top: 24px; } }
     </style>
 </head>
 <body>
+    <section class="espera" id="espera" hidden aria-live="polite">
+        <img class="logo" src="/efigie-logo.svg" alt="Efigie">
+        <h1>Mira la pantalla de tu representante</h1>
+        <p id="mensajeEspera"></p>
+    </section>
     <main>
-        <h1>¡Encontrá las dos efigies que pertenecen a tus compañeros!</h1>
+        <h1>¡Encontrá las tres efigies que pertenecen a tu equipo!</h1>
         <section class="opciones" id="opciones" aria-label="Efigies para elegir"></section>
         <div class="acciones">
             <button type="button" id="listo" disabled hidden>Listo</button>
-            <p class="mensaje" id="mensaje" role="status" aria-live="polite">Elegí 2 efigies.</p>
+            <p class="mensaje" id="mensaje" role="status" aria-live="polite">Elegí las 3 efigies de tu equipo.</p>
         </div>
     </main>
     <script>
@@ -41,14 +54,16 @@
         const listaOpciones = document.getElementById('opciones');
         const botonListo = document.getElementById('listo');
         const mensaje = document.getElementById('mensaje');
+        const espera = document.getElementById('espera');
+        const mensajeEspera = document.getElementById('mensajeEspera');
         const seleccionadas = new Set();
         let cargando = false;
         let yaRespondio = false;
         let opcionesRenderizadas = false;
 
         function actualizarBoton() {
-            botonListo.disabled = yaRespondio || seleccionadas.size !== 2;
-            botonListo.hidden = yaRespondio || seleccionadas.size !== 2;
+            botonListo.disabled = yaRespondio || seleccionadas.size !== 3;
+            botonListo.hidden = yaRespondio || seleccionadas.size !== 3;
         }
 
         function renderizarOpciones(opciones) {
@@ -69,12 +84,12 @@
                     if (seleccionadas.has(opcion.id)) {
                         seleccionadas.delete(opcion.id);
                         boton.setAttribute('aria-pressed', 'false');
-                    } else if (seleccionadas.size < 2) {
+                    } else if (seleccionadas.size < 3) {
                         seleccionadas.add(opcion.id);
                         boton.setAttribute('aria-pressed', 'true');
                     }
                     actualizarBoton();
-                    mensaje.textContent = `Elegiste ${seleccionadas.size} de 2 efigies.`;
+                    mensaje.textContent = `Elegiste ${seleccionadas.size} de 3 efigies.`;
                 });
                 listaOpciones.append(boton);
             }
@@ -82,7 +97,7 @@
         }
 
         async function enviarRespuesta() {
-            if (botonListo.disabled || seleccionadas.size !== 2) return;
+            if (botonListo.disabled || seleccionadas.size !== 3) return;
             if (adminPreview) {
                 mensaje.textContent = 'Vista de prueba: la respuesta no se registra.';
                 return;
@@ -121,12 +136,23 @@
                     window.location.replace('/lobby/' + encodeURIComponent(responseId));
                     return;
                 }
-                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2': '/ronda-2', 'ronda-3-notas': '/ronda-3', 'ronda-3-identificacion': '/ronda-3-identificacion', 'ronda-3-leaderboard': '/ronda-3-leaderboard', 'ronda-4': '/ronda-4' };
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2-representante': '/ronda-2-representante?ronda=2', 'ronda-2-identificacion': '/ronda-2', 'ronda-2-leaderboard': '/ronda-2-leaderboard', 'ronda-3': '/ronda-3' };
                 if ((ronda.etapaRondaUno !== 'adivinanza' || ronda.yaRespondio) && !adminPreview) {
                     const destino = ronda.etapaRondaUno === 'adivinanza' && ronda.yaRespondio
                         ? '/ronda-1-leaderboard'
                         : destinos[ronda.etapaRondaUno] || '/pre-ronda-1';
-                    window.location.replace(destino + '?id=' + encodeURIComponent(responseId));
+                    window.location.replace(destino + (destino.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(responseId));
+                    return;
+                }
+                document.documentElement.style.setProperty('--equipo', ronda.color || '#133463');
+                document.documentElement.style.setProperty('--tinta-equipo', ronda.colorTexto || '#ffffff');
+                const esRepresentante = ronda.esRepresentante === true;
+                document.body.classList.toggle('espera-representante', !esRepresentante);
+                espera.hidden = esRepresentante;
+                if (!esRepresentante) {
+                    mensajeEspera.textContent = ronda.representanteAsignado
+                        ? `Tu representante es ${ronda.representanteNombre}.`
+                        : 'Esperando que el equipo termine de elegir a su representante.';
                     return;
                 }
                 if (!opcionesRenderizadas) renderizarOpciones(ronda.opciones);
@@ -136,7 +162,7 @@
                     actualizarBoton();
                 }
                 if (!yaRespondio && seleccionadas.size === 0)
-                    mensaje.textContent = `Elegí 2 efigies entre ${ronda.opciones.length} participantes.`;
+                    mensaje.textContent = `Elegí las 3 efigies de tu equipo entre ${ronda.opciones.length} participantes.`;
             } catch (error) {
                 mensaje.textContent = 'No se pudo conectar con la ronda. Reintentando...';
                 console.error(error);

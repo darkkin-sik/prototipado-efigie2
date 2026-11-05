@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#eaf3f0">
-    <title>Resultados - Ronda 3 - Efigie</title>
+    <title>Resultados - Ronda 2 - Efigie</title>
     <link rel="stylesheet" href="/leaderboard.css">
     <style>
         .acciones { display: grid; justify-items: center; gap: 8px; }
@@ -14,7 +14,7 @@
 </head>
 <body>
     <main>
-        <h1>Resultados de la ronda 3</h1>
+        <h1>Resultados de la ronda 2</h1>
         <p class="subtitulo">Puntaje promedio por equipo</p>
         <section class="equipos" id="equipos" aria-label="Tabla de posiciones" aria-live="polite"></section>
         <div class="acciones">
@@ -100,11 +100,11 @@
                     mensaje.textContent = 'Las respuestas todavía no están disponibles.';
                     return;
                 }
-                if (!respuesta.ok) throw new Error('No se pudieron consultar los resultados de la ronda 3.');
+                if (!respuesta.ok) throw new Error('No se pudieron consultar los resultados de la ronda 2.');
                 const resultados = await respuesta.json();
                 renderizar(resultados.equipos, resultados.equipoPropio);
-                if (resultados.rondaCuatroIniciada && !adminPreview) {
-                    location.replace(urlEtapa('/ronda-4'));
+                if (resultados.rondaTresIniciada && !adminPreview) {
+                    location.replace(urlEtapa('/ronda-3'));
                     return;
                 }
 

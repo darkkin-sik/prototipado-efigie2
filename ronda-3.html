@@ -4,47 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#ffffff">
-    <title>Ronda 3 · Notas - Efigie</title>
+    <title>Efigies del equipo - Efigie</title>
     <style>
         :root { color-scheme: light; --paper: #fff; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --selected: #dcebe2; }
         * { box-sizing: border-box; }
         html, body { min-height: 100%; margin: 0; }
-        body { min-height: 100vh; padding: 18px 16px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
-        main { width: min(100%, 620px); margin: 0 auto; }
-        h1 { margin: 14px 0 4px; text-align: center; font-size: clamp(1.45rem, 5vw, 1.9rem); font-weight: 500; }
-        .instruccion { margin: 0 0 14px; text-align: center; color: var(--muted); line-height: 1.4; }
-        .efigie-principal { width: min(72vw, 310px); aspect-ratio: 1; margin: 0 auto 8px; }
+        body { min-height: 100vh; padding: 8px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { display: flex; min-height: calc(72vh - 2px); flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 0 auto; }
+        .efigie-principal { width: min(88vw, 360px, calc(72vh - 200px)); aspect-ratio: 1; margin: 0 auto; }
         .efigie-principal svg, .efigie-companero svg { display: block; width: 100%; height: 100%; background: transparent !important; }
-        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: min(100%, 380px); margin: 0 auto 16px; }
+        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 8px; width: min(100%, 390px); margin: 0 auto; }
         .companero { min-width: 0; margin: 0; text-align: center; }
-        .efigie-companero { width: min(100%, 170px); aspect-ratio: 1; margin: auto; }
-        figcaption { margin-top: 3px; overflow-wrap: anywhere; color: var(--muted); font-size: 0.78rem; }
-        .notas { display: grid; gap: 7px; }
-        .nota-fila { display: flex; align-items: center; gap: 7px; }
-        .nota { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid #68756e; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }
-        .nota:focus-visible, .eliminar:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
-        .nota:focus { border-color: var(--ink); background: var(--selected); }
-        .eliminar { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid transparent; border-radius: 50%; background: transparent; color: #7c171f; font-size: 1.35rem; cursor: pointer; }
-        .eliminar:hover { background: #f5e5e5; }
-        .eliminar[hidden] { display: none; }
-        .mensaje { min-height: 1.5em; margin: 10px 0 0; text-align: center; color: var(--muted); }
-        @media (max-height: 760px) {
-            body { padding-top: 10px; }
-            h1 { margin-top: 8px; }
-            .efigie-principal { width: min(62vw, 265px); margin-bottom: 4px; }
-            .companeros { width: min(100%, 380px); margin-bottom: 8px; }
-            .efigie-companero { width: min(100%, 150px); }
-            .nota { min-height: 38px; padding-block: 7px; }
+        .efigie-companero { width: min(100%, 185px); aspect-ratio: 1; margin: auto; }
+        figcaption { margin-top: 2px; overflow-wrap: anywhere; color: var(--muted); font-size: 0.72rem; }
+        .mensaje { display: none; }
+        @media (max-height: 560px) {
+            main { gap: 4px; }
+            .efigie-principal { width: min(82vw, 300px, calc(72vh - 170px)); }
+            .efigie-companero { width: min(100%, 145px); }
         }
     </style>
 </head>
 <body>
     <main>
-        <h1>¡Hay pistas a simple vista!</h1>
-        <p class="instruccion">Observá las efigies de tu equipo y anotá lo que quieras recordar. Cada nota puede tener hasta 15 caracteres.</p>
         <div class="efigie-principal" id="efigiePropia" role="img" aria-label="Tu efigie"></div>
         <section class="companeros" id="companeros" aria-label="Efigies de tus compañeros"></section>
-        <section class="notas" id="notas" aria-label="Tus notas"></section>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
     </main>
     <script>
@@ -52,13 +36,9 @@
         const responseId = parametros.get('id');
         const adminPreview = parametros.get('adminPreview') === '1';
         const consulta = parametros.get('consulta') === '1';
-        const listaNotas = document.getElementById('notas');
         const mensaje = document.getElementById('mensaje');
-        const claveNotas = `ronda-3-notas:${responseId}`;
-        let notas = [];
         let cargando = false;
         let contenidoCargado = false;
-        let guardado = Promise.resolve();
 
         function renderizarEfigies(efigies) {
             const propia = efigies.find(efigie => efigie.propia);
@@ -83,87 +63,15 @@
             }
         }
 
-        function dibujarNotas(indiceEnFoco = -1, posicionCursor = null) {
-            listaNotas.replaceChildren();
-            notas.forEach((texto, indice) => {
-                const fila = document.createElement('div');
-                fila.className = 'nota-fila';
-                const entrada = document.createElement('input');
-                entrada.className = 'nota';
-                entrada.type = 'text';
-                entrada.maxLength = 15;
-                entrada.value = texto;
-                entrada.placeholder = 'Añadir nota';
-                entrada.readOnly = consulta;
-                entrada.setAttribute('aria-label', `Nota ${indice + 1}, máximo 15 caracteres`);
-                entrada.addEventListener('keydown', evento => {
-                    if (evento.key === 'Enter') evento.preventDefault();
-                });
-                entrada.addEventListener('input', () => {
-                    if (consulta) return;
-                    entrada.value = entrada.value.replace(/[\r\n]/g, '').slice(0, 15);
-                    notas[indice] = entrada.value;
-                    if (entrada.value && indice === notas.length - 1) {
-                        notas.push('');
-                        const posicionCursor = entrada.selectionStart;
-                        dibujarNotas(indice, posicionCursor);
-                    }
-                    sessionStorage.setItem(claveNotas, JSON.stringify(notas.filter(nota => nota.length > 0)));
-                    guardarNotas();
-                });
-                const eliminar = document.createElement('button');
-                eliminar.className = 'eliminar';
-                eliminar.type = 'button';
-                eliminar.hidden = indice === notas.length - 1 && texto === '';
-                eliminar.textContent = '×';
-                eliminar.setAttribute('aria-label', `Eliminar nota ${indice + 1}`);
-                eliminar.hidden = consulta || eliminar.hidden;
-                eliminar.addEventListener('click', () => {
-                    notas.splice(indice, 1);
-                    if (!notas.length || notas[notas.length - 1] !== '') notas.push('');
-                    dibujarNotas();
-                    sessionStorage.setItem(claveNotas, JSON.stringify(notas.filter(nota => nota.length > 0)));
-                    guardarNotas();
-                });
-                fila.append(entrada, eliminar);
-                listaNotas.append(fila);
-            });
-            if (indiceEnFoco >= 0) {
-                const entrada = listaNotas.querySelectorAll('input')[indiceEnFoco];
-                entrada?.focus({ preventScroll: true });
-                if (posicionCursor !== null)
-                    entrada?.setSelectionRange(posicionCursor, posicionCursor);
-            }
-        }
-
-        function guardarNotas() {
-            if (consulta) return;
-            const guardables = notas.filter(nota => nota.length > 0);
-            guardado = guardado.then(async () => {
-                const parametrosApi = new URLSearchParams();
-                if (adminPreview) parametrosApi.set('adminPreview', '1');
-                if (consulta) parametrosApi.set('consulta', '1');
-                const respuesta = await fetch(`/api/ronda-3/notas?${parametrosApi}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ responseId, notes: guardables })
-                });
-                if (!respuesta.ok) throw new Error('No se pudieron guardar las notas.');
-            }).catch(error => {
-                mensaje.textContent = error.message;
-                console.error(error);
-            });
-        }
-
         async function redirigirSegunEtapa() {
             if (consulta) return;
             const respuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
             if (!respuesta.ok) return;
             const estado = await respuesta.json();
             const destinos = {
-                'ronda-3-identificacion': '/ronda-3-identificacion',
-                'ronda-3-leaderboard': '/ronda-3-leaderboard',
-                'ronda-4': '/ronda-4'
+                'ronda-2-identificacion': '/ronda-2',
+                'ronda-2-leaderboard': '/ronda-2-leaderboard',
+                'ronda-3': '/ronda-3'
             };
             const destino = destinos[estado.etapaRondaUno];
             if (destino && !adminPreview)
@@ -177,18 +85,15 @@
                 const parametrosApi = new URLSearchParams({ responseId });
                 if (adminPreview) parametrosApi.set('adminPreview', '1');
                 if (consulta) parametrosApi.set('consulta', '1');
-                const respuesta = await fetch(`/api/ronda-3/notas?${parametrosApi}`, { cache: 'no-store' });
+                const respuesta = await fetch(`/api/ronda-2/equipo?${parametrosApi}`, { cache: 'no-store' });
                 if (respuesta.status === 409 && !adminPreview && !consulta) {
                     await redirigirSegunEtapa();
                     return;
                 }
-                if (!respuesta.ok) throw new Error('No se pudo cargar la ronda 3.');
+                if (!respuesta.ok) throw new Error('No se pudo cargar la ronda 2.');
                 const estado = await respuesta.json();
                 if (!contenidoCargado) {
                     renderizarEfigies(estado.efigies);
-                    notas = [...estado.notas, ''];
-                    sessionStorage.setItem(claveNotas, JSON.stringify(estado.notas));
-                    dibujarNotas();
                     contenidoCargado = true;
                 }
                 mensaje.textContent = '';
