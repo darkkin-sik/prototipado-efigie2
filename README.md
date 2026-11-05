@@ -2,25 +2,31 @@
 
 Aplicación web local para responder una encuesta, generar una efigie visual a partir de las respuestas y compartir una dinámica grupal en tiempo real.
 
-## Funcionamiento general
+## Orden de juego y objetivos
 
-1. **Encuesta:** cada participante completa el formulario de [index.html](./index.html). La respuesta se guarda en `respuestas_app.csv` y se le asigna un identificador para continuar en su dispositivo.
-2. **Generación de la efigie:** el servidor usa las respuestas y la configuración para construir una ilustración SVG. La geometría se genera con Rhino 8.
-3. **Lobby:** hasta 15 participantes esperan en `/lobby/{id}`. El panel de administración está en `/admin-sesion`; muestra quiénes ingresaron y permite expulsar participantes antes de comenzar. El nombre `ESP` en la encuesta abre una sesión espectadora, sincronizada con la etapa global, que no ocupa cupo ni aparece en administración.
-4. **Armado de equipos:** al comenzar, el servidor organiza a los participantes en equipos de tres priorizando la compatibilidad de sus respuestas. En la simulación con bots, agrupa primero a los dispositivos reales en los menos equipos posibles y optimiza su compatibilidad; los bots completan los lugares restantes.
-5. **Pre-ronda:** los tres integrantes de cada equipo eligen un representante entre ellos. El representante queda asignado automáticamente cuando todos coinciden; administración decide cuándo comenzar la ronda 1.
-6. **Memoria:** cada participante ve las efigies de su equipo, sin un temporizador visible. Administración decide cuándo avanzar.
-7. **Adivinanza:** solo el representante responde desde su dispositivo; los otros dos integrantes ven «Mira la pantalla de tu representante». El representante elige las tres efigies de su equipo entre las de toda la sala. Cada acierto suma 50 puntos y el resultado se comparte con el equipo.
-8. **Leaderboard:** al enviar la respuesta del representante, los integrantes del equipo pasan a la tabla ordenada por puntaje. «Estoy listo» registra el estado para continuar, pero no avanza la sesión; administración controla los cambios de etapa desde su panel.
-9. **Ronda 2:** cada integrante identifica las capas de las efigies de su equipo desde su dispositivo. El representante controla el cambio de pregunta y solo puede avanzar cuando hay consenso. Si pide una pista, aparece como ventana emergente en el dispositivo de uno de los otros integrantes; usarla reduce a la mitad los puntos de esa pregunta.
+1. **Encuesta y efigie:** cada participante completa [index.html](./index.html). El servidor guarda las respuestas en `respuestas_app.csv` y genera una efigie visual a partir de ellas.
+2. **Lobby y equipos:** los participantes se reúnen en `/lobby/{id}`. La sesión admite de 3 a 15 jugadores en múltiplos de tres. Los equipos se forman buscando diferencias útiles entre las respuestas, para que las efigies y sus capas puedan distinguirse durante el juego. En una simulación, se agrupan primero los dispositivos reales en la menor cantidad posible de equipos y los bots completan los lugares restantes priorizando la compatibilidad de esos grupos.
+3. **Elección del representante:** antes de cada ronda, los tres integrantes votan desde sus dispositivos. El representante se asigna al coincidir los tres votos. Si cambian de opinión, pueden volver a votar hasta que cierre la elección.
+4. **Ronda 1 — recordar y reconocer:** primero, todos observan las efigies de su equipo durante la etapa de memoria. Luego, solo el representante responde desde su dispositivo y selecciona las tres efigies de su equipo entre las de toda la sala; los otros dos integrantes ven «Mira la pantalla de tu representante». Cada acierto suma 50 puntos.
+5. **Leaderboard de la Ronda 1:** se muestran los resultados y puntajes de los equipos. La administración controla el avance a la siguiente ronda.
+6. **Elección del representante de la Ronda 2:** el equipo vuelve a elegir por unanimidad quién coordinará esta ronda.
+7. **Ronda 2 — interpretar las capas:** cada integrante identifica las seis capas de la efigie desde su propio dispositivo. El representante controla el cambio de pregunta; puede avanzar cuando los integrantes reales del equipo coinciden en la respuesta. También puede volver a la pregunta anterior sin esperar consenso. Si solicita una pista, esta aparece en un dispositivo real de otro integrante y la pregunta vale la mitad de puntos. Cada acierto suma 100 puntos, o 50 si se usó la pista.
+8. **Leaderboard de la Ronda 2:** se presentan los puntajes y se puede continuar a la Ronda 3, cuya mecánica todavía está por definir.
+9. **Ronda 3 y cierre:** la pantalla actual es solo un borrador; todavía no hay una dinámica de juego implementada.
 
-**Problema conocido:** ESP todavía presenta fallas en algunos dispositivos Android; el acceso y la navegación del espectador no están confirmados como compatibles en esos dispositivos.
+## Administración y soporte
 
-El panel de administración incluye accesos para enviar a un participante seleccionado a una etapa en su propio dispositivo y temporizadores orientativos para las partes con duración sugerida. En el caso de bots, abre una vista de prueba en una pestaña aparte. Las vistas de prueba con `adminPreview=1` no cambian la etapa compartida ni marcan a nadie como listo; sus respuestas de ronda 2 se mantienen separadas del puntaje real. «Forzar retroceso» devuelve a todos a la etapa anterior sin reiniciar toda la sesión. «Kill all active sessions» envía a los dispositivos activos a la pantalla de bienvenida anterior a la encuesta y conserva las respuestas almacenadas hasta que se envíe una nueva.
+El panel de administración está en `/admin-sesion`. Permite observar el lobby, expulsar participantes antes de iniciar, comenzar o simular una sesión, inspeccionar etapas y controlar avances. Las vistas de prueba con `adminPreview=1` no alteran la etapa compartida ni los puntajes reales. «Forzar retroceso» vuelve a la etapa anterior; «Kill all active sessions» devuelve los dispositivos activos a la pantalla de bienvenida anterior a la encuesta.
 
-Cada equipo comparte el orden de sus seis preguntas de identificación y cada participante pasa individualmente a su leaderboard cuando todos los participantes reales de su equipo coinciden en las seis respuestas; los bots de ese equipo replican las respuestas. Los equipos completamente simulados reciben puntajes aleatorios. Cada acierto suma 100 puntos, o 50 si se usó la pista. Administración controla las transiciones compartidas y puede forzar el avance. **La interfaz de la ronda 3 todavía está pendiente; por ahora es solo una pantalla de borrador.**
+Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo propio y actualizan los puntajes en tiempo real. Los temporizadores del panel son orientativos; la administración controla las transiciones de etapa.
 
-Las leaderboards comparten el estilo de `leaderboard.css`, distinguen el equipo propio, actualizan los puntajes periódicamente y animan el reordenamiento solo cuando cambia la tabla. En rondas 2 y 3, «Estoy listo para continuar» registra el estado de cada participante; únicamente administración abre la siguiente etapa. Las pantallas no muestran temporizadores; el panel de administración puede mostrar tiempos orientativos y permite saltar las etapas temporizadas.
+**Problema conocido:** las sesiones espectadoras (`ESP`) y su navegación todavía pueden fallar en algunos dispositivos Android.
+
+## Cambios futuros y necesarios
+
+- **Diseñar e implementar la Ronda 3:** definir su objetivo, reglas, interacción, puntaje y transición a resultados. Evaluar si el juego termina con tres rondas o si necesita rondas adicionales.
+- **Pulir detalles de interfaz:** revisar las pantallas en distintos tamaños de celular, legibilidad, márgenes seguros, estados de espera y error, accesibilidad y consistencia visual entre rondas, leaderboards y administración.
+- **Mejorar el sistema de enlace:** simplificar cómo se comparte y abre la experiencia en los celulares; revisar enlaces de ingreso, recuperación al reconectar, persistencia/cambio de dispositivo y el acceso de espectadores. Evaluar QR o códigos de sesión y validar el flujo con ngrok y distintos navegadores móviles.
 
 El estado de la sesión y su etapa viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
 
