@@ -1,0 +1,19 @@
+{
+  "name": "efigie-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrar:local": "wrangler d1 migrations apply efigie --local",
+    "db:migrar:remoto": "wrangler d1 migrations apply efigie --remote",
+    "db:importar-csv": "node scripts/importar-csv.mjs",
+    "comparar": "node scripts/comparar.mjs",
+    "rhino:armar": "node scripts/armar-script-rhino.mjs",
+    "test": "node --test test/*.test.mjs",
+    "probar-partida": "node scripts/probar-partida.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

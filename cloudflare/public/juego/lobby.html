@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/lib/transporte.js"></script>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Sala de espera</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { width: 100%; min-height: 100%; margin: 0; background: #ffffff; color: #111111; font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 22px 18px max(24px, env(safe-area-inset-bottom)); }
+        .marca { width: min(177px, 54vw); height: auto; margin: 4px 0 25px; }
+        h1 { margin: 0 0 12px; text-align: center; font-size: clamp(1.15rem, 4vw, 1.6rem); font-weight: 650; }
+        .nombre { margin: 0 0 14px; text-align: center; font-size: 1rem; color: #53615b; overflow-wrap: anywhere; }
+        .efigie { width: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 200px)); height: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 200px)); flex: 0 1 auto; }
+        .efigie svg { width: 100%; height: 100%; display: block; }
+        .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 { transform-origin: 0px 0px; transform-box: view-box; animation-timing-function: linear; animation-iteration-count: infinite; }
+        .rotar-capa-1 { animation-name: girarHorario; animation-duration: 18s; }
+        .rotar-capa-2 { animation-name: girarAntihorario; animation-duration: 12s; }
+        .rotar-capa-3 { animation-name: girarHorario; animation-duration: 8s; }
+        @keyframes girarHorario { to { transform: rotate(360deg); } }
+        @keyframes girarAntihorario { to { transform: rotate(-360deg); } }
+        @media (max-height: 680px) { body { padding-block: 12px max(16px, env(safe-area-inset-bottom)); } .marca { margin-bottom: 12px; } h1 { margin-bottom: 8px; } .nombre { margin-bottom: 8px; } .efigie { width: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 150px)); height: min(94vmin, 720px, calc(100vw - 36px), calc(100dvh - 150px)); } }
+        @media (prefers-reduced-motion: reduce) { .rotar-capa-1, .rotar-capa-2, .rotar-capa-3 { animation-duration: 0.01ms; } }
+    </style>
+</head>
+<body>
+    <img class="marca" src="/efigie-logo.svg" alt="Efigie">
+    <h1 id="estadoLobby">Esperando participantes... 0/15</h1>
+    <p class="nombre" id="nombre"></p>
+    <main class="efigie" id="efigie"></main>
+    <script>
+        const responseId = decodeURIComponent(location.pathname.split('/')[2] || '');
+        const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
+        fetch('/api/efigie/' + encodeURIComponent(responseId)).then(r => r.json()).then(efigie => {
+            document.title = 'Sala de espera - ' + efigie.nombre;
+            document.getElementById('nombre').textContent = efigie.nombre;
+            const contenedor = document.getElementById('efigie');
+            contenedor.setAttribute('aria-label', 'Efigie de ' + efigie.nombre);
+            contenedor.innerHTML = efigie.svg;
+        }).catch(console.error);
+        const sessionId = (() => {
+            const bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        })();
+        async function actualizarLobby() {
+            try {
+                const respuesta = await fetch('/api/lobby/heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, responseId }) });
+                if (!respuesta.ok) return;
+                const estado = await respuesta.json();
+                if (estado.regresarInicio) { localStorage.removeItem('mi_efigie_id'); window.location.replace('/?reinicioSesion=1'); return; }
+                if (estado.regresarEncuesta) { localStorage.removeItem('mi_efigie_id'); window.location.replace('/encuesta?nueva=1'); return; }
+                if (estado.expulsado) { localStorage.removeItem('mi_efigie_id'); window.location.replace('/'); return; }
+                if (estado.rondaIniciada) {
+                    if (adminPreview) { document.getElementById('estadoLobby').textContent = 'Vista de prueba · Lobby'; return; }
+                    const destinos = { 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2-representante': '/ronda-2-representante?ronda=2', 'ronda-2-identificacion': '/ronda-2', 'ronda-2-leaderboard': '/ronda-2-leaderboard', 'ronda-3': '/ronda-3', 'ronda-3-leaderboard': '/ronda-3-leaderboard' };
+                    const destino = destinos[estado.etapaRondaUno] || '/pre-ronda-1';
+                    window.location.replace(`${destino}${destino.includes('?') ? '&' : '?'}id=${encodeURIComponent(responseId)}`);
+                    return;
+                }
+                document.getElementById('estadoLobby').textContent = `Esperando participantes... ${estado.cantidad}/15`;
+            } catch (error) { console.error(error); }
+        }
+        function abandonarLobby() {
+            fetch('/api/lobby/desconectar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, responseId }), keepalive: true }).catch(console.error);
+        }
+        actualizarLobby();
+        const intervaloLobby = setInterval(actualizarLobby, 3000);
+        window.addEventListener('pagehide', () => { clearInterval(intervaloLobby); abandonarLobby(); });
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>

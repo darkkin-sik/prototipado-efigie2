@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingreso de administración - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #f3f6f3; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --green: #6EB392; --green-dark: #4a896b; }
+        * { box-sizing: border-box; }
+        body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px 16px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        form { width: min(100%, 360px); display: grid; gap: 14px; padding: 28px 24px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+        .marca { width: min(150px, 50vw); justify-self: center; margin-bottom: 6px; }
+        h1 { margin: 0; font-size: 1.15rem; text-align: center; }
+        label { display: grid; gap: 6px; font-size: .9rem; color: var(--muted); }
+        input { padding: 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 1rem; color: var(--ink); }
+        button { min-height: 48px; border: 0; border-radius: 12px; background: var(--ink); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+        button:disabled { opacity: .6; cursor: default; }
+        #error { min-height: 1.3em; margin: 0; color: #7C171F; font-size: .9rem; text-align: center; }
+    </style>
+</head>
+<body>
+    <form id="ingreso">
+        <img class="marca" src="/efigie-logo.svg" alt="Efigie">
+        <h1>Administración</h1>
+        <label>Contraseña <input type="password" id="clave" autocomplete="current-password" required autofocus></label>
+        <button type="submit" id="entrar">Entrar</button>
+        <p id="error" role="alert"></p>
+    </form>
+    <script>
+        const volver = new URLSearchParams(location.search).get('volver') || '/admin-sesion';
+        const destino = volver.startsWith('/') && !volver.startsWith('//') ? volver : '/admin-sesion';
+        document.getElementById('ingreso').addEventListener('submit', async evento => {
+            evento.preventDefault();
+            const boton = document.getElementById('entrar');
+            const error = document.getElementById('error');
+            boton.disabled = true;
+            error.textContent = '';
+            try {
+                const respuesta = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clave: document.getElementById('clave').value })
+                });
+                if (respuesta.ok) { location.replace(destino); return; }
+                error.textContent = respuesta.status === 401 ? 'Contraseña incorrecta.' : 'No se pudo ingresar.';
+            } catch {
+                error.textContent = 'No se pudo conectar con el servidor.';
+            }
+            boton.disabled = false;
+        });
+    </script>
+</body>
+</html>

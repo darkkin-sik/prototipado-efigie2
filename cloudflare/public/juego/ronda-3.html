@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/lib/transporte.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>Efigies del equipo - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #fff; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --selected: #dcebe2; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; padding: 8px; background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { display: flex; min-height: calc(72vh - 2px); flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 0 auto; }
+        .efigie-principal { width: min(88vw, 360px, calc(72vh - 200px)); aspect-ratio: 1; margin: 0 auto; }
+        .efigie-principal svg, .efigie-companero svg { display: block; width: 100%; height: 100%; background: transparent !important; }
+        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 8px; width: min(100%, 390px); margin: 0 auto; }
+        .companero { min-width: 0; margin: 0; text-align: center; }
+        .efigie-companero { width: min(100%, 185px); aspect-ratio: 1; margin: auto; }
+        figcaption { margin-top: 2px; overflow-wrap: anywhere; color: var(--muted); font-size: 0.72rem; }
+        .mensaje { display: none; }
+        body.solo-propia main { min-height: calc(72vh - 18px); }
+        body.solo-propia .efigie-principal { width: min(94vw, 420px, calc(72vh - 30px)); }
+        @media (max-height: 560px) {
+            main { gap: 4px; }
+            .efigie-principal { width: min(82vw, 300px, calc(72vh - 170px)); }
+            .efigie-companero { width: min(100%, 145px); }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="efigie-principal" id="efigiePropia" role="img" aria-label="Tu efigie"></div>
+        <section class="companeros" id="companeros" aria-label="Efigies de tus compañeros"></section>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+    </main>
+    <script>
+        const parametros = new URLSearchParams(location.search);
+        const responseId = parametros.get('id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const consulta = parametros.get('consulta') === '1';
+        const soloPropia = parametros.get('soloPropia') === '1';
+        if (soloPropia) {
+            document.body.classList.add('solo-propia');
+            document.querySelector('.companeros').hidden = true;
+        }
+        const mensaje = document.getElementById('mensaje');
+        let cargando = false;
+        let contenidoCargado = false;
+
+        function renderizarEfigies(efigies) {
+            const propia = efigies.find(efigie => efigie.propia);
+            if (!propia) throw new Error('No se encontró tu efigie en el equipo.');
+            const dibujoPropio = document.getElementById('efigiePropia');
+            dibujoPropio.innerHTML = propia.svg;
+            dibujoPropio.setAttribute('aria-label', `Efigie de ${propia.nombre}`);
+            const companeros = document.getElementById('companeros');
+            companeros.replaceChildren();
+            for (const efigie of efigies.filter(persona => !persona.propia && !soloPropia)) {
+                const figura = document.createElement('figure');
+                figura.className = 'companero';
+                const dibujo = document.createElement('div');
+                dibujo.className = 'efigie-companero';
+                dibujo.setAttribute('role', 'img');
+                dibujo.setAttribute('aria-label', `Efigie de ${efigie.nombre}`);
+                dibujo.innerHTML = efigie.svg;
+                const nombre = document.createElement('figcaption');
+                nombre.textContent = efigie.nombre;
+                figura.append(dibujo, nombre);
+                companeros.append(figura);
+            }
+        }
+
+        async function redirigirSegunEtapa() {
+            if (consulta) return;
+            const respuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+            if (!respuesta.ok) return;
+            const estado = await respuesta.json();
+            const destinos = {
+                'ronda-2-identificacion': '/ronda-2',
+                'ronda-2-leaderboard': '/ronda-2-leaderboard',
+                'ronda-3': '/ronda-3'
+            };
+            const destino = destinos[estado.etapaRondaUno];
+            if (destino && !adminPreview)
+                location.replace(`${destino}?id=${encodeURIComponent(responseId)}`);
+        }
+
+        async function actualizarEstado() {
+            if (cargando || !responseId) return;
+            cargando = true;
+            try {
+                const parametrosApi = new URLSearchParams({ responseId });
+                if (adminPreview) parametrosApi.set('adminPreview', '1');
+                if (consulta) parametrosApi.set('consulta', '1');
+                const respuesta = await fetch(`/api/ronda-2/equipo?${parametrosApi}`, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview && !consulta) {
+                    await redirigirSegunEtapa();
+                    return;
+                }
+                if (!respuesta.ok) throw new Error('No se pudo cargar la ronda 2.');
+                const estado = await respuesta.json();
+                if (!contenidoCargado) {
+                    renderizarEfigies(estado.efigies);
+                    contenidoCargado = true;
+                }
+                mensaje.textContent = '';
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con la ronda. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        if (!responseId) {
+            mensaje.textContent = 'Falta el identificador de participante.';
+        } else {
+            actualizarEstado();
+            const intervalo = setInterval(actualizarEstado, 1200);
+            window.addEventListener('pagehide', () => {
+                clearInterval(intervalo);
+            });
+        }
+    </script>
+    <script>
+        if (!consulta) {
+            const navegacionAdmin = document.createElement('script');
+            navegacionAdmin.src = '/admin-navigation.js';
+            navegacionAdmin.defer = true;
+            document.body.append(navegacionAdmin);
+        }
+    </script>
+</body>
+</html>

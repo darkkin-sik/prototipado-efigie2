@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/lib/transporte.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eaf3f0">
+    <title>Resultados finales - Efigie</title>
+    <link rel="stylesheet" href="/leaderboard.css">
+    <style>
+        .avance { min-height: 1.5em; margin: -12px 0 18px; color: var(--muted); text-align: center; }
+        .nota { margin: 18px 0 0; color: var(--muted); font-size: .85rem; line-height: 1.5; text-align: center; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Resultados finales</h1>
+        <p class="subtitulo">Puntaje acumulado por equipo</p>
+        <p class="avance" id="avance" aria-live="polite"></p>
+        <section class="equipos" id="equipos" aria-label="Tabla de posiciones" aria-live="polite"></section>
+        <p class="nota">El puntaje de la ronda 3 se asigna por orden de finalización y suma al equipo. Solo cuentan respuestas de participantes reales.</p>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+    </main>
+    <script>
+        const parametros = new URLSearchParams(location.search);
+        const responseId = parametros.get('id') || localStorage.getItem('mi_efigie_id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const listaEquipos = document.getElementById('equipos');
+        const avance = document.getElementById('avance');
+        const mensaje = document.getElementById('mensaje');
+        let cargando = false;
+
+        function renderizar(equipos, equipoPropio) {
+            const posicionesAnteriores = new Map(
+                [...listaEquipos.children].map(fila => [fila.dataset.equipo, fila.getBoundingClientRect().top])
+            );
+            equipos.forEach((equipo, indice) => {
+                let fila = [...listaEquipos.children].find(elemento => elemento.dataset.equipo === String(equipo.numero));
+                if (!fila) {
+                    fila = document.createElement('article');
+                    fila.className = 'equipo';
+                    fila.dataset.equipo = String(equipo.numero);
+                    fila.innerHTML = '<div class="identidad"><span class="posicion"></span><span class="nombre"></span></div><span class="puntos"></span>';
+                }
+                fila.style.setProperty('--color-equipo', equipo.color);
+                fila.style.setProperty('--color-texto', equipo.colorTexto);
+                fila.querySelector('.posicion').textContent = String(indice + 1);
+                const nombre = fila.querySelector('.nombre');
+                nombre.textContent = `Equipo ${equipo.numero}`;
+                const esEquipoPropio = equipo.numero === equipoPropio;
+                fila.classList.toggle('equipo-propio', esEquipoPropio);
+                let marcaPropia = fila.querySelector('.marca-propia');
+                if (esEquipoPropio && !marcaPropia) {
+                    marcaPropia = document.createElement('span');
+                    marcaPropia.className = 'marca-propia';
+                    marcaPropia.textContent = 'Tu equipo';
+                    nombre.after(marcaPropia);
+                } else if (!esEquipoPropio) {
+                    marcaPropia?.remove();
+                }
+                fila.querySelector('.puntos').textContent = `${equipo.puntos} pts`;
+                listaEquipos.append(fila);
+            });
+            for (const fila of [...listaEquipos.children]) {
+                const topAnterior = posicionesAnteriores.get(fila.dataset.equipo);
+                if (topAnterior === undefined) continue;
+                const desplazamiento = topAnterior - fila.getBoundingClientRect().top;
+                if (Math.abs(desplazamiento) < 1) continue;
+                fila.classList.add('animando');
+                const duracion = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 650;
+                const animacion = fila.animate(
+                    [{ transform: `translateY(${desplazamiento}px)` }, { transform: 'translateY(0)' }],
+                    { duration: duracion, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' }
+                );
+                animacion.onfinish = () => fila.classList.remove('animando');
+            }
+        }
+
+        async function cargarResultados() {
+            if (cargando || !responseId) return;
+            cargando = true;
+            try {
+                const vista = adminPreview ? '&adminPreview=1' : '';
+                const respuesta = await fetch(`/api/ronda-4/leaderboard?responseId=${encodeURIComponent(responseId)}${vista}`, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview) {
+                    mensaje.textContent = 'Los resultados estarán disponibles al completar tu desafío.';
+                    return;
+                }
+                if (!respuesta.ok) throw new Error('No se pudieron consultar los resultados finales.');
+                const resultados = await respuesta.json();
+                renderizar(resultados.equipos, resultados.equipoPropio);
+                avance.textContent = resultados.rondaCompletada
+                    ? `Desafío completado por todos los participantes (${resultados.participantesRespondidos}/${resultados.totalParticipantes}).`
+                    : `Desafío completado por ${resultados.participantesRespondidos} de ${resultados.totalParticipantes} participantes.`;
+                mensaje.textContent = '';
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudieron cargar los resultados.';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        if (!responseId) {
+            mensaje.textContent = 'Falta el identificador de participante.';
+        } else {
+            cargarResultados();
+            const intervalo = setInterval(cargarResultados, 1100);
+            window.addEventListener('pagehide', () => clearInterval(intervalo));
+        }
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>

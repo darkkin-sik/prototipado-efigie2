@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/lib/transporte.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#133463">
+    <title>Representante - Efigie</title>
+    <style>
+        :root { color-scheme: light; --equipo: #133463; --tinta: #ffffff; }
+        * { box-sizing: border-box; }
+        html, body { width: 100%; min-height: 100%; margin: 0; }
+        body { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--equipo); color: var(--tinta); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; transition: background-color 250ms ease, color 250ms ease; }
+        main { width: min(100%, 520px); text-align: center; }
+        .logo { width: min(177px, 54vw); height: auto; margin: 0 auto 34px; filter: brightness(0) invert(1); }
+        h1 { margin: 0 0 10px; font-size: clamp(1.5rem, 5vw, 2rem); }
+        .equipo { margin: 0 0 28px; font-size: 1rem; }
+        .opciones-representante { display: grid; gap: 12px; width: min(100%, 300px); margin: 0 auto; }
+        .boton-representante { min-height: 54px; padding: 12px 18px; border: 2px solid transparent; border-radius: 5px; background: #ffffff; color: #101a15; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
+        .boton-representante[aria-pressed="true"] { border-color: var(--tinta); background: #dce8e2; }
+        .boton-representante:focus-visible { outline: 3px solid var(--tinta); outline-offset: 4px; }
+        .boton-representante:disabled { opacity: 0.7; cursor: default; }
+        .ayuda { min-height: 1.5em; margin: 16px 0 0; }
+        @media (max-height: 560px) { .logo { margin-bottom: 14px; } .equipo { margin-bottom: 20px; } }
+    </style>
+</head>
+<body>
+    <main>
+        <img class="logo" src="/efigie-logo.svg" alt="Efigie">
+        <h1 id="titulo">Elegí quién será el representante</h1>
+        <p class="equipo" id="equipo">Cargando equipo...</p>
+        <section class="opciones-representante" id="opcionesRepresentante" aria-label="Elegir representante"></section>
+        <p class="ayuda" id="mensaje" aria-live="polite"></p>
+    </main>
+    <script>
+        const parametros = new URLSearchParams(window.location.search);
+        const responseId = parametros.get('id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const ronda = parametros.get('ronda') === '2' ? 2 : 1;
+        const etapaEsperada = ronda === 2 ? 'ronda-2-representante' : 'pre-ronda';
+        const opcionesRepresentante = document.getElementById('opcionesRepresentante');
+        const mensaje = document.getElementById('mensaje');
+        document.getElementById('titulo').textContent = ronda === 2
+            ? 'Elegí quién será el representante de la ronda 2'
+            : 'Elegí quién será el representante';
+        let estadoRenderizado = false;
+        let enviandoEleccion = false;
+        let votoActual = null;
+        let etapaActual = '';
+
+        async function elegirRepresentante(representanteId) {
+            if (adminPreview || !responseId || enviandoEleccion) return;
+            enviandoEleccion = true;
+            let errorEleccion = '';
+            actualizarBotones(true);
+            try {
+                const respuesta = await fetch('/api/preronda/representante', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, representanteId, ronda })
+                });
+                if (!respuesta.ok) throw new Error(respuesta.status === 409
+                    ? 'La elección de representante ya se cerró.'
+                    : 'No se pudo registrar tu elección.');
+                const resultado = await respuesta.json();
+                if (ronda === 2 && resultado.etapaRondaUno === 'ronda-2-identificacion' && !adminPreview) {
+                    window.location.replace('/ronda-2?id=' + encodeURIComponent(responseId));
+                    return;
+                }
+            } catch (error) {
+                errorEleccion = error.message;
+                console.error(error);
+            } finally {
+                enviandoEleccion = false;
+                await actualizarEstado();
+                if (errorEleccion) mensaje.textContent = errorEleccion;
+            }
+        }
+
+        function renderizarCandidatos(candidatos) {
+            opcionesRepresentante.replaceChildren();
+            for (const candidato of candidatos) {
+                const boton = document.createElement('button');
+                boton.type = 'button';
+                boton.className = 'boton-representante';
+                boton.dataset.representanteId = candidato.id;
+                boton.textContent = candidato.id === responseId ? 'YO' : candidato.nombre;
+                boton.setAttribute('aria-label', `Elegir a ${candidato.nombre} como representante`);
+                boton.setAttribute('aria-pressed', 'false');
+                boton.disabled = adminPreview;
+                boton.addEventListener('click', () => elegirRepresentante(candidato.id));
+                opcionesRepresentante.append(boton);
+            }
+            estadoRenderizado = true;
+        }
+
+        function actualizarBotones(deshabilitar = false) {
+            for (const boton of opcionesRepresentante.children) {
+                boton.setAttribute('aria-pressed', String(boton.dataset.representanteId === votoActual));
+                boton.disabled = adminPreview || deshabilitar ||
+                    (ronda === 1 && etapaActual !== 'pre-ronda') ||
+                    (ronda === 2 && etapaActual !== 'ronda-2-representante');
+            }
+        }
+
+        async function actualizarEstado() {
+            if (!responseId) return;
+            try {
+                const parametrosApi = new URLSearchParams({ responseId });
+                if (ronda === 2) parametrosApi.set('ronda', '2');
+                if (adminPreview) parametrosApi.set('adminPreview', '1');
+                const url = '/api/preronda/estado?' + parametrosApi;
+                const respuesta = await fetch(url, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview) {
+                    const etapaRespuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+                    if (etapaRespuesta.ok) {
+                        const sesion = await etapaRespuesta.json();
+                        const destinos = {
+                            memoria: '/ronda-1-preview',
+                            adivinanza: '/ronda-1-adivinar',
+                            leaderboard: '/ronda-1-leaderboard',
+                            'ronda-2-representante': '/ronda-2-representante?ronda=2',
+                            'ronda-2-identificacion': '/ronda-2',
+                            'ronda-2-leaderboard': '/ronda-2-leaderboard',
+                            'ronda-3': '/ronda-3'
+                        };
+                        const destino = destinos[sesion.etapaRondaUno];
+                        if (destino) {
+                            window.location.replace(`${destino}${destino.includes('?') ? '&' : '?'}id=${encodeURIComponent(responseId)}`);
+                            return;
+                        }
+                    }
+                }
+                if (!respuesta.ok) throw new Error('No se pudo consultar la pre-ronda.');
+                const estado = await respuesta.json();
+                if (!estado.rondaIniciada && !adminPreview) {
+                    window.location.replace('/lobby/' + encodeURIComponent(responseId));
+                    return;
+                }
+                etapaActual = estado.etapaRondaUno;
+                votoActual = estado.miVoto;
+                if (!estado.grupo) {
+                    mensaje.textContent = 'La vista previa estará disponible cuando se forme un equipo.';
+                    return;
+                }
+                document.documentElement.style.setProperty('--equipo', estado.color);
+                document.documentElement.style.setProperty('--tinta', estado.colorTexto);
+                document.querySelector('meta[name="theme-color"]').content = estado.color;
+                document.getElementById('equipo').textContent = `Equipo ${estado.grupo}`;
+                if (!estadoRenderizado) renderizarCandidatos(estado.candidatosRepresentante);
+                actualizarBotones(enviandoEleccion);
+                if (estado.representanteAsignado) {
+                    mensaje.textContent = ronda === 2 && !estado.todosLosRepresentantesAsignados
+                        ? `¡${estado.representanteNombre} será el representante de tu equipo! Esperando que los demás equipos elijan.`
+                        : `¡${estado.representanteNombre} será el representante! Podés cambiar la elección hasta que comience la ronda.`;
+                } else if (adminPreview) {
+                    mensaje.textContent = 'Vista de prueba: la elección no se registra.';
+                } else if (estado.tieneVoto) {
+                    const mayorVoto = [...estado.conteoVotos].sort((a, b) => b.cantidad - a.cantidad)[0];
+                    mensaje.textContent = mayorVoto
+                        ? `${mayorVoto.cantidad}/3 eligieron a ${mayorVoto.nombre}. Esperando que coincidan.`
+                        : 'Tu elección quedó registrada. Esperando al resto del equipo.';
+                } else {
+                    mensaje.textContent = 'Elegí una de las tres opciones. El representante se asigna cuando todos coincidan.';
+                }
+                const destinos = { memoria: '/ronda-1-preview', adivinanza: '/ronda-1-adivinar', leaderboard: '/ronda-1-leaderboard', 'ronda-2-representante': '/ronda-2-representante?ronda=2', 'ronda-2-identificacion': '/ronda-2', 'ronda-2-leaderboard': '/ronda-2-leaderboard', 'ronda-3': '/ronda-3' };
+                const etapaActiva = estado.etapaRondaUno || (estado.previewIniciada ? 'memoria' : 'pre-ronda');
+                if (etapaActiva !== etapaEsperada && !adminPreview) {
+                    const destino = destinos[etapaActiva] || '/ronda-1-preview';
+                    window.location.replace(`${destino}${destino.includes('?') ? '&' : '?'}id=${encodeURIComponent(responseId)}`);
+                }
+            } catch (error) {
+                mensaje.textContent = 'No se pudo conectar con la pre-ronda. Reintentando...';
+                console.error(error);
+            }
+        }
+
+        actualizarEstado();
+        const intervalo = setInterval(actualizarEstado, 1200);
+        window.addEventListener('pagehide', () => clearInterval(intervalo));
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>
