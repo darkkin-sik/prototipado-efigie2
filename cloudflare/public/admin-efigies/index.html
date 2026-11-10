@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efigie · Ajustes</title>
+    <style>
+        :root { --fondo: #f6f7f5; --panel: #ffffff; --texto: #111111; --suave: #5f6b66; --borde: #dfe3e0; --acento: #133463; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--texto); font: 14px/1.4 "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif; }
+        body { display: grid; grid-template-columns: 320px 1fr; }
+        aside { background: var(--panel); border-right: 1px solid var(--borde); padding: 16px; overflow-y: auto; overflow-x: hidden; height: 100vh; }
+        input[type=file] { max-width: 100%; font-size: .78rem; }
+        .botones label.opcion { flex-wrap: wrap; }
+        main { height: 100vh; overflow-y: auto; padding: 16px; }
+        h1 { margin: 0 0 4px; font-size: 1.1rem; }
+        h2 { margin: 18px 0 8px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
+        .sub { margin: 0; color: var(--suave); font-size: .85rem; }
+        .param { display: grid; grid-template-columns: 1fr 72px; gap: 2px 8px; align-items: center; margin-bottom: 8px; }
+        .param label { font-size: .82rem; }
+        .param input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--acento); }
+        .param input[type=number] { width: 72px; padding: 2px 4px; border: 1px solid var(--borde); border-radius: 6px; font: inherit; font-size: .82rem; }
+        .param.cambiado label { color: var(--acento); font-weight: 600; }
+        .capas { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .capas label, .opcion { display: flex; gap: 6px; align-items: center; font-size: .85rem; }
+        .muestra { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+        button, select { font: inherit; font-size: .85rem; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borde); background: #fff; cursor: pointer; }
+        button.primario { background: var(--acento); color: #fff; border-color: var(--acento); }
+        button:disabled { opacity: .5; cursor: default; }
+        .botones { display: flex; flex-wrap: wrap; gap: 6px; }
+        #estado { min-height: 1.3em; font-size: .82rem; color: var(--suave); margin-top: 8px; }
+        #seleccion { font-size: .82rem; color: var(--suave); }
+        #lienzo canvas { display: block; }
+        @media (max-width: 760px) {
+            body { grid-template-columns: 1fr; }
+            aside, main { height: auto; }
+            aside { border-right: 0; border-bottom: 1px solid var(--borde); }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.1/p5.min.js"></script>
+</head>
+<body>
+    <aside>
+        <h1>Ajustes de la efigie</h1>
+        <p class="sub" id="fuente">Cargando respuestas…</p>
+
+        <h2>Parámetros</h2>
+        <div id="parametros"></div>
+
+        <h2>Capas</h2>
+        <div class="capas" id="capas"></div>
+        <label class="opcion" style="margin-top:8px"><input type="checkbox" id="colorear"> Colorear por capa</label>
+        <label class="opcion"><input type="checkbox" id="animar"> Animar rotación (como en el lobby)</label>
+        <label class="opcion"><input type="checkbox" id="nombres" checked> Mostrar nombres</label>
+
+        <h2>Guardar</h2>
+        <div class="botones">
+            <button class="primario" id="guardar">Guardar config</button>
+            <button id="restablecer">Volver a la guardada</button>
+            <button id="porDefecto">Valores por defecto</button>
+        </div>
+        <h2>Historial</h2>
+        <div class="botones">
+            <select id="versiones" style="flex:1"><option value="">—</option></select>
+            <button id="cargarVersion">Cargar</button>
+        </div>
+        <h2>Exportar</h2>
+        <div class="botones">
+            <button id="exportarSvg" disabled>SVG de la seleccionada</button>
+            <button id="exportarConfig">config.json</button>
+            <label class="opcion" style="width:100%"><input type="checkbox" id="exportarMarco"> Incluir marco y nombre</label>
+        </div>
+        <h2>Datos</h2>
+        <div class="botones">
+            <label class="opcion">Cargar CSV local <input type="file" id="csvLocal" accept=".csv"></label>
+            <button id="aleatorias">12 aleatorias</button>
+        </div>
+        <p id="estado" role="status"></p>
+    </aside>
+    <main>
+        <p id="seleccion">Hacé clic en una efigie para seleccionarla.</p>
+        <div id="lienzo"></div>
+    </main>
+
+    <script type="module">
+        import { generarEfigie, CONFIG_POR_DEFECTO, RANGOS_CONFIG, NOMBRES_CAPAS, normalizarConfig } from '/lib/efigie/geometria.js';
+        import { generarSvg, colorFacultad, ROTACION_CAPAS } from '/lib/efigie/svg.js';
+
+        const COLORES_CAPA = { anio: '#E27646', estaciones: '#133463', carrera: '#8B1C31', rol: '#CE2D7B', historia: '#84B444', conexiones: '#6064A3' };
+        // Período y sentido de cada velocidad de rotación (mismos valores que el CSS del lobby).
+        const ROTACIONES = { 1: [18, 1], 2: [12, -1], 3: [8, 1] };
+
+        const $ = id => document.getElementById(id);
+        let config = { ...CONFIG_POR_DEFECTO };
+        let configGuardada = { ...CONFIG_POR_DEFECTO };
+        let respuestas = [];
+        let efigies = [];
+        let seleccionada = -1;
+        const capasVisibles = Object.fromEntries(NOMBRES_CAPAS.map(c => [c, true]));
+        let sketch;
+
+        const avisar = texto => { $('estado').textContent = texto; };
+
+        // --- Controles ---
+        function crearControles() {
+            const cont = $('parametros');
+            for (const [clave, [min, max, paso]] of Object.entries(RANGOS_CONFIG)) {
+                const fila = document.createElement('div');
+                fila.className = 'param';
+                fila.innerHTML = `<label for="p-${clave}">${clave}</label>
+                    <input type="number" id="n-${clave}" min="${min}" max="${max}" step="${paso}">
+                    <input type="range" id="p-${clave}" min="${min}" max="${max}" step="${paso}">`;
+                cont.append(fila);
+                for (const input of fila.querySelectorAll('input'))
+                    input.addEventListener('input', () => { config[clave] = Number(input.value); sincronizarControles(); regenerar(); });
+            }
+            for (const capa of NOMBRES_CAPAS) {
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" checked> <span class="muestra" style="background:${COLORES_CAPA[capa]}"></span>${capa}`;
+                label.querySelector('input').addEventListener('change', e => { capasVisibles[capa] = e.target.checked; redibujar(); });
+                $('capas').append(label);
+            }
+        }
+
+        function sincronizarControles() {
+            for (const clave of Object.keys(RANGOS_CONFIG)) {
+                $(`p-${clave}`).value = config[clave];
+                if (document.activeElement !== $(`n-${clave}`)) $(`n-${clave}`).value = config[clave];
+                $(`p-${clave}`).parentElement.classList.toggle('cambiado', config[clave] !== configGuardada[clave]);
+            }
+        }
+
+        function regenerar() {
+            efigies = respuestas.map(r => generarEfigie(r, config));
+            redibujar();
+        }
+
+        // --- Lienzo p5 (modo instancia) ---
+        const TAM_MIN = 180;
+        function geometriaGrilla(p) {
+            const ancho = $('lienzo').clientWidth || 600;
+            const columnas = Math.max(1, Math.floor(ancho / TAM_MIN));
+            const celda = ancho / columnas;
+            return { ancho, columnas, celda, alto: Math.max(celda, Math.ceil(efigies.length / columnas) * celda) };
+        }
+
+        sketch = new p5(p => {
+            p.setup = () => {
+                const g = geometriaGrilla(p);
+                p.createCanvas(g.ancho, g.alto).parent('lienzo');
+                p.noLoop();
+            };
+            p.windowResized = () => redibujar();
+            p.draw = () => {
+                const g = geometriaGrilla(p);
+                if (p.width !== g.ancho || p.height !== g.alto) p.resizeCanvas(g.ancho, g.alto, true);
+                p.background(255);
+                const t = p.millis() / 1000;
+                efigies.forEach((efigie, i) => {
+                    const cx = (i % g.columnas) * g.celda + g.celda / 2;
+                    const cy = Math.floor(i / g.columnas) * g.celda + g.celda / 2;
+                    if (i === seleccionada) {
+                        p.noFill(); p.stroke('#133463'); p.strokeWeight(2);
+                        p.rect(cx - g.celda / 2 + 3, cy - g.celda / 2 + 3, g.celda - 6, g.celda - 6, 8);
+                    }
+                    dibujarEfigie(p, efigie, cx, cy, (g.celda * 0.9) / 100, t);
+                    if ($('nombres').checked) {
+                        p.noStroke(); p.fill('#5f6b66'); p.textSize(11); p.textAlign(p.CENTER, p.BOTTOM);
+                        p.text(respuestas[i]?.nombre ?? '', cx, cy + g.celda / 2 - 4);
+                    }
+                });
+            };
+            p.mousePressed = () => {
+                if (p.mouseX < 0 || p.mouseY < 0 || p.mouseX > p.width || p.mouseY > p.height) return;
+                const g = geometriaGrilla(p);
+                const i = Math.floor(p.mouseY / g.celda) * g.columnas + Math.floor(p.mouseX / g.celda);
+                seleccionar(i < efigies.length ? i : -1);
+            };
+        });
+
+        function dibujarEfigie(p, efigie, cx, cy, escala, t) {
+            const animar = $('animar').checked;
+            const colorear = $('colorear').checked;
+            p.noFill();
+            for (const capa of NOMBRES_CAPAS) {
+                if (!capasVisibles[capa]) continue;
+                p.push();
+                p.translate(cx, cy);
+                // Igual que el CSS del lobby, "carrera" no rota (su <g> lleva stroke y el regex no la toma).
+                const vel = ROTACIONES[ROTACION_CAPAS[capa]];
+                if (animar && capa !== 'carrera' && vel) p.rotate(vel[1] * p.TWO_PI * (t / vel[0]));
+                p.scale(escala, -escala); // +Y hacia arriba, como en Rhino
+                p.stroke(colorear ? COLORES_CAPA[capa] : capa === 'carrera' ? colorFacultad(efigie.facultad) : '#000');
+                p.strokeWeight(0.4);
+                for (const curva of efigie.capas[capa]) {
+                    p.beginShape();
+                    for (const [x, y] of curva) p.vertex(x, y);
+                    p.endShape();
+                }
+                p.pop();
+            }
+        }
+
+        function redibujar() {
+            if ($('animar').checked) sketch.loop(); else { sketch.noLoop(); sketch.redraw(); }
+        }
+
+        function seleccionar(i) {
+            seleccionada = i;
+            const r = respuestas[i];
+            $('seleccion').textContent = r
+                ? `${r.nombre} · ${r.anio} · ${r.facultad} · etapa ${r.etapa} · ${r.estacion} · ${r.grupal} · ${r.formato} · ${r.rol}`
+                : 'Hacé clic en una efigie para seleccionarla.';
+            $('exportarSvg').disabled = !r;
+            redibujar();
+        }
+
+        // --- Datos y API ---
+        function respuestasAleatorias(n) {
+            const elegir = arr => arr[Math.floor(Math.random() * arr.length)];
+            return Array.from({ length: n }, (_, i) => ({
+                id: `aleatoria-${i}`, nombre: `Aleatoria ${i + 1}`,
+                anio: String(1990 + Math.floor(Math.random() * 19)),
+                facultad: elegir(['Arquitectura y Diseño', 'Ciencias Económicas', 'Ingeniería y Ciencias Agrarias', 'Psicología y Psicopedagogía', 'Derecho', 'Teología']),
+                etapa: elegir(['1 (Ingresante / Primer año)', '2', '3', '4', '5', '6 (Sexto año o más)', 'Docente', 'No Docente']),
+                estacion: elegir(['Primavera', 'Verano', 'Otoño', 'Invierno']),
+                grupal: elegir(['Solo', 'Grupal']),
+                formato: elegir(['Película', 'Serie', 'Libro', 'Videojuego', 'Teatro']),
+                rol: elegir(['Proponer', 'Organizar', 'Materializar', 'Mejorar'])
+            }));
+        }
+
+        function usarRespuestas(lista, fuente) {
+            respuestas = lista;
+            $('fuente').textContent = `${lista.length} efigies · ${fuente}`;
+            seleccionar(-1);
+            regenerar();
+        }
+
+        async function cargarDatos() {
+            try {
+                const [datos, cfg] = await Promise.all([
+                    fetch('/api/datos').then(r => { if (!r.ok) throw r; return r.json(); }),
+                    fetch('/api/config').then(r => { if (!r.ok) throw r; return r.json(); })
+                ]);
+                configGuardada = normalizarConfig(cfg);
+                config = { ...configGuardada };
+                sincronizarControles();
+                usarRespuestas(datos.length ? datos : respuestasAleatorias(12), datos.length ? 'respuestas guardadas' : 'sin respuestas: aleatorias');
+                cargarVersiones();
+            } catch {
+                sincronizarControles();
+                usarRespuestas(respuestasAleatorias(12), 'sin servidor: aleatorias');
+            }
+        }
+
+        async function cargarVersiones() {
+            const r = await fetch('/api/config/versiones').catch(() => null);
+            if (!r?.ok) return;
+            const versiones = await r.json();
+            $('versiones').innerHTML = versiones.length
+                ? versiones.map(v => `<option value='${JSON.stringify(v.config)}'>#${v.id} · ${v.creado}${v.nota ? ' · ' + v.nota.replace(/[<>&']/g, '') : ''}</option>`).join('')
+                : '<option value="">Sin versiones guardadas</option>';
+        }
+
+        async function guardar() {
+            const nota = prompt('Nota para esta versión (opcional)');
+            if (nota === null) return;
+            const r = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config, nota })
+            }).catch(() => null);
+            if (r?.status === 401) return location.assign('/admin-login?volver=/admin-efigies/');
+            if (!r?.ok) return avisar('No se pudo guardar la config.');
+            const respuesta = await r.json();
+            configGuardada = { ...respuesta.config };
+            sincronizarControles();
+            cargarVersiones();
+            avisar(`Config guardada (versión #${respuesta.version}). Las efigies nuevas ya la usan.`);
+        }
+
+        function descargar(nombre, contenido, tipo) {
+            const url = URL.createObjectURL(new Blob([contenido], { type: tipo }));
+            const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        async function leerCsvLocal(archivo) {
+            const texto = (await archivo.text()).replace(/^﻿/, '');
+            const columnas = ['id', 'nombre', 'anio', 'facultad', 'etapa', 'estacion', 'grupal', 'formato', 'rol'];
+            return texto.split(/\r?\n/).slice(1).filter(l => l.trim()).map(linea => {
+                const partes = []; let comillas = false, actual = '';
+                for (const c of linea) {
+                    if (c === '"') comillas = !comillas;
+                    else if (c === ',' && !comillas) { partes.push(actual.trim()); actual = ''; }
+                    else actual += c;
+                }
+                partes.push(actual.trim());
+                return Object.fromEntries(columnas.map((c, i) => [c, partes[i] ?? '']));
+            });
+        }
+
+        // --- Eventos ---
+        crearControles();
+        $('colorear').addEventListener('change', redibujar);
+        $('animar').addEventListener('change', redibujar);
+        $('nombres').addEventListener('change', redibujar);
+        $('guardar').addEventListener('click', () => guardar());
+        $('restablecer').addEventListener('click', () => { config = { ...configGuardada }; sincronizarControles(); regenerar(); });
+        $('porDefecto').addEventListener('click', () => { config = { ...CONFIG_POR_DEFECTO }; sincronizarControles(); regenerar(); });
+        $('cargarVersion').addEventListener('click', () => {
+            if (!$('versiones').value) return;
+            config = normalizarConfig(JSON.parse($('versiones').value));
+            sincronizarControles(); regenerar();
+            avisar('Versión cargada en los controles. Guardala para aplicarla.');
+        });
+        $('exportarSvg').addEventListener('click', () => {
+            const r = respuestas[seleccionada];
+            if (r) descargar(`efigie-${r.nombre || r.id}.svg`, generarSvg(r, config, $('exportarMarco').checked), 'image/svg+xml');
+        });
+        $('exportarConfig').addEventListener('click', () => descargar('config.json', JSON.stringify(config, null, 2), 'application/json'));
+        $('csvLocal').addEventListener('change', async e => {
+            const archivo = e.target.files[0];
+            if (archivo) usarRespuestas(await leerCsvLocal(archivo), archivo.name);
+        });
+        $('aleatorias').addEventListener('click', () => usarRespuestas(respuestasAleatorias(12), 'aleatorias'));
+        cargarDatos();
+    </script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/lib/transporte.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>Ronda 2 · Identificación - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #fff; --ink: #101a15; --muted: #53615b; --line: #cbd6d0; --green: #6eb392; --green-dark: #4a896b; --selected: #dcebe2; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; padding: 18px 20px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 760px); margin: 0 auto; }
+        h1 { margin: 10px 0 4px; text-align: center; font-size: clamp(1.3rem, 5vw, 1.65rem); line-height: 1.2; font-weight: 500; }
+        .instruccion { margin: 0; text-align: center; color: var(--muted); line-height: 1.4; }
+        .efigie { width: min(94vw, 660px, calc(100vh - 255px)); aspect-ratio: 1; margin: 4px auto 6px; }
+        .efigie svg { display: block; width: 100%; height: 100%; overflow: visible; background: transparent !important; }
+        .efigie [data-capa].resaltada { filter: drop-shadow(0 0 2px #e53920); }
+        .efigie [data-capa].resaltada, .efigie [data-capa].resaltada * { stroke: #e53920 !important; stroke-width: 1.15 !important; }
+        .progreso { display: flex; justify-content: center; gap: 9px; margin: 0 0 8px; }
+        .paso { width: 10px; height: 10px; border: 1px solid #53615b; border-radius: 50%; background: transparent; }
+        .paso.activo { background: var(--green-dark); border-color: var(--green-dark); }
+        .paso.completo { background: #6eb392; border-color: #286547; }
+        .pregunta { width: min(100%, 500px); margin: 0 auto; }
+        .pregunta h2 { margin: 0 0 6px; text-align: center; font-size: 1rem; font-weight: 500; }
+        .opciones select { display: block; width: 100%; min-height: 48px; padding: 9px 12px; border: 1px solid #87938c; border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }
+        .opciones option.utilizada { color: #929a95; }
+        .opciones select:focus-visible, .navegacion button:focus-visible, .notas-consulta summary:focus-visible, .pista-boton:focus-visible, .cerrar-pista:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+        .estado-equipo { min-height: 1.4em; margin: 5px 0; text-align: center; color: var(--muted); }
+        .pista-boton { min-height: 42px; padding: 7px 8px; border: 1px solid var(--green-dark); border-radius: 5px; background: #fff; color: var(--ink); font: inherit; font-size: .9rem; cursor: pointer; }
+        .pista-boton:hover:not(:disabled) { background: var(--selected); }
+        .pista-boton:disabled { opacity: .55; cursor: default; }
+        .navegacion { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 8px; margin-top: 8px; }
+        .navegacion button { min-width: 0; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 5px; background: var(--green); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+        .navegacion button:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
+        .navegacion button:disabled { opacity: 0.5; cursor: default; }
+        .mensaje { min-height: 1.4em; margin: 6px 0 0; text-align: center; color: var(--muted); }
+        .notas-consulta { position: fixed; z-index: 4; top: 0; left: 0; }
+        .notas-consulta summary { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 6px; border: 1px solid #b6c9bf; border-left: 0; border-radius: 0 6px 6px 0; background: var(--green); color: var(--ink); font-size: .76rem; font-weight: 700; cursor: pointer; list-style: none; writing-mode: vertical-rl; transition: background-color 180ms ease; }
+        .notas-consulta summary:hover { background: var(--green-dark); color: #fff; }
+        .notas-consulta summary::-webkit-details-marker { display: none; }
+        .notas-panel { position: absolute; top: 50%; left: 100%; width: min(84vw, 420px); height: min(72vh, 680px); margin-left: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgb(16 26 21 / 20%); opacity: 0; transform: translate(-12px, -50%); transition: opacity 220ms ease, transform 220ms ease; pointer-events: none; }
+        .notas-consulta[open] .notas-panel { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+        .notas-panel iframe { display: block; width: 100%; height: 100%; border: 0; }
+        .dialogo-pista { width: min(90vw, 430px); padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); box-shadow: 0 12px 40px rgb(16 26 21 / 24%); }
+        .dialogo-pista::backdrop { background: rgb(16 26 21 / 48%); }
+        .dialogo-pista h2 { margin: 0 0 12px; font-size: 1.15rem; }
+        .dialogo-pista p { margin: 0; line-height: 1.5; white-space: pre-line; }
+        .cerrar-pista { display: block; min-height: 42px; margin: 20px 0 0 auto; padding: 8px 18px; border: 0; border-radius: 5px; background: var(--green); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+        [hidden] { display: none !important; }
+        @media (max-height: 720px) {
+            body { padding-top: 10px; }
+            h1 { margin-top: 5px; }
+            .efigie { width: min(94vw, 660px, calc(100vh - 220px)); margin-block: 0; }
+            .progreso { margin-bottom: 4px; }
+        }
+        @media (max-width: 380px) {
+            body { padding-inline: 14px; }
+            .efigie { width: min(94vw, 660px, calc(100vh - 220px)); }
+            .navegacion { gap: 5px; }
+            .navegacion button { padding-inline: 5px; font-size: .88rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Relacioná cada parte con lo que representa</h1>
+        <p class="instruccion" id="instruccion">Cada integrante responde en su dispositivo. El representante coordina el avance.</p>
+        <div class="efigie" id="efigie" role="img" aria-label="Tu efigie con una parte resaltada"></div>
+        <nav class="progreso" id="progreso" aria-label="Progreso de respuestas"></nav>
+        <section class="pregunta" aria-label="Opciones de respuesta">
+            <h2 id="tituloPregunta">¿Qué representa esta parte?</h2>
+            <div class="opciones">
+                <select id="opciones" aria-label="Elegí qué representa esta parte"></select>
+            </div>
+            <p class="estado-equipo" id="estadoEquipo" aria-live="polite"></p>
+            <div class="navegacion" id="navegacion">
+                <button type="button" id="anterior">Anterior</button>
+                <button type="button" class="pista-boton" id="verPista">Pista (-50 pts)</button>
+                <button type="button" id="siguiente">Siguiente</button>
+            </div>
+        </section>
+        <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+    </main>
+    <dialog class="dialogo-pista" id="dialogoPista" aria-labelledby="tituloPista">
+        <h2 id="tituloPista">Pista</h2>
+        <p id="textoPista"></p>
+        <button type="button" class="cerrar-pista" id="cerrarPista">Entendido</button>
+    </dialog>
+    <details class="notas-consulta">
+        <summary aria-label="Ver las efigies de tu equipo">Equipo</summary>
+        <div class="notas-panel">
+            <iframe id="vistaNotas" title="Efigies de los tres integrantes del equipo"></iframe>
+        </div>
+    </details>
+    <script>
+        const parametros = new URLSearchParams(location.search);
+        const responseId = parametros.get('id');
+        const adminPreview = parametros.get('adminPreview') === '1';
+        const queryVista = adminPreview ? '&adminPreview=1' : '';
+        const apiVista = adminPreview ? '?adminPreview=1' : '';
+        const efigie = document.getElementById('efigie');
+        const opciones = document.getElementById('opciones');
+        const progreso = document.getElementById('progreso');
+        const instruccion = document.getElementById('instruccion');
+        const estadoEquipo = document.getElementById('estadoEquipo');
+        const botonPista = document.getElementById('verPista');
+        const navegacion = document.getElementById('navegacion');
+        const botonAnterior = document.getElementById('anterior');
+        const botonSiguiente = document.getElementById('siguiente');
+        const mensaje = document.getElementById('mensaje');
+        const vistaNotas = document.getElementById('vistaNotas');
+        const dialogoPista = document.getElementById('dialogoPista');
+        const textoPista = document.getElementById('textoPista');
+        const tabEquipo = document.querySelector('.notas-consulta');
+        let estadoActual = null;
+        let indiceActual = -1;
+        let cargando = false;
+        let enviando = false;
+
+        function posicionarTabEquipo() {
+            tabEquipo.style.top = `${efigie.getBoundingClientRect().top}px`;
+        }
+
+        function urlEtapa(destino) {
+            const query = new URLSearchParams({ id: responseId });
+            for (const clave of ['espectador', 'sesion']) {
+                const valor = parametros.get(clave);
+                if (valor) query.set(clave, valor);
+            }
+            if (adminPreview) query.set('adminPreview', '1');
+            return `${destino}${destino.includes('?') ? '&' : '?'}${query}`;
+        }
+
+        function dibujarPregunta(estado) {
+            efigie.querySelectorAll('[data-capa]').forEach(capa => capa.classList.remove('resaltada'));
+            const capa = efigie.querySelector(`[data-capa="${CSS.escape(estado.pregunta.layer)}"]`);
+            if (!capa) throw new Error('No se pudo resaltar la parte seleccionada de la efigie.');
+            capa.classList.add('resaltada');
+            opciones.replaceChildren();
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Seleccioná una opción';
+            opciones.append(placeholder);
+            const opcionesUsadas = new Set(estado.respuestasPrevias.filter(Boolean));
+            const opcionesOrdenadas = [
+                ...estado.pregunta.opciones.filter(opcion => !opcionesUsadas.has(opcion)),
+                ...estado.pregunta.opciones.filter(opcion => opcionesUsadas.has(opcion))
+            ];
+            opcionesOrdenadas.forEach(opcion => {
+                const opcionElemento = document.createElement('option');
+                opcionElemento.value = opcion;
+                opcionElemento.textContent = opcion;
+                if (opcionesUsadas.has(opcion)) opcionElemento.classList.add('utilizada');
+                opciones.append(opcionElemento);
+            });
+            opciones.value = estado.pregunta.respuesta || '';
+            document.getElementById('tituloPregunta').textContent =
+                `¿Qué representa esta parte? (${estado.indiceActual + 1} de ${estado.cantidadPreguntas})`;
+            progreso.replaceChildren(...Array.from({ length: estado.cantidadPreguntas }, (_, indice) => {
+                const paso = document.createElement('span');
+                paso.className = `paso${indice === estado.indiceActual ? ' activo' : ''}`;
+                paso.setAttribute('aria-label', `Pregunta ${indice + 1}`);
+                return paso;
+            }));
+        }
+
+        function actualizarPantalla(estado) {
+            const cambioPregunta = estado.indiceActual !== indiceActual;
+            if (!efigie.firstElementChild) efigie.innerHTML = estado.efigie;
+            if (cambioPregunta) {
+                indiceActual = estado.indiceActual;
+                dibujarPregunta(estado);
+            } else if (document.activeElement !== opciones && opciones.value !== estado.pregunta.respuesta) {
+                opciones.value = estado.pregunta.respuesta || '';
+            }
+            opciones.disabled = enviando || estado.respondido;
+            const esRepresentante = estado.esRepresentante || adminPreview;
+            botonAnterior.hidden = !esRepresentante;
+            botonSiguiente.hidden = !esRepresentante;
+            botonPista.hidden = !esRepresentante;
+            navegacion.hidden = !esRepresentante;
+            instruccion.textContent = esRepresentante
+                ? 'Esperá a que todos respondan lo mismo para avanzar a la siguiente pregunta.'
+                : `Mira la pantalla de ${estado.nombreRepresentante || 'tu representante'}. Respondé en tu dispositivo para continuar.`;
+            botonAnterior.disabled = enviando || indiceActual === 0;
+            botonSiguiente.disabled = enviando || !estado.consenso;
+            botonSiguiente.textContent = indiceActual === estado.cantidadPreguntas - 1 ? 'Terminar' : 'Siguiente';
+            botonPista.disabled = enviando || estado.pregunta.pistaUsada || estado.respondido || (estado.consenso && !adminPreview);
+            botonPista.textContent = estado.pregunta.pistaUsada ? 'Pista utilizada' : 'Pista (-50 pts)';
+            estadoEquipo.textContent = estado.respondido
+                ? 'Tu equipo completó la ronda.'
+                : estado.pistaEnviadaA
+                    ? `Pista enviada al dispositivo de ${estado.pistaEnviadaA}.`
+                : estado.consenso
+                    ? 'Todos respondieron lo mismo. El representante puede avanzar.'
+                    : `Integrantes que respondieron: ${estado.cantidadRespuestas}/${estado.totalParticipantes}.`;
+            progreso.querySelectorAll('.paso').forEach((paso, indice) => {
+                paso.classList.toggle('completo',
+                    indice < estado.indiceActual ||
+                    (indice === estado.indiceActual && Boolean(estado.pregunta.respuesta)));
+            });
+        }
+
+        async function seleccionarRespuesta(respuestaElegida) {
+            if (enviando || !responseId || !respuestaElegida) return;
+            enviando = true;
+            opciones.disabled = true;
+            try {
+                const respuesta = await fetch(`/api/ronda-3/responder${apiVista}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, indice: indiceActual, respuesta: respuestaElegida })
+                });
+                if (!respuesta.ok) throw new Error('No se pudo guardar la selección.');
+                mensaje.textContent = '';
+                await cargarEstado(true);
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo guardar la selección.';
+                console.error(error);
+            } finally {
+                enviando = false;
+                if (estadoActual) actualizarPantalla(estadoActual);
+            }
+        }
+
+        async function redirigirSegunEtapa() {
+            const respuesta = await fetch(`/api/ronda-1/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
+            if (!respuesta.ok) return;
+            const estado = await respuesta.json();
+            const destinos = {
+                'pre-ronda': '/pre-ronda-1',
+                memoria: '/ronda-1-preview',
+                adivinanza: '/ronda-1-adivinar',
+                leaderboard: '/ronda-1-leaderboard',
+                'ronda-2-representante': '/ronda-2-representante?ronda=2',
+                'ronda-2-identificacion': '/ronda-2',
+                'ronda-2-leaderboard': '/ronda-2-leaderboard',
+                'ronda-3': '/ronda-3'
+            };
+            const destino = destinos[estado.etapaRondaUno];
+            if (destino && !adminPreview)
+                location.replace(urlEtapa(destino));
+        }
+
+        async function cargarEstado(forzar = false) {
+            if (cargando || (enviando && !forzar) || !responseId) return;
+            cargando = true;
+            try {
+                const respuesta = await fetch(`/api/ronda-3/identificacion?responseId=${encodeURIComponent(responseId)}${queryVista}`, { cache: 'no-store' });
+                if (respuesta.status === 409 && !adminPreview) {
+                    await redirigirSegunEtapa();
+                    return;
+                }
+                if (!respuesta.ok) throw new Error('No se pudo consultar la ronda 2.');
+                estadoActual = await respuesta.json();
+                actualizarPantalla(estadoActual);
+                    if (estadoActual.pistaPopup && !dialogoPista.open) {
+                        textoPista.textContent = estadoActual.pistaPopup;
+                        dialogoPista.showModal();
+                    }
+                mensaje.textContent = '';
+                if (estadoActual.respondido && !adminPreview)
+                    location.replace(urlEtapa('/ronda-2-leaderboard'));
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo conectar con la ronda. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        async function navegar(accion) {
+            if (enviando || !estadoActual || (accion === 'siguiente' && !estadoActual.consenso)) return;
+            enviando = true;
+            actualizarPantalla(estadoActual);
+            try {
+                const respuesta = await fetch(`/api/ronda-3/navegar${apiVista}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, accion })
+                });
+                if (!respuesta.ok) throw new Error('Esperá a que todos los integrantes respondan lo mismo antes de avanzar.');
+                const resultado = await respuesta.json();
+                if (resultado.finalizada && !adminPreview) {
+                    location.replace(urlEtapa('/ronda-2-leaderboard'));
+                    return;
+                }
+                await cargarEstado(true);
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo cambiar de pregunta.';
+                console.error(error);
+            } finally {
+                enviando = false;
+                if (estadoActual) actualizarPantalla(estadoActual);
+            }
+        }
+
+        async function usarPista() {
+            if (enviando || !estadoActual || estadoActual.pregunta.pistaUsada) return;
+            enviando = true;
+            actualizarPantalla(estadoActual);
+            try {
+                const respuesta = await fetch(`/api/ronda-3/pista${apiVista}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ responseId, indice: indiceActual })
+                });
+                if (!respuesta.ok) {
+                    if (respuesta.status === 409) {
+                        const resultado = await respuesta.json();
+                        throw new Error(resultado.error || 'No se pudo mostrar la pista.');
+                    }
+                    throw new Error('No se pudo mostrar la pista.');
+                }
+                await cargarEstado(true);
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo mostrar la pista.';
+                console.error(error);
+            } finally {
+                enviando = false;
+                if (estadoActual) actualizarPantalla(estadoActual);
+            }
+        }
+
+        botonAnterior.addEventListener('click', () => navegar('anterior'));
+        botonSiguiente.addEventListener('click', () => navegar('siguiente'));
+        botonPista.addEventListener('click', usarPista);
+        document.getElementById('cerrarPista').addEventListener('click', () => dialogoPista.close());
+        opciones.addEventListener('change', () => seleccionarRespuesta(opciones.value));
+        if (!responseId) {
+            mensaje.textContent = 'Falta el identificador de participante.';
+        } else {
+            vistaNotas.src = `/ronda-2-equipo?id=${encodeURIComponent(responseId)}${adminPreview ? '&adminPreview=1' : ''}&consulta=1`;
+            cargarEstado();
+            const intervalo = setInterval(cargarEstado, 800);
+            window.addEventListener('pagehide', () => {
+                clearInterval(intervalo);
+            });
+        }
+        window.addEventListener('resize', posicionarTabEquipo);
+        window.addEventListener('scroll', posicionarTabEquipo, { passive: true });
+        requestAnimationFrame(posicionarTabEquipo);
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>

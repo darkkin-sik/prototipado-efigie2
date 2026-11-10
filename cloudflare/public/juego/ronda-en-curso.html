@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="/lib/transporte.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eaf3f0">
+    <title>Ronda 1 - Memoria - Efigie</title>
+    <style>
+        :root { color-scheme: light; --paper: #eaf3f0; --ink: #101a15; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { min-height: 100vh; padding: 18px 20px max(24px, env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+        main { width: min(100%, 520px); min-height: calc(100vh - 42px); margin: 0 auto; display: flex; flex-direction: column; }
+        h1 { max-width: 390px; margin: 30px auto 28px; text-align: center; font-size: clamp(1.25rem, 5vw, 1.7rem); line-height: 1.2; font-weight: 500; }
+        .efigie-principal { width: min(76vw, 290px); margin: 0 auto; text-align: center; }
+        .dibujo-principal { width: 100%; aspect-ratio: 1; }
+        .dibujo-principal svg, .dibujo-companero svg { display: block; width: 100%; height: 100%; background: transparent !important; }
+        .nombre-principal { margin: 4px 0 34px; overflow-wrap: anywhere; font-size: 0.9rem; }
+        .companeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: min(100%, 310px); margin: 0 auto 28px; }
+        .companero { min-width: 0; margin: 0; text-align: center; }
+        .dibujo-companero { width: min(100%, 154px); aspect-ratio: 1; margin: 0 auto; }
+        .nombre-companero { min-height: 1.2em; margin: 1px 0 0; overflow-wrap: anywhere; font-size: 0.78rem; }
+        .puntaje { display: flex; align-items: center; gap: 9px; margin: auto 0 0; padding-top: 18px; font-size: 1.1rem; }
+        .trofeo { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+        .mensaje { min-height: 1.4em; margin: 8px 0 0; text-align: center; color: #53615b; font-size: 0.85rem; }
+        @media (max-width: 380px) { body { padding-inline: 14px; } h1 { margin-top: 24px; } .efigie-principal { width: min(76vw, 270px); } .companeros { width: min(100%, 290px); gap: 14px; } }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>¿Qué tan buena es tu memoria?</h1>
+        <section class="efigie-principal" aria-label="Tu efigie">
+            <div class="dibujo-principal" id="efigiePropia"></div>
+            <p class="nombre-principal" id="nombrePropio"></p>
+        </section>
+        <section class="companeros" id="companeros" aria-label="Efigies de tu equipo"></section>
+        <p class="mensaje" id="mensajeRonda" role="status" aria-live="polite"></p>
+        <p class="puntaje" aria-label="Puntaje de equipo">
+            <svg class="trofeo" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v7a5 5 0 0 1-10 0V4ZM7 6H4v2a4 4 0 0 0 4 4M17 6h3v2a4 4 0 0 1-4 4"></path></svg>
+            <span>0</span>
+        </p>
+    </main>
+    <script>
+        const responseId = new URLSearchParams(window.location.search).get('id');
+        const adminPreview = new URLSearchParams(window.location.search).get('adminPreview') === '1';
+        const mensaje = document.getElementById('mensajeRonda');
+        let cargando = false;
+        let contenidoRenderizado = false;
+
+        async function actualizarRonda() {
+            if (cargando) return;
+            if (!responseId) {
+                mensaje.textContent = 'Falta el identificador de participante.';
+                return;
+            }
+            cargando = true;
+            try {
+                const url = '/api/ronda-1/estado?responseId=' + encodeURIComponent(responseId) + (contenidoRenderizado ? '' : '&incluirEfigies=1');
+                const respuesta = await fetch(url, { cache: 'no-store' });
+                if (respuesta.status === 404) throw new Error('No se encontró tu equipo.');
+                if (!respuesta.ok) throw new Error('No se pudo consultar el estado de la ronda.');
+                const ronda = await respuesta.json();
+                if (!ronda.rondaIniciada && !adminPreview) {
+                    window.location.replace('/lobby/' + encodeURIComponent(responseId));
+                    return;
+                }
+                const destinos = { 'pre-ronda': '/pre-ronda-1', 'memoria': '/ronda-1-preview', 'adivinanza': '/ronda-1-adivinar', 'leaderboard': '/ronda-1-leaderboard', 'ronda-2-representante': '/ronda-2-representante?ronda=2', 'ronda-2-identificacion': '/ronda-2', 'ronda-2-leaderboard': '/ronda-2-leaderboard', 'ronda-3': '/ronda-3' };
+                const etapaActiva = ronda.etapaRondaUno || (ronda.previewIniciada ? 'memoria' : 'pre-ronda');
+                if (etapaActiva !== 'memoria' && !adminPreview) {
+                    const destino = destinos[etapaActiva] || '/pre-ronda-1';
+                    window.location.replace(destino + (destino.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(responseId));
+                    return;
+                }
+                if (!contenidoRenderizado) {
+                    const propios = ronda.integrantes.find(integrante => integrante.id === responseId);
+                    if (!propios) throw new Error('No se encontró tu efigie.');
+                    const efigiePropia = document.getElementById('efigiePropia');
+                    efigiePropia.innerHTML = propios.efigie;
+                    efigiePropia.setAttribute('role', 'img');
+                    efigiePropia.setAttribute('aria-label', `Efigie de ${propios.nombre}`);
+                    document.getElementById('nombrePropio').textContent = propios.nombre;
+                    const companeros = document.getElementById('companeros');
+                    for (const integrante of ronda.integrantes.filter(persona => persona.id !== responseId)) {
+                        const figura = document.createElement('figure');
+                        figura.className = 'companero';
+                        const dibujo = document.createElement('div');
+                        dibujo.className = 'dibujo-companero';
+                        dibujo.setAttribute('role', 'img');
+                        dibujo.setAttribute('aria-label', `Efigie de ${integrante.nombre}`);
+                        dibujo.innerHTML = integrante.efigie;
+                        const nombre = document.createElement('figcaption');
+                        nombre.className = 'nombre-companero';
+                        nombre.textContent = integrante.nombre;
+                        figura.append(dibujo, nombre);
+                        companeros.append(figura);
+                    }
+                    contenidoRenderizado = true;
+                }
+                mensaje.textContent = '';
+            } catch (error) {
+                mensaje.textContent = 'No se pudo conectar con la ronda. Reintentando...';
+                console.error(error);
+            } finally {
+                cargando = false;
+            }
+        }
+
+        actualizarRonda();
+        const intervaloEstado = setInterval(actualizarRonda, 1000);
+        window.addEventListener('pagehide', () => {
+            clearInterval(intervaloEstado);
+        });
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>

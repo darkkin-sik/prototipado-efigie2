@@ -1,0 +1,56 @@
+{
+	// Configuración de Cloudflare Workers. Antes del primer deploy:
+	//   npx wrangler login
+	//   npx wrangler d1 create efigie      → copiar el database_id que devuelve acá abajo
+	//   npm run db:migrar:remoto
+	//   npx wrangler secret put ADMIN_KEY  (contraseña de /admin-sesion y /admin-efigies)
+	// En local, la contraseña se define en .dev.vars (ADMIN_KEY=...).
+	"name": "efigie",
+	"main": "worker/index.js",
+	"compatibility_date": "2026-11-01",
+	"assets": {
+		"directory": "public",
+		"binding": "ASSETS",
+		// Estas rutas pasan por el Worker (páginas del juego con las mismas URLs que Program.cs y la API);
+		// el resto (css, js, svg) se sirve directo como archivo estático.
+		"run_worker_first": [
+			"/",
+			"/api/*",
+			"/guardar",
+			"/encuesta",
+			"/admin-sesion",
+			"/admin-login",
+			"/admin-efigies*",
+			"/espectador",
+			"/pre-ronda-1",
+			"/ronda-*",
+			"/lobby/*",
+			"/efigie/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "efigie",
+			"database_id": "25c6e049-30f1-4538-a0ec-3ff34d6da445",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Una única sesión de juego (como el servidor C#), con su estado en un Durable Object.
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SESION",
+				"class_name": "SesionEfigie"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"SesionEfigie"
+			]
+		}
+	]
+}
