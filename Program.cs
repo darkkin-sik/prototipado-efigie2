@@ -140,14 +140,6 @@ class Program
     [STAThread]
     static void Main(string[] args)
     {
-        if (!PuertoDisponible(PuertoServidor))
-        {
-            Console.Error.WriteLine($"ERROR: El puerto {PuertoServidor} ya está ocupado. Efigie no se inició.");
-            Console.Error.WriteLine("Cierra normalmente la aplicación que usa ese puerto o detén la instancia anterior de Efigie.");
-            Environment.ExitCode = 1;
-            return;
-        }
-
         string rhinoSystemDir = @"C:\Program Files\Rhino 8\System";
         string rhinoNetCoreDir = Path.Combine(rhinoSystemDir, "netcore");
 
@@ -164,7 +156,40 @@ class Program
             return null;
         };
 
+        if (args.Contains("--exportar-efigies-svg", StringComparer.Ordinal))
+        {
+            ExportarEfigiesSvg();
+            return;
+        }
+
+        if (!PuertoDisponible(PuertoServidor))
+        {
+            Console.Error.WriteLine($"ERROR: El puerto {PuertoServidor} ya está ocupado. Efigie no se inició.");
+            Console.Error.WriteLine("Cierra normalmente la aplicación que usa ese puerto o detén la instancia anterior de Efigie.");
+            Environment.ExitCode = 1;
+            return;
+        }
+
         IniciarServidor(args);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void ExportarEfigiesSvg()
+    {
+        string dirActual = Directory.GetCurrentDirectory();
+        using var rhinoCore = new Rhino.Runtime.InProcess.RhinoCore(new string[] { "/netcore", "/nosplash" }, Rhino.Runtime.InProcess.WindowStyle.Hidden);
+        Directory.SetCurrentDirectory(dirActual);
+
+        string rutaCsv = Path.Combine(dirActual, "respuestas_app.csv");
+        var respuestas = LeerUsuariosCsv(rutaCsv).Take(30).ToList();
+        if (respuestas.Count < 30)
+            throw new InvalidOperationException($"Se necesitan 30 respuestas para generar la lámina; solo hay {respuestas.Count}.");
+
+        string rutaSvg = Path.Combine(dirActual, "efigies-30.svg");
+        File.WriteAllText(rutaSvg, CrearLaminaSvg(respuestas, LeerConfig(Path.Combine(dirActual, "config.json"))), new UTF8Encoding(false));
+        Console.WriteLine($"SVG generado correctamente: {rutaSvg}");
+        // Rhino's in-process runtime can keep native worker threads alive after a one-shot export.
+        Environment.Exit(0);
     }
 
     private static bool PuertoDisponible(int puerto)
@@ -3067,6 +3092,37 @@ static List<DatosRespuesta> LeerUsuariosCsv(string ruta)
         });
     }
     return lista;
+}
+
+static string CrearLaminaSvg(IReadOnlyList<DatosRespuesta> respuestas, ConfigEfigie config)
+{
+    const int columnas = 5;
+    const int anchoCelda = 140;
+    const int altoCelda = 140;
+    var svg = new StringBuilder();
+    svg.AppendLine($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {columnas * anchoCelda} {respuestas.Count / columnas * altoCelda}\" width=\"100%\" height=\"100%\">");
+    svg.AppendLine("<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\" />");
+
+    for (int i = 0; i < respuestas.Count; i++)
+    {
+        var respuesta = respuestas[i];
+        int x = (i % columnas) * anchoCelda;
+        int y = (i / columnas) * altoCelda;
+        string contenido = GeneradorEfigie.GenerarSVG(respuesta, config, incluirMarcoYNombre: false);
+        var contenidoSvg = Regex.Match(contenido, @"^\s*<svg\b[^>]*>([\s\S]*)</svg>\s*$");
+        if (!contenidoSvg.Success)
+            throw new InvalidOperationException($"No se pudo leer el SVG de la efigie {respuesta.id}.");
+
+        svg.AppendLine($"<g id=\"efigie-{i + 1:D2}\" data-nombre=\"{System.Net.WebUtility.HtmlEncode(respuesta.nombre)}\">");
+        svg.AppendLine($"<g transform=\"translate({x + 20} {y + 10})\">");
+        svg.AppendLine(contenidoSvg.Groups[1].Value);
+        svg.AppendLine("</g>");
+        svg.AppendLine($"<text x=\"{x + anchoCelda / 2}\" y=\"{y + 125}\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"5\" fill=\"#101a15\">{System.Net.WebUtility.HtmlEncode(respuesta.nombre)}</text>");
+        svg.AppendLine("</g>");
+    }
+
+    svg.AppendLine("</svg>");
+    return svg.ToString();
 }
 
 static string[] AnalizarLineaCSV(string linea)
