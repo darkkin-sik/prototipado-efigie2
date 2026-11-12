@@ -27,7 +27,7 @@ Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo pr
 
 - **Evaluar rondas adicionales:** decidir si la experiencia termina con estas tres rondas o si necesita más.
 - **Pulir detalles de interfaz:** revisar las pantallas en distintos tamaños de celular, legibilidad, márgenes seguros, estados de espera y error, accesibilidad y consistencia visual entre rondas, leaderboards y administración.
-- **Mejorar el sistema de enlace:** simplificar cómo se comparte y abre la experiencia en los celulares; revisar enlaces de ingreso, recuperación al reconectar, persistencia/cambio de dispositivo y el acceso de espectadores. Evaluar QR o códigos de sesión y validar el flujo con ngrok y distintos navegadores móviles.
+- **Mejorar el sistema de enlace:** simplificar cómo se comparte y abre la experiencia en los celulares; revisar enlaces de ingreso, recuperación al reconectar, persistencia/cambio de dispositivo y el acceso de espectadores. Evaluar QR o códigos de sesión y validar el flujo con Cloudflare Tunnel y distintos navegadores móviles.
 
 El estado de la sesión y su etapa viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
 
@@ -36,7 +36,7 @@ El estado de la sesión y su etapa viven en el proceso del servidor; al reinicia
 - Windows de 64 bits.
 - Visual Studio 2022 con la carga de trabajo **Desarrollo de ASP.NET y web** (o **Desarrollo de escritorio de .NET**) y el SDK de .NET 8.
 - Rhino 8 instalado en la ubicación esperada por el proyecto: `C:\Program Files\Rhino 8`. El servidor inicializa Rhino en segundo plano y carga sus ensamblados desde esa instalación.
-- Para compartir el servidor fuera de la computadora local, una cuenta y el cliente de ngrok.
+- Para compartir el servidor fuera de la computadora local, el cliente `cloudflared`. Los Quick Tunnels no requieren cuenta ni dominio de Cloudflare.
 
 ## Ejecutar desde Visual Studio
 
@@ -50,19 +50,23 @@ El estado de la sesión y su etapa viven en el proceso del servidor; al reinicia
 
 No uses únicamente la vista previa estática de Visual Studio: la aplicación necesita ejecutar el servidor ASP.NET Core y el motor de Rhino.
 
-## Compartir mediante ngrok
+## Iniciar el proyecto y compartirlo
 
-ngrok no es necesario para usar la aplicación desde la misma computadora. Sí resulta práctico para que celulares u otros dispositivos, incluso fuera de la red local, puedan conectarse sin configurar el router.
+Para iniciar Efigie y compartirla desde otros dispositivos, abre PowerShell en la carpeta del proyecto y ejecuta:
 
-1. Instala ngrok y configura tu token de autenticación siguiendo las instrucciones de tu cuenta.
-2. Con el servidor ejecutándose en el puerto `5500`, abre otra terminal y ejecuta:
+```powershell
+.\iniciar.ps1
+```
 
-   ```powershell
-   ngrok http 5500
-   ```
+El iniciador ejecuta `dotnet run`, espera a que el servidor esté disponible en el puerto `5500`, inicia el Quick Tunnel de Cloudflare y actualiza el destino del QR permanente en `C:\Users\<usuario>\QR-REDIRECT-EFIGIE`. Luego crea y sube un commit a `main` en ese repositorio; por eso necesitas tener esa copia local y permisos de `git push` configurados. La URL del túnel también se muestra en la terminal. Los Quick Tunnels son temporales y la URL puede cambiar cada vez que se inicia el script.
 
-3. Comparte la dirección HTTPS que muestra ngrok. Los participantes deben abrir esa dirección seguida de `/encuesta`; quien administre la sesión abre la misma dirección seguida de `/admin-sesion`.
-4. Mantén abiertas tanto la aplicación como la terminal de ngrok durante la actividad. Al detener cualquiera de ellas, se interrumpe el acceso remoto.
+Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo. Si el puerto `5500` ya está ocupado, cierra normalmente la instancia anterior o libera el puerto antes de volver a ejecutar el iniciador.
+
+En esta computadora, las direcciones locales son:
+
+- Bienvenida y animación: `http://localhost:5500/`
+- Encuesta: `http://localhost:5500/encuesta`
+- Administración: `http://localhost:5500/admin-sesion`
 
 ## Archivos principales
 

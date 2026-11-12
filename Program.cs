@@ -5,10 +5,14 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
 using Microsoft.Extensions.FileProviders;
 
 class Program
 {
+    private const int PuertoServidor = 5500;
+
     private sealed class ActiveTabSession
     {
         public string ResponseId { get; init; } = "";
@@ -136,6 +140,14 @@ class Program
     [STAThread]
     static void Main(string[] args)
     {
+        if (!PuertoDisponible(PuertoServidor))
+        {
+            Console.Error.WriteLine($"ERROR: El puerto {PuertoServidor} ya está ocupado. Efigie no se inició.");
+            Console.Error.WriteLine("Cierra normalmente la aplicación que usa ese puerto o detén la instancia anterior de Efigie.");
+            Environment.ExitCode = 1;
+            return;
+        }
+
         string rhinoSystemDir = @"C:\Program Files\Rhino 8\System";
         string rhinoNetCoreDir = Path.Combine(rhinoSystemDir, "netcore");
 
@@ -155,6 +167,20 @@ class Program
         IniciarServidor(args);
     }
 
+    private static bool PuertoDisponible(int puerto)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Any, puerto);
+            listener.Start();
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
 [MethodImpl(MethodImplOptions.NoInlining)]
     static void IniciarServidor(string[] args)
     {
@@ -172,7 +198,7 @@ class Program
             Args = args,
             ContentRootPath = dirActual
         });
-        builder.WebHost.UseUrls("http://0.0.0.0:5500");
+        builder.WebHost.UseUrls($"http://0.0.0.0:{PuertoServidor}");
         var app = builder.Build();
 
         string rutaCsv = Path.Combine(dirActual, "respuestas_app.csv");
