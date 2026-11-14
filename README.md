@@ -10,9 +10,11 @@ Abre PowerShell en la carpeta del proyecto y ejecuta:
 .\iniciar.ps1
 ```
 
-El iniciador ejecuta `dotnet run`, espera a que el servidor esté disponible en el puerto `5500`, inicia el Quick Tunnel de Cloudflare y actualiza el destino del QR permanente en `C:\Users\<usuario>\QR-REDIRECT-EFIGIE`. Luego crea y sube un commit a `main` en ese repositorio; necesitas tener esa copia local y permisos de `git push` configurados. La URL del túnel también se muestra en la terminal. Los Quick Tunnels son temporales y su dirección puede cambiar cada vez que se inicia el script.
+El iniciador ejecuta `dotnet run --no-restore` para evitar restaurar paquetes por Internet en cada arranque, espera a que el servidor esté disponible en el puerto `5500`, inicia el Quick Tunnel de Cloudflare y publica la URL del túnel en `destino.txt` dentro de `C:\Users\<usuario>\QR-REDIRECT-EFIGIE`. El túnel usa HTTP/2 sobre TCP para evitar redes que bloquean QUIC/UDP. La red debe permitir conexiones salientes al puerto `7844`. Luego crea y sube un commit a `main` en ese repositorio; necesitas tener esa copia local y permisos de `git push` configurados. El redirector de Cloudflare Workers consulta ese archivo en cada acceso y redirige al túnel activo. La URL del túnel también se muestra en la terminal. Los Quick Tunnels son temporales y su dirección puede cambiar cada vez que se inicia el script.
 
-**Enlace estático del QR:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/). Usa esta dirección para el QR; el iniciador actualiza su destino con la URL del túnel activo. El enlace permanece igual mientras el sitio de GitHub Pages siga publicado en esa dirección.
+**Enlace estático del QR:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/). Usa esta dirección para el QR; la página redirige al Worker estable y este consulta el túnel activo. El enlace permanece igual mientras el sitio de GitHub Pages siga publicado en esa dirección.
+
+Antes del primer uso, despliega el Worker gratuito `figie-qr-redirect.jose-sicardi-r2.workers.dev` con el código de `worker.js` en la copia local de `QR-REDIRECT-EFIGIE`. El script publica los archivos del redirector y el destino del túnel en ese repositorio; necesitas permisos para hacer `git push` a `main`.
 
 Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo. Si el puerto `5500` ya está ocupado, cierra normalmente la instancia anterior o libera el puerto antes de volver a ejecutar el iniciador.
 
@@ -20,7 +22,10 @@ Direcciones locales:
 
 - Bienvenida y animación: `http://localhost:5500/`
 - Encuesta: `http://localhost:5500/encuesta`
+- Pantalla grande Pantuno: `http://localhost:5500/pantuno`
 - Administración: `http://localhost:5500/admin-sesion`
+
+En la encuesta, escribir **pantuno** como nombre y pulsar **Siguiente** también abre esa pantalla. Pantuno muestra la efigie más reciente, recorre en columnas las últimas 36 efigies y actualiza la galería cuando se generan nuevas. El pequeño control con el QR alterna la efigie destacada y el código QR local `qr.svg`; el control contiguo activa o desactiva pantalla completa.
 
 ## Requisitos
 
@@ -57,6 +62,7 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 - `GeneradorEfigie.cs`: generación de las efigies SVG a partir de las respuestas.
 - `descargar-efigies.ps1`: exportación local de una lámina SVG con 30 efigies.
 - `index.html`: encuesta.
+- `pantuno.html`: pantalla grande con galería animada y acceso al QR de la actividad.
 - `pre-ronda-1.html`: elección unánime del representante al comienzo de cada ronda.
 - `ronda-en-curso.html`: etapa de memoria de la ronda 1.
 - `ronda-1-adivinar.html`: selección de las efigies de los compañeros.
@@ -80,7 +86,7 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 5. **Leaderboard de la Ronda 1:** se muestran los resultados y puntajes de los equipos. Cada participante confirma cuándo está listo para continuar; administración también puede forzar el avance.
 6. **Elección del representante de la Ronda 2:** el equipo vuelve a elegir por unanimidad quién coordinará esta ronda.
 7. **Ronda 2 — interpretar las capas:** cada integrante identifica las seis capas de la efigie desde su propio dispositivo. El representante controla el cambio de pregunta; puede avanzar cuando los integrantes reales del equipo coinciden en la respuesta. También puede volver a la pregunta anterior sin esperar consenso. Si solicita una pista, esta aparece en un dispositivo real de otro integrante y la pregunta vale la mitad de puntos. Cada acierto suma 100 puntos, o 50 si se usó la pista.
-8. **Leaderboard de la Ronda 2:** se presentan los puntajes. Al estar todos listos, comienza automáticamente la Ronda 3; administración puede forzar el avance.
+8. **Leaderboard de la Ronda 2:** se presentan los puntajes. Cuando todos confirman que están listos, o administración fuerza el avance, todos pasan a la pantalla de preronda de la Ronda 3.
 9. **Ronda 3 — encontrar personas:** los tres integrantes juegan simultáneamente desde sus dispositivos, sin representante. Cada uno resuelve tres consignas buscando participantes que coincidan con características de la encuesta (año de nacimiento, facultad, etapa o rol, estación favorita, forma de trabajo, formato de historia o rol grupal). Las opciones muestran a todos los integrantes de la sala, incluidos los simulados; las consignas se generan a partir de respuestas existentes de participantes reales y priorizan personas de otros equipos. La misma persona puede servir para más de una consigna. Al completar las tres, aparece «Enviar» y se asignan puntos por orden global de finalización: 250, 200 y 150 a los tres primeros; desde el cuarto lugar, 50 puntos, restando 5 por cada posición posterior hasta llegar a cero. Solo los jugadores reales envían desafíos y suman puntos; cada puntaje individual se agrega al total de su equipo.
 10. **Leaderboard final:** se actualiza a medida que terminan los jugadores y muestra el acumulado de las tres rondas. Combina el puntaje de la Ronda 1, el promedio por equipo de la Ronda 2 y la suma de los puntos individuales reales de la Ronda 3. Al completar el desafío todos los participantes, la sesión pasa a resultados finales.
 
@@ -89,6 +95,21 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 El panel de administración está en `/admin-sesion`. Permite observar el lobby, expulsar participantes antes de iniciar, comenzar o simular una sesión, inspeccionar etapas y controlar avances. Las vistas de prueba con `adminPreview=1` no alteran la etapa compartida ni los puntajes reales. «Forzar retroceso» vuelve a la etapa anterior; «Kill all active sessions» devuelve los dispositivos activos a la pantalla de bienvenida anterior a la encuesta.
 
 Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo propio y actualizan los puntajes en tiempo real. Los temporizadores del panel son orientativos; el avance entre etapas depende de las reglas de cada ronda y administración puede forzarlo.
+
+### Experiencia guiada por audio
+
+Los archivos de audio se sirven desde la carpeta del proyecto y se reproducen en la computadora que tiene abierto `/admin-sesion`; conectá esa computadora al sistema de sonido del espacio. Un colaborador presenta la bienvenida y explica el QR en persona. Cuando termina, administración pulsa **Iniciar experiencia** y comienza Audio 2. El control de audio permite reproducir o pausar y ajustar el volumen; al pausar, también se detienen los temporizadores que dependen de esa pista. El volumen queda guardado en el navegador de administración.
+
+Los archivos actuales `audio 2.ogg` a `audio 9.ogg` son borradores de referencia y serán reemplazados por las grabaciones correctas.
+
+El orden y los avances son:
+
+1. Audio 2 comienza al iniciar la experiencia después de la bienvenida presencial. La selección de representantes y el paso a memoria siguen bajo control de administración. No se reproducen pistas de bienvenida ni de explicación del QR; Pantuno conserva su control visual para mostrar el código QR.
+2. Al terminar Audio 3 empieza una espera de 30 segundos y luego comienza Audio 4. El límite de dos minutos de la adivinanza empieza al comenzar Audio 4; administración puede agregar 20 segundos. Al finalizar el tiempo se pasa al leaderboard de la Ronda 1.
+3. Administración inicia la elección de representantes de la Ronda 2 y luego Audio 5. Al avanzar, comienza Audio 6; la identificación queda bloqueada hasta que termina. Después hay una espera de 2 minutos y 30 segundos antes del leaderboard de la Ronda 2.
+4. Al pasar del leaderboard de la Ronda 2, todos llegan a la pantalla de preronda de la Ronda 3 y comienza Audio 7. Esa pantalla espera el final de la pista; entonces se abre el desafío y su límite de 10 minutos. Audio 8 se reproduce al cumplirse 8 minutos si el desafío sigue activo; Audio 9 comienza cuando todos terminan o al vencer el límite.
+
+Si se recarga el panel mientras hay una pista activa, el servidor la pausa para evitar que el audio y los temporizadores queden desincronizados. El operador puede reanudarla desde el control de audio.
 
 El estado de la sesión y su etapa viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
 

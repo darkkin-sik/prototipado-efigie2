@@ -33,6 +33,13 @@
         .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding-top: 30px; }
         .contadores-acciones { min-height: 1.4em; margin: 6px 0 0; text-align: center; color: var(--muted); font-size: 0.88rem; }
         .temporizador-guia { min-height: 1.5em; margin: 8px 0 0; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .controlador-audio { margin: 0 0 22px; padding: 14px; border: 1px solid var(--line); background: #fff; }
+        .controlador-audio h2 { margin: 0 0 10px; text-align: center; font-size: 1.05rem; }
+        .controles-audio { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; }
+        .controles-audio label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+        .controles-audio input { width: 120px; accent-color: var(--green-dark); }
+        .estado-audio { min-height: 1.4em; margin: 9px 0 0; text-align: center; color: var(--muted); font-size: .9rem; }
+        .ayuda-audio { margin: 5px 0 0; text-align: center; color: var(--muted); font-size: .8rem; }
         .accion { min-height: 48px; padding: 11px 17px; border: 0; border-radius: 4px; background: var(--green); color: #101a15; font: inherit; font-weight: 600; cursor: pointer; }
         a.accion { display: grid; place-items: center; text-align: center; text-decoration: none; }
         .accion-volver { background: #dcebe2; }
@@ -58,10 +65,22 @@
             <h1>Administración de sesión</h1>
             <p class="estado" id="estadoSesion" aria-live="polite">Esperando participantes... 0/15</p>
         </header>
+        <section class="controlador-audio" aria-label="Control de audio">
+            <h2>Control de audio</h2>
+            <audio id="audioSesion" preload="auto"></audio>
+            <div class="controles-audio">
+                <button type="button" class="accion" id="controlAudio" disabled>Reproducir / Pausar</button>
+                <label for="volumenAudio">Volumen
+                    <input type="range" id="volumenAudio" min="0" max="100" value="80">
+                </label>
+            </div>
+            <p class="estado-audio" id="estadoAudio" aria-live="polite">Audio 2 comienza al iniciar la experiencia, después de la bienvenida presencial.</p>
+            <p class="ayuda-audio">La explicación del QR es presencial; Pantuno conserva el control para mostrarlo.</p>
+        </section>
         <div class="equipos" id="equipos" aria-label="Equipos de la pre-ronda" hidden></div>
         <footer class="acciones">
             <button type="button" class="accion" id="simular">Simular ronda</button>
-            <button type="button" class="accion" id="comenzar" disabled>Comenzar ronda</button>
+            <button type="button" class="accion" id="comenzar" disabled>Iniciar experiencia</button>
             <button type="button" class="accion" id="forzarListo" hidden>Avanzar a memoria</button>
             <button type="button" class="accion" id="agregarTiempo" hidden>Agregar 20 seg</button>
             <button type="button" class="accion" id="saltarTiempo" hidden>Saltar tiempo</button>
@@ -92,6 +111,10 @@
         const listaEquipos = document.getElementById('equipos');
         const estado = document.getElementById('estadoSesion');
         const temporizadorGuia = document.getElementById('temporizadorGuia');
+        const audioSesion = document.getElementById('audioSesion');
+        const botonControlAudio = document.getElementById('controlAudio');
+        const volumenAudio = document.getElementById('volumenAudio');
+        const estadoAudio = document.getElementById('estadoAudio');
         const mensaje = document.getElementById('mensaje');
         const botonSimular = document.getElementById('simular');
         const botonComenzar = document.getElementById('comenzar');
@@ -112,9 +135,26 @@
         let firmaParticipantesPrueba = '';
         let etapaTemporizadorGuia = '';
         let finTemporizadorGuia = 0;
+        let segundosServidorGuia = 0;
+        let ultimaVersionCue = null;
+        let pistaAudioActual = '';
+        let sincronizandoAudio = false;
+        let iniciandoExperiencia = false;
+        const pistasAudio = {
+            audio2: '/audio%202.ogg',
+            audio3: '/audio%203.ogg',
+            audio4: '/audio%204.ogg',
+            audio5: '/audio%205.ogg',
+            audio6: '/audio%206.ogg',
+            audio7: '/audio%207.ogg',
+            audio8: '/audio%208.ogg',
+            audio9: '/audio%209.ogg'
+        };
         const duracionesGuia = {
             memoria: 30,
             adivinanza: 120,
+            'ronda-2-identificacion': 150,
+            'ronda-3': 600
         };
         const etapasPrueba = [
             { clave: 'encuesta', nombre: 'Encuesta', ruta: () => '/encuesta?nueva=1' },
@@ -128,6 +168,7 @@
             { clave: 'ronda-2-equipo', nombre: 'Ronda 2 · Efigies del equipo', ruta: id => `/ronda-2-equipo?id=${encodeURIComponent(id)}&adminPreview=1&consulta=1` },
             { clave: 'ronda-2', nombre: 'Ronda 2 · Identificación', ruta: id => `/ronda-2?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-2-resultados', nombre: 'Ronda 2 · Resultados', ruta: id => `/ronda-2-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` },
+            { clave: 'ronda-3-preronda', nombre: 'Ronda 3 · Introducción', ruta: id => `/ronda-3-preronda?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-3', nombre: 'Ronda 3 · Desafío', ruta: id => `/ronda-3?id=${encodeURIComponent(id)}&adminPreview=1` },
             { clave: 'ronda-3-resultados', nombre: 'Ronda 3 · Resultados finales', ruta: id => `/ronda-3-leaderboard?id=${encodeURIComponent(id)}&adminPreview=1` }
         ];
@@ -192,20 +233,206 @@
             }
         }
 
-        function actualizarTemporizadorGuia(etapa, segundosServidor = 0) {
+        function nombrePistaAudio(pista) {
+            return pista ? `Audio ${pista.replace('audio', '')}` : '';
+        }
+
+        async function enviarControlAudio(accion, pista = '', version = 0) {
+            const respuesta = await fetch('/api/admin/audio/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accion, pista, version })
+            });
+            if (!respuesta.ok && respuesta.status !== 204)
+                throw new Error('No se pudo actualizar el control de audio.');
+            return respuesta;
+        }
+
+        function actualizarControlesAudio() {
+            botonControlAudio.disabled = !pistaAudioActual;
+            botonControlAudio.textContent = audioSesion.paused ? 'Reproducir audio' : 'Pausar audio';
+            estadoAudio.textContent = pistaAudioActual
+                ? `${audioSesion.paused ? 'Pausado' : 'Reproduciendo'}: ${nombrePistaAudio(pistaAudioActual)}`
+                : 'No hay un audio en reproducción.';
+        }
+
+        async function iniciarPistaAudio(pista, version = 0) {
+            if (!pistasAudio[pista]) throw new Error('No se encontró el archivo de audio solicitado.');
+            await enviarControlAudio('iniciar', pista, version);
+            pistaAudioActual = pista;
+            audioSesion.src = pistasAudio[pista];
+            audioSesion.load();
+            audioSesion.volume = Number(volumenAudio.value) / 100;
+            actualizarControlesAudio();
+            try {
+                await audioSesion.play();
+            } catch (error) {
+                try {
+                    await enviarControlAudio('pausar', pista);
+                } catch (errorPausa) {
+                    console.error(errorPausa);
+                }
+                actualizarControlesAudio();
+                throw error;
+            }
+            actualizarControlesAudio();
+        }
+
+        async function sincronizarAudio() {
+            if (sincronizandoAudio || iniciandoExperiencia) return;
+            sincronizandoAudio = true;
+            try {
+                const respuesta = await fetch('/api/admin/audio/estado', { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error('No se pudo consultar el estado del audio.');
+                const estadoServidor = await respuesta.json();
+                if (ultimaVersionCue === null) {
+                    ultimaVersionCue = estadoServidor.cueVersion;
+                    if (estadoServidor.audioActual && !pistaAudioActual && pistasAudio[estadoServidor.audioActual]) {
+                        pistaAudioActual = estadoServidor.audioActual;
+                        audioSesion.src = pistasAudio[pistaAudioActual];
+                        audioSesion.load();
+                        audioSesion.pause();
+                        if (!estadoServidor.pausado) {
+                            await enviarControlAudio('pausar', pistaAudioActual);
+                            estadoServidor.pausado = true;
+                        }
+                    }
+                } else if (estadoServidor.cueVersion > ultimaVersionCue) {
+                    if (estadoServidor.cueTrack) {
+                        if (estadoServidor.audioActual !== estadoServidor.cueTrack ||
+                            pistaAudioActual !== estadoServidor.cueTrack ||
+                            audioSesion.paused)
+                            await iniciarPistaAudio(estadoServidor.cueTrack, estadoServidor.cueVersion);
+                        ultimaVersionCue = estadoServidor.cueVersion;
+                    } else {
+                        audioSesion.pause();
+                        pistaAudioActual = '';
+                        ultimaVersionCue = estadoServidor.cueVersion;
+                    }
+                }
+                if (estadoServidor.audioActual === pistaAudioActual && pistaAudioActual) {
+                    if (estadoServidor.pausado && !audioSesion.paused) audioSesion.pause();
+                    else if (!estadoServidor.pausado && audioSesion.paused && !audioSesion.ended) {
+                        try {
+                            await audioSesion.play();
+                        } catch (error) {
+                            await enviarControlAudio('pausar', pistaAudioActual);
+                            throw error;
+                        }
+                    }
+                }
+                actualizarControlesAudio();
+            } catch (error) {
+                estadoAudio.textContent = error.message || 'No se pudo sincronizar el audio.';
+                console.error(error);
+            } finally {
+                sincronizandoAudio = false;
+            }
+        }
+
+        async function iniciarExperiencia() {
+            if (!window.confirm('¿Iniciar la experiencia después de la bienvenida presencial?')) return;
+            botonComenzar.disabled = true;
+            iniciandoExperiencia = true;
+            let sesionIniciada = false;
+            try {
+                const respuesta = await fetch('/api/admin/sesion/iniciar', { method: 'POST' });
+                if (!respuesta.ok) throw new Error('No se pudo comenzar. Verificá que haya grupos completos de tres participantes.');
+                sesionIniciada = true;
+                const estadoRespuesta = await fetch('/api/admin/audio/estado', { cache: 'no-store' });
+                if (!estadoRespuesta.ok) throw new Error('La experiencia comenzó, pero no se pudo consultar la pista inicial.');
+                const estadoAudioServidor = await estadoRespuesta.json();
+                ultimaVersionCue = estadoAudioServidor.cueVersion;
+                if (estadoAudioServidor.cueTrack)
+                    await iniciarPistaAudio(estadoAudioServidor.cueTrack, estadoAudioServidor.cueVersion);
+                mensaje.textContent = 'Experiencia iniciada; se está reproduciendo Audio 2.';
+            } catch (error) {
+                mensaje.textContent = error.message || 'No se pudo iniciar la experiencia.';
+                console.error(error);
+                actualizarControlesAudio();
+            } finally {
+                if (sesionIniciada) await cargarEstado();
+                iniciandoExperiencia = false;
+                botonComenzar.disabled = false;
+            }
+        }
+
+        async function alternarAudio() {
+            if (!pistaAudioActual) return;
+            botonControlAudio.disabled = true;
+            try {
+                if (audioSesion.paused) {
+                    await audioSesion.play();
+                    try {
+                        await enviarControlAudio('reanudar', pistaAudioActual);
+                    } catch (error) {
+                        audioSesion.pause();
+                        throw error;
+                    }
+                } else {
+                    await enviarControlAudio('pausar', pistaAudioActual);
+                    audioSesion.pause();
+                }
+                actualizarControlesAudio();
+            } catch (error) {
+                estadoAudio.textContent = error.message || 'No se pudo cambiar la reproducción.';
+                console.error(error);
+            } finally {
+                actualizarControlesAudio();
+            }
+        }
+
+        audioSesion.addEventListener('ended', async () => {
+            const pistaTerminada = pistaAudioActual;
+            pistaAudioActual = '';
+            try {
+                await enviarControlAudio('terminar', pistaTerminada);
+                await sincronizarAudio();
+            } catch (error) {
+                estadoAudio.textContent = error.message || 'No se pudo completar la pista de audio.';
+                console.error(error);
+            }
+            actualizarControlesAudio();
+        });
+
+        botonControlAudio.addEventListener('click', alternarAudio);
+        audioSesion.addEventListener('play', actualizarControlesAudio);
+        audioSesion.addEventListener('pause', actualizarControlesAudio);
+        volumenAudio.value = localStorage.getItem('efigie_volumen_audio') || '80';
+        audioSesion.volume = Number(volumenAudio.value) / 100;
+        volumenAudio.addEventListener('input', () => {
+            audioSesion.volume = Number(volumenAudio.value) / 100;
+            localStorage.setItem('efigie_volumen_audio', volumenAudio.value);
+        });
+
+        function actualizarTemporizadorGuia(etapa, segundosServidor = null) {
             const duracion = duracionesGuia[etapa];
             temporizadorGuia.hidden = !duracion;
             if (!duracion) {
                 etapaTemporizadorGuia = '';
                 finTemporizadorGuia = 0;
+                segundosServidorGuia = 0;
                 return;
             }
             if (etapa !== etapaTemporizadorGuia) {
                 etapaTemporizadorGuia = etapa;
-                finTemporizadorGuia = Date.now() + duracion * 1000;
+                finTemporizadorGuia = 0;
+                segundosServidorGuia = 0;
             }
-            if (segundosServidor > 0 && ['memoria', 'adivinanza'].includes(etapa))
-                finTemporizadorGuia = Date.now() + segundosServidor * 1000;
+            if (segundosServidor !== null) {
+                segundosServidorGuia = Number(segundosServidor) || 0;
+                if (segundosServidorGuia > 0)
+                    finTemporizadorGuia = Date.now() + segundosServidorGuia * 1000;
+            }
+            if (segundosServidorGuia === 0 && ['memoria', 'adivinanza', 'ronda-2-identificacion'].includes(etapa)) {
+                finTemporizadorGuia = 0;
+                temporizadorGuia.textContent = etapa === 'memoria'
+                    ? 'El temporizador comienza al terminar Audio 3.'
+                    : etapa === 'adivinanza'
+                        ? 'El temporizador comienza al iniciar Audio 4.'
+                        : 'El temporizador comienza al terminar Audio 6.';
+                return;
+            }
             const segundos = Math.max(0, Math.ceil((finTemporizadorGuia - Date.now()) / 1000));
             const tiempo = `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
             temporizadorGuia.textContent = `Tiempo orientativo: ${tiempo}${segundos === 0 ? ' · Podés avanzar' : ''}`;
@@ -227,6 +454,7 @@
                     'ronda-2-representante': 'Ronda 2 · Representantes',
                     'ronda-2-identificacion': 'Ronda 2 · Identificación',
                     'ronda-2-leaderboard': 'Ronda 2 · Resultados',
+                    'ronda-3-preronda': 'Ronda 3 · Introducción',
                     'ronda-3': 'Ronda 3 · Desafío',
                     'ronda-3-leaderboard': 'Resultados finales'
                 };
@@ -235,14 +463,19 @@
                     : preRondaActiva
                         ? 'Pre-ronda 1'
                         : `Esperando participantes... ${sesion.cantidad}/${sesion.capacidad}${cantidadValida ? '' : ' · Se inicia con múltiplos de 3'}`;
-                actualizarTemporizadorGuia(sesion.etapaRondaUno, sesion.segundosRestantesRondaUno);
+                actualizarTemporizadorGuia(
+                    sesion.etapaRondaUno,
+                    sesion.etapaRondaUno === 'ronda-3'
+                        ? sesion.segundosRestantesRondaTres
+                        : sesion.segundosRestantesRondaUno
+                );
                 lista.hidden = participantes.length === 0;
                 listaEquipos.hidden = !preRondaActiva;
                 botonSimular.hidden = rondaIniciada;
                 botonComenzar.hidden = rondaIniciada;
                 botonComenzar.disabled = !cantidadValida;
                 botonForzarListo.hidden = !preRondaActiva || sesion.previewIniciada;
-                botonAgregarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
+                botonAgregarTiempo.hidden = sesion.etapaRondaUno !== 'adivinanza';
                 botonSaltarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
                 botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2-representante', 'ronda-2-identificacion', 'ronda-2-leaderboard', 'ronda-3'].includes(sesion.etapaRondaUno);
@@ -339,15 +572,6 @@
             await cargarEstado();
         }
 
-        async function enviarInicio(ruta, confirmacion) {
-            if (!window.confirm(confirmacion)) return;
-            const respuesta = await fetch(ruta, { method: 'POST' });
-            mensaje.textContent = respuesta.ok
-                ? 'Pre-ronda 1 iniciada.'
-                : 'No se pudo comenzar. Se necesitan entre 3 y 15 participantes, en grupos de tres.';
-            await cargarEstado();
-        }
-
         botonSimular.addEventListener('click', async () => {
             botonSimular.disabled = true;
             const respuesta = await fetch('/api/admin/sesion/simular', { method: 'POST' });
@@ -355,7 +579,7 @@
             await cargarEstado();
         });
 
-        botonComenzar.addEventListener('click', () => enviarInicio('/api/admin/sesion/iniciar', '¿Comenzar la ronda con los participantes actuales? Se requiere un grupo completo por cada tres personas.'));
+        botonComenzar.addEventListener('click', iniciarExperiencia);
 
         botonForzarListo.addEventListener('click', async () => {
             botonForzarListo.disabled = true;
@@ -468,9 +692,12 @@
         cargarEstado();
         const intervalo = setInterval(cargarEstado, 2500);
         const intervaloTemporizador = setInterval(() => actualizarTemporizadorGuia(etapaTemporizadorGuia), 1000);
+        sincronizarAudio();
+        const intervaloAudio = setInterval(sincronizarAudio, 500);
         window.addEventListener('pagehide', () => {
             clearInterval(intervalo);
             clearInterval(intervaloTemporizador);
+            clearInterval(intervaloAudio);
         });
     </script>
 </body>

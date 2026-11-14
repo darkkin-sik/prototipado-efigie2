@@ -81,6 +81,7 @@ class Program
     private sealed record RoundThreeAnswerRequest(string responseId, int indice, string respuesta);
     private sealed record RoundThreeNavigationRequest(string responseId, string accion);
     private sealed record RoundThreeHintRequest(string responseId, int indice);
+    private sealed record AudioControlRequest(string accion, string pista, int version);
 
     private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
     private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesLobby = new(StringComparer.Ordinal);
@@ -117,7 +118,15 @@ class Program
     private static int EtapaRondaUno;
     private static DateTime? InicioEtapaRondaUnoUtc;
     private static int SegundosExtraRondaUno;
-    private static readonly string[] EtapasRondaUno = { "pre-ronda", "memoria", "adivinanza", "leaderboard", "ronda-2-antigua", "ronda-2-representante", "ronda-2-identificacion", "ronda-2-leaderboard", "ronda-3", "ronda-3-leaderboard" };
+    private static DateTime? InicioRondaTresUtc;
+    private static bool AudioRondaDosBloqueada;
+    private static bool AudioOchoProgramado;
+    private static string AudioCueTrack = "";
+    private static int AudioCueVersion;
+    private static string AudioActual = "";
+    private static bool AudioPausado;
+    private static DateTime? AudioPausadoDesdeUtc;
+    private static readonly string[] EtapasRondaUno = { "pre-ronda", "memoria", "adivinanza", "leaderboard", "ronda-3-preronda", "ronda-2-representante", "ronda-2-identificacion", "ronda-2-leaderboard", "ronda-3", "ronda-3-leaderboard" };
     private static readonly RoundThreeQuestion[] PreguntasRondaTres =
     {
         new("anio", "Año de nacimiento", "No dice cuántos años tenés, pero permite calcularlos. Son cuatro números que señalan cuándo empezó tu historia."),
@@ -489,10 +498,12 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/ronda-3-equipo", () => Results.File(Path.Combine(dirActual, "ronda-3.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-2-leaderboard", () => Results.File(Path.Combine(dirActual, "ronda-3-leaderboard.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-3", () => Results.File(Path.Combine(dirActual, "ronda-4.html"), "text/html; charset=utf-8"));
+    app.MapGet("/ronda-3-preronda", () => Results.File(Path.Combine(dirActual, "ronda-3-preronda.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-3-identificacion", () => Results.Redirect("/ronda-2"));
     app.MapGet("/ronda-3-leaderboard", () => Results.File(Path.Combine(dirActual, "ronda-3-final-leaderboard.html"), "text/html; charset=utf-8"));
     app.MapGet("/ronda-4", () => Results.Redirect("/ronda-3"));
     app.MapGet("/espectador", () => Results.File(Path.Combine(dirActual, "espectador.html"), "text/html; charset=utf-8"));
+    app.MapGet("/pantuno", () => Results.File(Path.Combine(dirActual, "pantuno.html"), "text/html; charset=utf-8"));
 
     app.MapGet("/api/espectador/estado", (HttpContext ctx) => {
         string sessionId = ctx.Request.Query["sessionId"].FirstOrDefault() ?? "";
@@ -569,6 +580,8 @@ app.MapGet("/", (HttpContext ctx) => {
         if (!TryObtenerEquipoRonda(responseId, out _, out _)) return Results.NotFound();
         if (!adminPreview && EtapaRondaUno != 6)
             return Results.Conflict(new { error = "La ronda ya no está activa." });
+        if (!adminPreview && AudioRondaDosBloqueada)
+            return Results.Json(new { bloqueado = true });
 
         RoundThreeParticipantState estado = ObtenerEstadoRondaTres(responseId, adminPreview);
         if (!adminPreview || ParticipantesEspectador.ContainsKey(responseId)) InicializarRespuestasBotsRondaTres();
@@ -625,7 +638,8 @@ app.MapGet("/", (HttpContext ctx) => {
                     respuestasPrevias = estado.Answers.Take(indice).ToArray(),
                     respondido = estado.Submitted,
                     puntos = estado.Points,
-                    notas = estado.Notes
+                    notas = estado.Notes,
+                    bloqueado = false
                 });
             }
         }
@@ -639,7 +653,7 @@ app.MapGet("/", (HttpContext ctx) => {
             string.IsNullOrWhiteSpace(solicitud.respuesta) ||
             !OpcionesRondaTres.Contains(solicitud.respuesta, StringComparer.Ordinal))
             return Results.BadRequest();
-        if (!adminPreview && EtapaRondaUno != 6)
+        if (!adminPreview && (EtapaRondaUno != 6 || AudioRondaDosBloqueada))
             return Results.Conflict(new { error = "La ronda ya no está activa." });
         if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out RoundTeam equipo)) return Results.NotFound();
         RoundThreeParticipantState estado = ObtenerEstadoRondaTres(solicitud.responseId, adminPreview);
@@ -670,7 +684,7 @@ app.MapGet("/", (HttpContext ctx) => {
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) ||
             solicitud.indice is < 0 or >= 6)
             return Results.BadRequest();
-        if (!adminPreview && EtapaRondaUno != 6)
+        if (!adminPreview && (EtapaRondaUno != 6 || AudioRondaDosBloqueada))
             return Results.Conflict(new { error = "La ronda ya no está activa." });
         if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out RoundTeam equipo)) return Results.NotFound();
         if (!TryObtenerRepresentante(equipo, out string representanteId, ronda: 2) ||
@@ -728,7 +742,7 @@ app.MapGet("/", (HttpContext ctx) => {
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) ||
             solicitud.accion is not ("anterior" or "siguiente"))
             return Results.BadRequest();
-        if (!adminPreview && EtapaRondaUno != 6) return Results.Conflict();
+        if (!adminPreview && (EtapaRondaUno != 6 || AudioRondaDosBloqueada)) return Results.Conflict();
         if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out RoundTeam equipo)) return Results.NotFound();
         if (!adminPreview &&
             (!TryObtenerRepresentante(equipo, out string representanteId, ronda: 2) || representanteId != solicitud.responseId))
@@ -849,19 +863,46 @@ app.MapGet("/", (HttpContext ctx) => {
                 .Where(participante => !participante.EsBot)
                 .All(participante => ParticipantesListosRondaCuatro.ContainsKey(participante.ResponseId));
             if (todosListos)
+                IniciarPrerondaRondaTres();
+            return Results.Json(new
             {
-                EtapaRondaUno = 8;
-                InicioEtapaRondaUnoUtc = null;
-                SegundosExtraRondaUno = 0;
-                InicializarRondaCuatro();
-            }
-            return Results.Json(new { estado = "ok", listo = true, rondaLista = todosListos });
+                estado = "ok",
+                listo = true,
+                rondaLista = todosListos,
+                etapaRondaUno = ObtenerEtapaRondaUno()
+            });
+        }
+    });
+
+    app.MapGet("/api/ronda-3/preronda", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        if (!TryObtenerEquipoRonda(responseId, out int numeroGrupo, out RoundTeam equipo))
+            return Results.NotFound();
+        return Results.Json(new
+        {
+            etapaRondaUno = ObtenerEtapaRondaUno(),
+            equipo = numeroGrupo,
+            color = equipo.Color,
+            colorTexto = equipo.TextColor
+        });
+    });
+
+    app.MapGet("/api/ronda-3/tiempo", () => {
+        ProcesarAvancesAutomaticos();
+        lock (CandadoLobby)
+        {
+            return Results.Json(new
+            {
+                etapaRondaUno = ObtenerEtapaRondaUno(),
+                segundosRestantes = ObtenerSegundosRestantesRondaTres()
+            });
         }
     });
 
     app.MapGet("/api/ronda-4/juego", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
+        ProcesarAvancesAutomaticos();
         if (EtapaRondaUno is not (8 or 9)) return Results.Conflict();
         if (!ParticipantesLobby.TryGetValue(responseId, out LobbyParticipant participante) ||
             participante.EsBot)
@@ -888,6 +929,8 @@ app.MapGet("/", (HttpContext ctx) => {
             }).ToArray(),
             puntos = estado.Points,
             posicion = estado.Position,
+            etapaRondaUno = ObtenerEtapaRondaUno(),
+            segundosRestantes = ObtenerSegundosRestantesRondaTres(),
             adminPreview
         });
     });
@@ -898,6 +941,7 @@ app.MapGet("/", (HttpContext ctx) => {
             solicitud.participantIds == null || solicitud.participantIds.Length != 3 ||
             solicitud.participantIds.Any(string.IsNullOrWhiteSpace))
             return Results.BadRequest();
+        ProcesarAvancesAutomaticos();
         if (EtapaRondaUno != 8) return Results.Conflict();
         if (!ParticipantesLobby.TryGetValue(solicitud.responseId, out LobbyParticipant participante) ||
             participante.EsBot)
@@ -935,7 +979,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 .All(item => EstadosRondaCuatro.TryGetValue(item.ResponseId, out var estadoJugador) &&
                     estadoJugador.Submitted);
             if (todosTerminaron)
-                EtapaRondaUno = 9;
+                FinalizarRondaTres();
 
             return Results.Json(new
             {
@@ -951,6 +995,7 @@ app.MapGet("/", (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<RoundFourSubmitRequest>();
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId))
             return Results.BadRequest();
+        ProcesarAvancesAutomaticos();
         if (EtapaRondaUno != 8) return Results.Conflict();
         if (!ParticipantesLobby.TryGetValue(solicitud.responseId, out LobbyParticipant participante) ||
             participante.EsBot)
@@ -974,7 +1019,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 .All(item => EstadosRondaCuatro.TryGetValue(item.ResponseId, out var estadoJugador) &&
                     estadoJugador.Submitted);
             if (todosTerminaron)
-                EtapaRondaUno = 9;
+                FinalizarRondaTres();
 
             return Results.Json(new
             {
@@ -1045,8 +1090,10 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapGet("/api/ronda-2/estado", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
-        if (!adminPreview && ObtenerEtapaRondaUno() != "ronda-2") return Results.Conflict();
+        if (!adminPreview && EtapaRondaUno != 6) return Results.Conflict();
         if (!TryObtenerEquipoRonda(responseId, out _, out _)) return Results.NotFound();
+        if (!adminPreview && AudioRondaDosBloqueada)
+            return Results.Json(new { bloqueado = true });
 
         RoundTwoParticipantState estado = EstadosRondaDos.GetOrAdd(
             ClaveEstadoRondaDos(responseId, adminPreview),
@@ -1070,7 +1117,8 @@ app.MapGet("/", (HttpContext ctx) => {
                         ? Math.Max(0, 30 - (int)Math.Floor((DateTime.UtcNow - desafio.StartedUtc.Value).TotalSeconds))
                         : 30,
                     respondido = desafio.Answered,
-                    desafio.Points
+                    desafio.Points,
+                    bloqueado = false
                 })
             });
         }
@@ -1081,7 +1129,7 @@ app.MapGet("/", (HttpContext ctx) => {
         bool adminPreview = ctx.Request.Query["adminPreview"] == "1";
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) || solicitud.indice is < 0 or > 1)
             return Results.BadRequest();
-        if (!adminPreview && ObtenerEtapaRondaUno() != "ronda-2") return Results.Conflict();
+        if (!adminPreview && (EtapaRondaUno != 6 || AudioRondaDosBloqueada)) return Results.Conflict();
         if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
         if (!EstadosRondaDos.TryGetValue(ClaveEstadoRondaDos(solicitud.responseId, adminPreview), out RoundTwoParticipantState estado))
             return Results.Conflict();
@@ -1104,7 +1152,7 @@ app.MapGet("/", (HttpContext ctx) => {
         if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId) ||
             solicitud.indice is < 0 or > 1)
             return Results.BadRequest();
-        if (!adminPreview && ObtenerEtapaRondaUno() != "ronda-2") return Results.Conflict();
+        if (!adminPreview && (EtapaRondaUno != 6 || AudioRondaDosBloqueada)) return Results.Conflict();
         if (!TryObtenerEquipoRonda(solicitud.responseId, out _, out _)) return Results.NotFound();
         if (!EstadosRondaDos.TryGetValue(ClaveEstadoRondaDos(solicitud.responseId, adminPreview), out RoundTwoParticipantState estado))
             return Results.Conflict();
@@ -1225,6 +1273,7 @@ app.MapGet("/", (HttpContext ctx) => {
             "ronda-2-representante" => $"/ronda-2-representante?ronda=2&id={Uri.EscapeDataString(solicitud.responseId)}&adminPreview=1",
             "ronda-2-equipo" => $"/ronda-2-equipo?id={Uri.EscapeDataString(solicitud.responseId)}&adminPreview=1&consulta=1",
             "ronda-2-resultados" => $"/ronda-2-leaderboard?id={Uri.EscapeDataString(solicitud.responseId)}&adminPreview=1",
+            "ronda-3-preronda" => $"/ronda-3-preronda?id={Uri.EscapeDataString(solicitud.responseId)}&adminPreview=1",
             "ronda-3" => $"/ronda-3?id={Uri.EscapeDataString(solicitud.responseId)}&adminPreview=1",
             _ => null
         };
@@ -1256,7 +1305,82 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.NoContent();
     });
 
+    app.MapGet("/api/admin/audio/estado", () => {
+        ProcesarAvancesAutomaticos();
+        lock (CandadoLobby)
+        {
+            return Results.Json(new
+            {
+                cueTrack = AudioCueTrack,
+                cueVersion = AudioCueVersion,
+                audioActual = AudioActual,
+                pausado = AudioPausado,
+                rondaIniciada = RondaIniciada,
+                audioRondaDosBloqueada = AudioRondaDosBloqueada,
+                segundosRestantesRondaUno = ObtenerSegundosRestantesRondaUno(),
+                segundosRestantesRondaTres = ObtenerSegundosRestantesRondaTres()
+            });
+        }
+    });
+
+    app.MapPost("/api/admin/audio/control", async (HttpContext ctx) => {
+        AudioControlRequest solicitud = await ctx.Request.ReadFromJsonAsync<AudioControlRequest>();
+        if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.accion))
+            return Results.BadRequest();
+
+        lock (CandadoLobby)
+        {
+            if (solicitud.accion == "iniciar")
+            {
+                if (!EsPistaAudioValida(solicitud.pista))
+                    return Results.BadRequest();
+                if (solicitud.version > 0 &&
+                    (solicitud.version != AudioCueVersion || solicitud.pista != AudioCueTrack))
+                    return Results.Conflict();
+                if (!PuedeIniciarPistaAudio(solicitud.pista))
+                    return Results.Conflict();
+
+                AudioActual = solicitud.pista;
+                AudioPausado = false;
+                AudioPausadoDesdeUtc = null;
+                if (AudioActual == "audio4" && EtapaRondaUno == 2)
+                    InicioEtapaRondaUnoUtc ??= DateTime.UtcNow;
+                return Results.Json(new { estado = "ok", audioActual = AudioActual });
+            }
+
+            if (solicitud.accion == "pausar")
+            {
+                if (AudioActual.Length == 0 || AudioPausado)
+                    return Results.Conflict();
+                AudioPausado = true;
+                AudioPausadoDesdeUtc = DateTime.UtcNow;
+                return Results.Json(new { estado = "ok", pausado = true });
+            }
+
+            if (solicitud.accion == "reanudar")
+            {
+                if (!AudioPausado || !AudioPausadoDesdeUtc.HasValue)
+                    return Results.Conflict();
+                AjustarTemporizadoresPorPausaAudio(DateTime.UtcNow - AudioPausadoDesdeUtc.Value);
+                AudioPausado = false;
+                AudioPausadoDesdeUtc = null;
+                return Results.Json(new { estado = "ok", pausado = false });
+            }
+
+            if (solicitud.accion == "terminar")
+            {
+                if (AudioActual != solicitud.pista)
+                    return Results.NoContent();
+                CompletarPistaAudio(AudioActual);
+                return Results.Json(new { estado = "ok", audioActual = AudioActual });
+            }
+
+            return Results.BadRequest();
+        }
+    });
+
     app.MapGet("/api/admin/sesion", () => {
+        ProcesarAvancesAutomaticos();
         LimpiarParticipantesLobby();
         _ = ObtenerEtapaRondaUno();
         var participantes = ParticipantesLobby.Values
@@ -1321,6 +1445,7 @@ app.MapGet("/", (HttpContext ctx) => {
             previewIniciada = PreviewRondaIniciada,
             etapaRondaUno = ObtenerEtapaRondaUno(),
             segundosRestantesRondaUno = ObtenerSegundosRestantesRondaUno(),
+            segundosRestantesRondaTres = ObtenerSegundosRestantesRondaTres(),
             totalParticipantesReales = participantesReales.Length,
             listosEtapa,
             respondieronEtapa,
@@ -1400,12 +1525,6 @@ app.MapGet("/", (HttpContext ctx) => {
                     votosRepresentante[idBot] = solicitud.representanteId;
             bool asignado = TryObtenerRepresentante(equipo, out string representanteId, ronda);
             bool todosAsignados = ronda == 2 && TodosLosRepresentantesRondaDosAsignados();
-            if (todosAsignados)
-            {
-                EtapaRondaUno = 6;
-                InicializarEstadosRondaTres();
-                InicializarRespuestasBotsRondaTres();
-            }
             return Results.Json(new
             {
                 estado = "ok",
@@ -1625,7 +1744,7 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/admin/ronda-1/agregar-tiempo", () => {
         lock (CandadoLobby)
         {
-            if (EtapaRondaUno is not (1 or 2)) return Results.Conflict();
+            if (EtapaRondaUno != 2) return Results.Conflict();
             SegundosExtraRondaUno += 20;
             return Results.Json(new { estado = "ok", segundosRestantes = ObtenerSegundosRestantesRondaUno() });
         }
@@ -1637,8 +1756,9 @@ app.MapGet("/", (HttpContext ctx) => {
             if (EtapaRondaUno == 1)
             {
                 EtapaRondaUno = 2;
-                InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+                InicioEtapaRondaUnoUtc = null;
                 SegundosExtraRondaUno = 0;
+                EncolarAudio("audio4");
                 return Results.Json(new { estado = "ok", etapaRondaUno = "adivinanza" });
             }
             if (EtapaRondaUno == 2)
@@ -1647,6 +1767,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 EtapaRondaUno = 3;
                 InicioEtapaRondaUnoUtc = null;
                 SegundosExtraRondaUno = 0;
+                CancelarAudioActual();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "leaderboard" });
             }
             if (EtapaRondaUno == 5)
@@ -1656,6 +1777,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 SegundosExtraRondaUno = 0;
                 InicializarEstadosRondaTres();
                 InicializarRespuestasBotsRondaTres();
+                EncolarAudio("audio6");
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-2-identificacion" });
             }
             if (EtapaRondaUno == 6)
@@ -1664,6 +1786,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 EtapaRondaUno = 7;
                 InicioEtapaRondaUnoUtc = null;
                 SegundosExtraRondaUno = 0;
+                CancelarAudioActual();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-2-leaderboard" });
             }
             return Results.Conflict();
@@ -1678,6 +1801,7 @@ app.MapGet("/", (HttpContext ctx) => {
             EtapaRondaUno = 3;
             InicioEtapaRondaUnoUtc = null;
             SegundosExtraRondaUno = 0;
+            CancelarAudioActual();
             return Results.Json(new { estado = "ok", etapaRondaUno = "leaderboard" });
         }
     });
@@ -1690,9 +1814,10 @@ app.MapGet("/", (HttpContext ctx) => {
                 foreach (RoundTeam equipo in EquiposPreRonda)
                     foreach (string id in equipo.ParticipantIds)
                         ParticipantesListosSiguienteRonda[id] = true;
-                InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+                InicioEtapaRondaUnoUtc = null;
                 SegundosExtraRondaUno = 0;
                 IniciarEleccionRepresentanteRondaDos();
+                EncolarAudio("audio5");
                 return Results.Json(new { estado = "ok", etapaRondaUno = ObtenerEtapaRondaUno() });
             }
             if (EtapaRondaUno == 5)
@@ -1702,6 +1827,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 SegundosExtraRondaUno = 0;
                 InicializarEstadosRondaTres();
                 InicializarRespuestasBotsRondaTres();
+                EncolarAudio("audio6");
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-2-identificacion" });
             }
             if (EtapaRondaUno == 6)
@@ -1710,26 +1836,19 @@ app.MapGet("/", (HttpContext ctx) => {
                 EtapaRondaUno = 7;
                 InicioEtapaRondaUnoUtc = null;
                 SegundosExtraRondaUno = 0;
+                CancelarAudioActual();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-2-leaderboard" });
             }
             if (EtapaRondaUno == 7)
             {
                 foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values))
                     ParticipantesListosRondaCuatro[participante.ResponseId] = true;
-                EtapaRondaUno = 8;
-                InicioEtapaRondaUnoUtc = null;
-                SegundosExtraRondaUno = 0;
-                InicializarRondaCuatro();
-                return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3" });
+                IniciarPrerondaRondaTres();
+                return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-preronda" });
             }
             if (EtapaRondaUno == 8)
             {
-                EtapaRondaUno = 9;
-                InicioEtapaRondaUnoUtc = null;
-                SegundosExtraRondaUno = 0;
-                foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => !persona.EsBot))
-                    NavegacionesAdmin[participante.ResponseId] =
-                        $"/ronda-3-leaderboard?id={Uri.EscapeDataString(participante.ResponseId)}";
+                FinalizarRondaTres();
                 return Results.Json(new { estado = "ok", etapaRondaUno = "ronda-3-leaderboard" });
             }
             return Results.Conflict();
@@ -1742,33 +1861,43 @@ app.MapGet("/", (HttpContext ctx) => {
         {
             if (RondaIniciada && EtapaRondaUno > 0)
             {
-                string rutaAnterior = EtapaRondaUno switch
+                int etapaAnterior = EtapaRondaUno switch
                 {
-                    1 => "/pre-ronda-1?id=",
-                    2 => "/ronda-1-preview?id=",
-                    3 => "/ronda-1-adivinar?id=",
-                    4 => "/ronda-1-leaderboard?id=",
-                    5 => "/ronda-1-leaderboard?id=",
-                    6 => "/ronda-2-representante?ronda=2&id=",
-                    7 => "/ronda-2?id=",
-                    8 => "/ronda-2-leaderboard?id=",
-                    9 => "/ronda-3?id=",
+                    4 => 7,
+                    5 => 3,
+                    8 => 4,
+                    _ => EtapaRondaUno - 1
+                };
+                string rutaAnterior = etapaAnterior switch
+                {
+                    0 => "/pre-ronda-1?id=",
+                    1 => "/ronda-1-preview?id=",
+                    2 => "/ronda-1-adivinar?id=",
+                    3 => "/ronda-1-leaderboard?id=",
+                    4 => "/ronda-3-preronda?id=",
+                    5 => "/ronda-2-representante?ronda=2&id=",
+                    6 => "/ronda-2?id=",
+                    7 => "/ronda-2-leaderboard?id=",
+                    8 => "/ronda-3?id=",
                     _ => null
                 };
                 if (rutaAnterior == null)
                     return Results.Conflict();
 
-                int etapaAnterior = EtapaRondaUno == 5 ? 3 : EtapaRondaUno - 1;
                 foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(persona => !persona.EsBot))
                     NavegacionesAdmin[participante.ResponseId] =
                         $"{rutaAnterior}{Uri.EscapeDataString(participante.ResponseId)}";
 
                 EtapaRondaUno = etapaAnterior;
                 PreviewRondaIniciada = etapaAnterior > 0;
-                InicioEtapaRondaUnoUtc = etapaAnterior is 1 or 2 or 5 ? DateTime.UtcNow : null;
+                InicioEtapaRondaUnoUtc = null;
+                InicioRondaTresUtc = null;
                 SegundosExtraRondaUno = 0;
+                CancelarAudioActual();
                 if (etapaAnterior == 8)
                 {
+                    InicioRondaTresUtc = DateTime.UtcNow;
+                    AudioOchoProgramado = false;
                     PuntajesRondaCuatro.Clear();
                     foreach (RoundFourParticipantState estado in EstadosRondaCuatro.Values)
                     {
@@ -1800,6 +1929,20 @@ app.MapGet("/", (HttpContext ctx) => {
                         ProgresoEquipoRondaTres.Clear();
                     PuntajesRondaTres.Clear();
                 }
+                if (etapaAnterior == 1)
+                    EncolarAudio("audio3");
+                else if (etapaAnterior == 2)
+                    EncolarAudio("audio4");
+                else if (etapaAnterior == 5)
+                    EncolarAudio("audio5");
+                else if (etapaAnterior == 6)
+                {
+                    InicializarEstadosRondaTres();
+                    InicializarRespuestasBotsRondaTres();
+                    EncolarAudio("audio6");
+                }
+                else if (etapaAnterior == 4)
+                    EncolarAudio("audio7");
                 return Results.Json(new
                 {
                     estado = "ok",
@@ -1814,7 +1957,9 @@ app.MapGet("/", (HttpContext ctx) => {
                 PreviewRondaIniciada = false;
                 EtapaRondaUno = 0;
                 InicioEtapaRondaUnoUtc = null;
+                InicioRondaTresUtc = null;
                 SegundosExtraRondaUno = 0;
+                RestablecerControlAudio();
                 ParticipantesListos.Clear();
                 ParticipantesListosSiguienteRonda.Clear();
                 ParticipantesListosRondaTres.Clear();
@@ -1836,7 +1981,9 @@ app.MapGet("/", (HttpContext ctx) => {
                 PreviewRondaIniciada = false;
                 EtapaRondaUno = 0;
                 InicioEtapaRondaUnoUtc = null;
+                InicioRondaTresUtc = null;
                 SegundosExtraRondaUno = 0;
+                RestablecerControlAudio();
                 EquiposPreRonda = new List<RoundTeam>();
                 GrupoPorParticipante.Clear();
                 ParticipantesListos.Clear();
@@ -1906,7 +2053,9 @@ app.MapGet("/", (HttpContext ctx) => {
             PreviewRondaIniciada = false;
             EtapaRondaUno = 0;
             InicioEtapaRondaUnoUtc = null;
+            InicioRondaTresUtc = null;
             SegundosExtraRondaUno = 0;
+            RestablecerControlAudio();
             EquiposPreRonda = new List<RoundTeam>();
             GrupoPorParticipante.Clear();
             ParticipantesLobby.Clear();
@@ -2188,6 +2337,31 @@ app.MapGet("/", (HttpContext ctx) => {
     // --- API DATOS Y CONFIGURACIÓN ---
     app.MapGet("/api/datos", () => Results.Json(LeerUsuariosCsv(rutaCsv)));
 
+    app.MapGet("/api/pantuno", (HttpContext ctx) => {
+        var respuestas = LeerUsuariosCsv(rutaCsv);
+        string desdeId = ctx.Request.Query["desde"].FirstOrDefault() ?? "";
+        int indiceCursor = string.IsNullOrWhiteSpace(desdeId)
+            ? -1
+            : respuestas.FindLastIndex(respuesta => respuesta.id == desdeId);
+        IEnumerable<DatosRespuesta> nuevasRespuestas = indiceCursor >= 0
+            ? respuestas.Skip(indiceCursor + 1)
+            : respuestas.TakeLast(36);
+        var config = LeerConfig(rutaConfig);
+        var efigies = nuevasRespuestas.Select(respuesta => new
+        {
+            id = respuesta.id,
+            nombre = respuesta.nombre,
+            svg = InyectarAnimacionRotacionSvg(
+                GeneradorEfigie.GenerarSVG(respuesta, config, incluirMarcoYNombre: false))
+        });
+
+        return Results.Json(new
+        {
+            ultimoId = respuestas.LastOrDefault()?.id,
+            efigies
+        });
+    });
+
     app.MapPost("/limpiar", () => {
         if (File.Exists(rutaCsv)) File.Delete(rutaCsv);
         return Results.Json(new { estado = "ok" });
@@ -2386,17 +2560,31 @@ app.MapGet("/", (HttpContext ctx) => {
             SembrarVotosBots(equipo, ronda: 2);
         foreach (RoundTeam equipo in EquiposEspectadorPorParticipante.Values.DistinctBy(FirmaEquipo))
             SembrarVotosBots(equipo, ronda: 2);
-        if (!TodosLosRepresentantesRondaDosAsignados()) return;
-
-        EtapaRondaUno = 6;
-        InicializarEstadosRondaTres();
-        InicializarRespuestasBotsRondaTres();
     }
 
     LobbyParticipant ObtenerParticipanteRonda(string responseId) =>
         TryObtenerParticipanteRonda(responseId, out LobbyParticipant participante)
             ? participante
             : throw new InvalidOperationException($"No se encontró al integrante {responseId}.");
+
+    void IniciarPrerondaRondaTres()
+    {
+        if (EtapaRondaUno != 7) return;
+
+        EtapaRondaUno = 4;
+        InicioEtapaRondaUnoUtc = null;
+        InicioRondaTresUtc = null;
+        SegundosExtraRondaUno = 0;
+        AudioOchoProgramado = false;
+        EncolarAudio("audio7");
+
+        foreach (LobbyParticipant participante in ParticipantesLobby.Values
+            .Concat(ParticipantesEspectador.Values)
+            .Where(persona => !persona.EsBot)
+            .DistinctBy(persona => persona.ResponseId))
+            NavegacionesAdmin[participante.ResponseId] =
+                $"/ronda-3-preronda?id={Uri.EscapeDataString(participante.ResponseId)}";
+    }
 
     IResult IniciarPreRonda(bool completarConBots, bool botsListos)
     {
@@ -2445,6 +2633,8 @@ app.MapGet("/", (HttpContext ctx) => {
             EtapaRondaUno = 0;
             InicioEtapaRondaUnoUtc = null;
             SegundosExtraRondaUno = 0;
+            InicioRondaTresUtc = null;
+            RestablecerControlAudio();
             ParticipantesListosSiguienteRonda.Clear();
             ParticipantesListosRondaTres.Clear();
             ParticipantesListosRondaCuatro.Clear();
@@ -2458,6 +2648,7 @@ app.MapGet("/", (HttpContext ctx) => {
             EstadosRondaTres.Clear();
             RespuestasQueVuelvenAEncuesta.Clear();
             RondaIniciada = true;
+            EncolarAudio("audio2");
         }
         return Results.Json(new { estado = "ok", rondaIniciada = true, equipos = EquiposPreRonda.Count, participantes = ParticipantesLobby.Count });
     }
@@ -2598,10 +2789,11 @@ app.MapGet("/", (HttpContext ctx) => {
     void IniciarRondaUno()
     {
         if (PreviewRondaIniciada) return;
-        InicioEtapaRondaUnoUtc = DateTime.UtcNow;
+        InicioEtapaRondaUnoUtc = null;
         EtapaRondaUno = 1;
         SegundosExtraRondaUno = 0;
         PreviewRondaIniciada = true;
+        EncolarAudio("audio3");
     }
 
     void SimularRespuestasBots()
@@ -2743,6 +2935,171 @@ app.MapGet("/", (HttpContext ctx) => {
             _ => Math.Max(0, 50 - ((posicion - 4) * 5))
         };
 
+    bool EsPistaAudioValida(string pista) =>
+        pista is "audio2" or "audio3" or "audio4" or
+            "audio5" or "audio6" or "audio7" or "audio8" or "audio9";
+
+    bool PuedeIniciarPistaAudio(string pista) =>
+        pista switch
+        {
+            "audio2" => EtapaRondaUno == 0,
+            "audio3" => EtapaRondaUno == 1,
+            "audio4" => EtapaRondaUno == 2,
+            "audio5" => EtapaRondaUno == 5,
+            "audio6" => EtapaRondaUno == 6,
+            "audio7" => EtapaRondaUno == 4,
+            "audio8" => EtapaRondaUno == 8,
+            "audio9" => EtapaRondaUno == 9,
+            _ => false
+        };
+
+    void EncolarAudio(string pista)
+    {
+        AudioCueTrack = pista;
+        AudioCueVersion++;
+        AudioActual = "";
+        AudioPausado = false;
+        AudioPausadoDesdeUtc = null;
+        AudioRondaDosBloqueada = pista == "audio6";
+    }
+
+    void CancelarAudioActual()
+    {
+        AudioCueTrack = "";
+        AudioCueVersion++;
+        AudioActual = "";
+        AudioPausado = false;
+        AudioPausadoDesdeUtc = null;
+        AudioRondaDosBloqueada = false;
+    }
+
+    void RestablecerControlAudio()
+    {
+        AudioCueTrack = "";
+        AudioCueVersion++;
+        AudioActual = "";
+        AudioPausado = false;
+        AudioPausadoDesdeUtc = null;
+        AudioRondaDosBloqueada = false;
+        AudioOchoProgramado = false;
+    }
+
+    void AjustarTemporizadoresPorPausaAudio(TimeSpan duracionPausa)
+    {
+        if (AudioActual == "audio4" && EtapaRondaUno == 2 && InicioEtapaRondaUnoUtc.HasValue)
+            InicioEtapaRondaUnoUtc = InicioEtapaRondaUnoUtc.Value.Add(duracionPausa);
+        if (AudioActual == "audio8" && EtapaRondaUno == 8 && InicioRondaTresUtc.HasValue)
+            InicioRondaTresUtc = InicioRondaTresUtc.Value.Add(duracionPausa);
+    }
+
+    void CompletarPistaAudio(string pista)
+    {
+        AudioActual = "";
+        AudioPausado = false;
+        AudioPausadoDesdeUtc = null;
+        DateTime ahora = DateTime.UtcNow;
+        if (pista == "audio3" && EtapaRondaUno == 1)
+        {
+            InicioEtapaRondaUnoUtc = ahora;
+            SegundosExtraRondaUno = 0;
+        }
+        else if (pista == "audio6" && EtapaRondaUno == 6)
+        {
+            AudioRondaDosBloqueada = false;
+            InicioEtapaRondaUnoUtc = ahora;
+            SegundosExtraRondaUno = 0;
+        }
+        else if (pista == "audio7" && EtapaRondaUno == 4)
+        {
+            EtapaRondaUno = 8;
+            InicioEtapaRondaUnoUtc = null;
+            SegundosExtraRondaUno = 0;
+            InicioRondaTresUtc = ahora;
+            AudioOchoProgramado = false;
+            InicializarRondaCuatro();
+            foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values)
+                .Where(persona => !persona.EsBot)
+                .DistinctBy(persona => persona.ResponseId))
+                NavegacionesAdmin[participante.ResponseId] =
+                    $"/ronda-3?id={Uri.EscapeDataString(participante.ResponseId)}";
+        }
+    }
+
+    void FinalizarRondaTres()
+    {
+        if (EtapaRondaUno == 9) return;
+        EtapaRondaUno = 9;
+        InicioEtapaRondaUnoUtc = null;
+        InicioRondaTresUtc = null;
+        SegundosExtraRondaUno = 0;
+        AudioRondaDosBloqueada = false;
+        EncolarAudio("audio9");
+        foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values)
+            .Where(persona => !persona.EsBot)
+            .DistinctBy(persona => persona.ResponseId))
+            NavegacionesAdmin[participante.ResponseId] =
+                $"/ronda-3-leaderboard?id={Uri.EscapeDataString(participante.ResponseId)}";
+    }
+
+    void ProcesarAvancesAutomaticos()
+    {
+        lock (CandadoLobby)
+        {
+            if (!RondaIniciada) return;
+            DateTime ahora = AudioPausado && AudioPausadoDesdeUtc.HasValue
+                ? AudioPausadoDesdeUtc.Value
+                : DateTime.UtcNow;
+            if (EtapaRondaUno == 1 && InicioEtapaRondaUnoUtc.HasValue &&
+                ObtenerSegundosRestantesEtapaActual() == 0)
+            {
+                EtapaRondaUno = 2;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+                EncolarAudio("audio4");
+            }
+            else if (EtapaRondaUno == 2 && InicioEtapaRondaUnoUtc.HasValue &&
+                ObtenerSegundosRestantesEtapaActual() == 0)
+            {
+                SimularRespuestasBots();
+                EtapaRondaUno = 3;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+                CancelarAudioActual();
+            }
+            else if (EtapaRondaUno == 6 && !AudioRondaDosBloqueada &&
+                InicioEtapaRondaUnoUtc.HasValue && ObtenerSegundosRestantesEtapaActual() == 0)
+            {
+                CompletarRespuestasRondaTresPorForzarAvance();
+                EtapaRondaUno = 7;
+                InicioEtapaRondaUnoUtc = null;
+                SegundosExtraRondaUno = 0;
+            }
+
+            if (EtapaRondaUno != 8 || !InicioRondaTresUtc.HasValue) return;
+            TimeSpan transcurrido = ahora - InicioRondaTresUtc.Value;
+            if (transcurrido >= TimeSpan.FromMinutes(8) && !AudioOchoProgramado)
+            {
+                AudioOchoProgramado = true;
+                EncolarAudio("audio8");
+            }
+            if (transcurrido >= TimeSpan.FromMinutes(10))
+                FinalizarRondaTres();
+        }
+    }
+
+    int ObtenerSegundosRestantesRondaTres()
+    {
+        lock (CandadoLobby)
+        {
+            if (EtapaRondaUno != 8 || !InicioRondaTresUtc.HasValue) return 0;
+            DateTime ahora = AudioPausado && AudioPausadoDesdeUtc.HasValue
+                ? AudioPausadoDesdeUtc.Value
+                : DateTime.UtcNow;
+            int transcurridos = (int)Math.Ceiling((ahora - InicioRondaTresUtc.Value).TotalSeconds);
+            return Math.Max(0, 600 - transcurridos);
+        }
+    }
+
     string ObtenerEtapaRondaUno()
     {
         lock (CandadoLobby)
@@ -2759,15 +3116,18 @@ app.MapGet("/", (HttpContext ctx) => {
 
     int ObtenerSegundosRestantesEtapaActual()
     {
-        if (!InicioEtapaRondaUnoUtc.HasValue || EtapaRondaUno is not (1 or 2 or 5)) return 0;
+        if (!InicioEtapaRondaUnoUtc.HasValue || EtapaRondaUno is not (1 or 2 or 6)) return 0;
         int duracion = EtapaRondaUno switch
         {
             1 => 30 + SegundosExtraRondaUno,
             2 => 120 + SegundosExtraRondaUno,
-            5 => 30,
+            6 => 150,
             _ => 0
         };
-        int transcurridos = (int)Math.Ceiling((DateTime.UtcNow - InicioEtapaRondaUnoUtc.Value).TotalSeconds);
+        DateTime ahora = AudioPausado && AudioPausadoDesdeUtc.HasValue
+            ? AudioPausadoDesdeUtc.Value
+            : DateTime.UtcNow;
+        int transcurridos = (int)Math.Ceiling((ahora - InicioEtapaRondaUnoUtc.Value).TotalSeconds);
         return Math.Max(0, duracion - transcurridos);
     }
 
@@ -3062,6 +3422,11 @@ app.MapGet("/", (HttpContext ctx) => {
         return $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{viewBox.Groups[1].Value}\" width=\"100%\" height=\"100%\" fill=\"none\" stroke=\"#000000\" stroke-width=\"0.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">{ObtenerGrupoSvg(svg, capa)}</svg>";
     }
 
+    using var temporizadorAvance = new System.Threading.Timer(
+        _ => ProcesarAvancesAutomaticos(),
+        null,
+        TimeSpan.FromMilliseconds(250),
+        TimeSpan.FromMilliseconds(250));
     app.Run();
 }
 

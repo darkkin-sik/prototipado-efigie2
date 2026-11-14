@@ -139,6 +139,11 @@
                     body: JSON.stringify({ responseId })
                 });
                 if (!respuesta.ok) throw new Error('No se pudo registrar que estás listo para continuar.');
+                const resultado = await respuesta.json();
+                if (resultado.etapaRondaUno === 'ronda-3-preronda') {
+                    location.replace(urlEtapa('/ronda-3-preronda'));
+                    return;
+                }
                 await cargarResultados();
             } catch (error) {
                 mensaje.textContent = error.message || 'No se pudo registrar que estás listo.';

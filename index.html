@@ -340,6 +340,10 @@
                 window.location.href = '/admin-sesion';
                 return;
             }
+            if (pasoActual === 0 && document.getElementById('nombre').value.trim().toLowerCase() === 'pantuno') {
+                window.location.href = '/pantuno';
+                return;
+            }
             if (pasoActual === 0 && document.getElementById('nombre').value.trim().toUpperCase() === 'ESP') {
                 window.location.href = '/espectador';
                 return;

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>Pantalla 1 - Efigie</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+            color: #101a15;
+            background: #ffffff;
+        }
+        * { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+        body { background: #ffffff; }
+        .logo {
+            width: min(177px, 30vw);
+            height: auto;
+            flex: 0 0 auto;
+            margin: 0 0 2vh;
+        }
+        .escenario {
+            width: 100%;
+            height: 100%;
+            padding: 4vh 4vw;
+            display: grid;
+            grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+            gap: 4vw;
+        }
+        .panel-destacada {
+            min-width: 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .logo { align-self: center; }
+        .visual-destacada {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            display: grid;
+            place-items: center;
+        }
+        .efigie-destacada {
+            width: min(72vh, 39vw);
+            max-width: 100%;
+            aspect-ratio: 1;
+            display: grid;
+            place-items: center;
+        }
+        .efigie-destacada svg { display: block; width: 100%; height: 100%; }
+        .qr-destacada {
+            width: min(54vh, 30vw);
+            max-width: 88%;
+            aspect-ratio: 1;
+            padding: 1.5%;
+            background: #ffffff;
+        }
+        .qr-destacada img { display: block; width: 100%; height: 100%; }
+        .mensaje-vacio {
+            max-width: 28rem;
+            padding: 1rem;
+            color: #53615b;
+            font-size: clamp(1.1rem, 2vw, 1.7rem);
+            line-height: 1.45;
+            text-align: center;
+        }
+        .controles-operador {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 1vh;
+        }
+        .control-operador {
+            width: 48px;
+            height: 48px;
+            padding: 6px;
+            display: grid;
+            place-items: center;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: #87918b;
+            opacity: 0.62;
+            cursor: pointer;
+            transition: opacity 160ms ease, background-color 160ms ease, color 160ms ease;
+        }
+        .control-operador:hover,
+        .control-operador:focus-visible {
+            opacity: 1;
+            background: #f5f7f5;
+            color: #101a15;
+        }
+        .control-operador:focus-visible { outline: 1px solid #b8c2bc; outline-offset: 1px; }
+        .control-qr img { display: block; width: 100%; height: 100%; }
+        .control-pantalla svg { display: block; width: 36px; height: 36px; }
+        .galeria {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1.5vw;
+            overflow: hidden;
+        }
+        .columna { min-width: 0; min-height: 0; overflow: hidden; }
+        .columna-pista {
+            display: flex;
+            flex-direction: column;
+            animation: descender 48s linear infinite;
+        }
+        .columna:nth-child(2) .columna-pista { animation-duration: 57s; }
+        .columna:nth-child(3) .columna-pista { animation-duration: 66s; }
+        .columna-lista {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5vw;
+            padding-bottom: 1.5vw;
+        }
+        .tarjeta-efigie {
+            width: 100%;
+            aspect-ratio: 1;
+            flex: 0 0 auto;
+            display: grid;
+            place-items: center;
+            background: #ffffff;
+        }
+        .tarjeta-efigie svg { display: block; width: 94%; height: 94%; }
+        .estado-conexion {
+            position: fixed;
+            right: 1rem;
+            bottom: 1rem;
+            padding: 0.55rem 0.8rem;
+            border-radius: 999px;
+            background: #fff3e0;
+            color: #663c00;
+            font-size: 0.9rem;
+        }
+        @keyframes descender {
+            from { transform: translateY(-50%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes girarHorario { to { transform: rotate(360deg); } }
+        @keyframes girarAntihorario { to { transform: rotate(-360deg); } }
+        .efigie-destacada .rotar-capa-1,
+        .efigie-destacada .rotar-capa-2,
+        .efigie-destacada .rotar-capa-3,
+        .tarjeta-efigie .rotar-capa-1,
+        .tarjeta-efigie .rotar-capa-2,
+        .tarjeta-efigie .rotar-capa-3 {
+            transform-origin: 0px 0px;
+            transform-box: view-box;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }
+        .rotar-capa-1 { animation-name: girarHorario; animation-duration: 18s; }
+        .rotar-capa-2 { animation-name: girarAntihorario; animation-duration: 12s; }
+        .rotar-capa-3 { animation-name: girarHorario; animation-duration: 8s; }
+        @media (max-width: 760px) {
+            html, body { min-height: 100%; height: auto; overflow: auto; }
+            .logo { width: 150px; }
+            .escenario {
+                min-height: 100vh;
+                height: auto;
+                padding: 4vh 5vw;
+                grid-template-columns: 1fr;
+                grid-template-rows: minmax(48vh, auto) minmax(42vh, auto);
+                gap: 3vh;
+            }
+            .efigie-destacada { width: min(48vh, 82vw); }
+            .qr-destacada { width: min(38vh, 68vw); }
+            .galeria { gap: 3vw; }
+            .columna-lista { gap: 3vw; padding-bottom: 3vw; }
+            .controles-operador { align-self: flex-end; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <main class="escenario">
+        <section class="panel-destacada" aria-label="Efigie destacada y código QR">
+            <img class="logo" src="/efigie-logo.svg" alt="Efigie">
+            <div class="visual-destacada">
+                <div id="efigieDestacada" class="efigie-destacada" hidden></div>
+                <div id="qrDestacada" class="qr-destacada" hidden>
+                    <img src="/qr.svg" alt="Código QR para participar en la actividad">
+                </div>
+                <p id="mensajeVacio" class="mensaje-vacio">La galería aparecerá cuando se generen efigies.</p>
+            </div>
+            <div class="controles-operador" aria-label="Controles del operador">
+                <button id="controlQr" class="control-operador control-qr" type="button" aria-label="Mostrar código QR" aria-pressed="false" title="Mostrar u ocultar el QR">
+                    <img src="/qr.svg" alt="" aria-hidden="true">
+                </button>
+                <button id="controlPantalla" class="control-operador control-pantalla" type="button" aria-label="Activar pantalla completa" title="Activar pantalla completa"></button>
+            </div>
+        </section>
+        <section id="galeria" class="galeria" aria-label="Efigies recientes"></section>
+    </main>
+    <div id="estadoConexion" class="estado-conexion" role="status" aria-live="polite" hidden></div>
+    <script>
+        const limiteEfigies = 36;
+        const columnas = [[], [], []];
+        const idsConocidos = new Set();
+        const efigiesEnPantalla = [];
+        const pistas = Array.from({ length: 3 }, (_, indice) => {
+            const columna = document.createElement('div');
+            columna.className = 'columna';
+            const pista = document.createElement('div');
+            pista.className = 'columna-pista';
+            pista.dataset.columna = String(indice);
+            for (let copia = 0; copia < 2; copia++) {
+                const lista = document.createElement('div');
+                lista.className = 'columna-lista';
+                if (copia === 1) lista.setAttribute('aria-hidden', 'true');
+                pista.appendChild(lista);
+            }
+            columna.appendChild(pista);
+            document.getElementById('galeria').appendChild(columna);
+            return pista;
+        });
+        const estadoConexion = document.getElementById('estadoConexion');
+        const efigieDestacada = document.getElementById('efigieDestacada');
+        const qrDestacada = document.getElementById('qrDestacada');
+        const mensajeVacio = document.getElementById('mensajeVacio');
+        const controlQr = document.getElementById('controlQr');
+        const controlPantalla = document.getElementById('controlPantalla');
+        const iconoMaximizar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3H3v6m0-6 7 7M15 3h6v6m0-6-7 7M3 15v6h6m-6 0 7-7m5 7h6v-6m0 6-7-7"/></svg>';
+        const iconoMinimizar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6H3m0 0 6-6m6 0v6h6m0 0-6-6M3 15h6v6m0 0-6-6m18 0h-6v6m0 0 6-6"/></svg>';
+        let ultimoId = null;
+        let mostrandoQr = false;
+
+        function crearTarjeta(efigie) {
+            const tarjeta = document.createElement('div');
+            tarjeta.className = 'tarjeta-efigie';
+            tarjeta.innerHTML = efigie.svg;
+            return tarjeta;
+        }
+
+        function renderizarColumnas() {
+            for (let indice = 0; indice < pistas.length; indice++) {
+                const listas = pistas[indice].children;
+                const primera = columnas[indice].map(crearTarjeta);
+                listas[0].replaceChildren(...primera);
+                listas[1].replaceChildren(...primera.map(tarjeta => tarjeta.cloneNode(true)));
+            }
+        }
+
+        function actualizarDestacada(efigie) {
+            efigieDestacada.innerHTML = efigie.svg;
+            efigieDestacada.hidden = mostrandoQr;
+            mensajeVacio.hidden = true;
+        }
+
+        function agregarEfigies(nuevas) {
+            let ultimaAgregada = null;
+            for (const efigie of nuevas) {
+                if (idsConocidos.has(efigie.id)) continue;
+                const indiceColumna = columnas.reduce(
+                    (menor, columna, indice, lista) => columna.length < lista[menor].length ? indice : menor,
+                    0
+                );
+                const efigieConColumna = { ...efigie, indiceColumna };
+                efigiesEnPantalla.push(efigieConColumna);
+                columnas[indiceColumna].push(efigieConColumna);
+                idsConocidos.add(efigie.id);
+                ultimaAgregada = efigie;
+
+                while (efigiesEnPantalla.length > limiteEfigies) {
+                    const eliminada = efigiesEnPantalla.shift();
+                    idsConocidos.delete(eliminada.id);
+                    columnas[eliminada.indiceColumna].shift();
+                }
+            }
+            if (ultimaAgregada) {
+                renderizarColumnas();
+                actualizarDestacada(ultimaAgregada);
+            }
+        }
+
+        function vaciarGaleria() {
+            efigiesEnPantalla.length = 0;
+            idsConocidos.clear();
+            columnas.forEach(columna => { columna.length = 0; });
+            renderizarColumnas();
+            efigieDestacada.replaceChildren();
+            efigieDestacada.hidden = true;
+            mensajeVacio.hidden = mostrandoQr;
+        }
+
+        controlQr.addEventListener('click', () => {
+            mostrandoQr = !mostrandoQr;
+            efigieDestacada.hidden = mostrandoQr || efigiesEnPantalla.length === 0;
+            qrDestacada.hidden = !mostrandoQr;
+            mensajeVacio.hidden = mostrandoQr || efigiesEnPantalla.length > 0;
+            controlQr.setAttribute('aria-label', mostrandoQr ? 'Volver a la efigie destacada' : 'Mostrar código QR');
+            controlQr.setAttribute('aria-pressed', String(mostrandoQr));
+        });
+
+        function actualizarControlPantalla() {
+            const estaCompleta = Boolean(document.fullscreenElement);
+            controlPantalla.innerHTML = estaCompleta ? iconoMinimizar : iconoMaximizar;
+            const etiqueta = estaCompleta ? 'Salir de pantalla completa' : 'Activar pantalla completa';
+            controlPantalla.setAttribute('aria-label', etiqueta);
+            controlPantalla.title = etiqueta;
+        }
+
+        controlPantalla.addEventListener('click', async () => {
+            try {
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                } else if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                } else {
+                    throw new Error('Este navegador no permite pantalla completa.');
+                }
+            } catch (error) {
+                console.error('No se pudo cambiar el modo de pantalla completa.', error);
+                estadoConexion.textContent = 'No se pudo cambiar el modo de pantalla completa.';
+                estadoConexion.hidden = false;
+            }
+        });
+        document.addEventListener('fullscreenchange', actualizarControlPantalla);
+        actualizarControlPantalla();
+
+        async function actualizarEfigies() {
+            try {
+                const url = ultimoId
+                    ? `/api/pantuno?desde=${encodeURIComponent(ultimoId)}`
+                    : '/api/pantuno';
+                const respuesta = await fetch(url, { cache: 'no-store' });
+                if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
+                const resultado = await respuesta.json();
+                if (!resultado.ultimoId && (ultimoId || efigiesEnPantalla.length > 0)) vaciarGaleria();
+                agregarEfigies(resultado.efigies);
+                ultimoId = resultado.ultimoId || null;
+                estadoConexion.hidden = true;
+            } catch (error) {
+                console.error('No se pudieron actualizar las efigies de Pantuno.', error);
+                estadoConexion.textContent = 'Sin conexión con el servidor. Reintentando…';
+                estadoConexion.hidden = false;
+            } finally {
+                window.setTimeout(actualizarEfigies, 4000);
+            }
+        }
+
+        actualizarEfigies();
+    </script>
+</body>
+</html>

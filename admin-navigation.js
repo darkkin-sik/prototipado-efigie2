@@ -62,6 +62,7 @@
             'ronda-2-representante': '/ronda-2-representante?ronda=2',
             'ronda-2-identificacion': '/ronda-2',
             'ronda-2-leaderboard': '/ronda-2-leaderboard',
+            'ronda-3-preronda': '/ronda-3-preronda',
             'ronda-3': '/ronda-3',
             'ronda-3-leaderboard': '/ronda-3-leaderboard'
         };

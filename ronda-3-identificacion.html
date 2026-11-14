@@ -47,6 +47,10 @@
         .dialogo-pista h2 { margin: 0 0 12px; font-size: 1.15rem; }
         .dialogo-pista p { margin: 0; line-height: 1.5; white-space: pre-line; }
         .cerrar-pista { display: block; min-height: 42px; margin: 20px 0 0 auto; padding: 8px 18px; border: 0; border-radius: 5px; background: var(--green); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+        .bloqueo-audio { width: min(100%, 560px); margin: 18vh auto 0; padding: 28px 20px; text-align: center; }
+        .bloqueo-audio p { color: var(--muted); line-height: 1.5; }
+        body.audio-bloqueado main > :not(.bloqueo-audio) { display: none; }
+        body.audio-bloqueado > .notas-consulta { display: none; }
         [hidden] { display: none !important; }
         @media (max-height: 720px) {
             body { padding-top: 10px; }
@@ -67,6 +71,10 @@
 </head>
 <body>
     <main>
+        <section class="bloqueo-audio" id="bloqueoAudio" hidden>
+            <h1>Escuchá la indicación</h1>
+            <p>La ronda comienza cuando termina el audio de instrucciones.</p>
+        </section>
         <h1>Relacioná cada parte con lo que representa</h1>
         <p class="instruccion" id="instruccion">Cada integrante responde en su dispositivo. El representante coordina el avance.</p>
         <div class="efigie" id="efigie" role="img" aria-label="Tu efigie con una parte resaltada"></div>
@@ -116,6 +124,7 @@
         const dialogoPista = document.getElementById('dialogoPista');
         const textoPista = document.getElementById('textoPista');
         const tabEquipo = document.querySelector('.notas-consulta');
+        const bloqueoAudio = document.getElementById('bloqueoAudio');
         let estadoActual = null;
         let indiceActual = -1;
         let cargando = false;
@@ -257,6 +266,13 @@
                 }
                 if (!respuesta.ok) throw new Error('No se pudo consultar la ronda 2.');
                 estadoActual = await respuesta.json();
+                if (estadoActual.bloqueado) {
+                    document.body.classList.add('audio-bloqueado');
+                    bloqueoAudio.hidden = false;
+                    return;
+                }
+                document.body.classList.remove('audio-bloqueado');
+                bloqueoAudio.hidden = true;
                 actualizarPantalla(estadoActual);
                     if (estadoActual.pistaPopup && !dialogoPista.open) {
                         textoPista.textContent = estadoActual.pistaPopup;
