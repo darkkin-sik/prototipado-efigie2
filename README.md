@@ -120,7 +120,7 @@ Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo pr
 
 Los archivos de audio se sirven desde la carpeta del proyecto y se reproducen en la computadora que tiene abierto `/admin-sesion`; conectá esa computadora al sistema de sonido del espacio. Un colaborador presenta la bienvenida y explica el QR en persona. Cuando termina, administración pulsa **Iniciar experiencia** y comienza Audio 2. El control de audio permite reproducir o pausar y ajustar el volumen; al pausar, también se detienen los temporizadores que dependen de esa pista. El volumen queda guardado en el navegador de administración.
 
-Los archivos actuales `audio 2.ogg` a `audio 9.ogg` son borradores de referencia y serán reemplazados por las grabaciones correctas.
+Las grabaciones se guardan como `audio 2.mp3` a `audio 9.mp3`.
 
 El orden y los avances son:
 
