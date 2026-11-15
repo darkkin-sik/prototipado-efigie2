@@ -316,7 +316,7 @@ body {
     justify-content: center;
     align-items: center;
     background: transparent;
-    transition: background-color 240ms ease, box-shadow 240ms ease;
+    transition: background-color 100ms linear, box-shadow 240ms ease;
 }
 
 .hub-usuario-encabezado.scrolleado {
@@ -326,12 +326,19 @@ body {
 
 .hub-usuario-logo {
     width: min(250px, 70vw);
-    height: auto;
-    transition: filter 240ms ease;
+    aspect-ratio: 177 / 40;
+    background-color: #111111;
+    -webkit-mask: url("/efigie-logo.svg") center / contain no-repeat;
+    mask: url("/efigie-logo.svg") center / contain no-repeat;
+    transition: background-color 100ms linear;
 }
 
 .hub-usuario-encabezado.scrolleado .hub-usuario-logo {
-    filter: invert(1);
+    background-color: var(--color-logo, #ffffff);
+}
+
+.hub-usuario-encabezado.scrolleado.logo-oscuro {
+    background: #ffffff;
 }
 
 .hub-efigie-tarjeta {
@@ -557,25 +564,122 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
     cursor: pointer;
 }
 
-.hub-contenido-intermedio,
 .hub-capas {
     width: min(100%, 900px);
     margin: 0 auto;
     padding: 24px;
 }
 
-.hub-contenido-intermedio {
-    margin-top: 40px;
-    margin-bottom: 80px;
+.hub-comunidad {
+    width: min(100%, 960px);
+    margin: 48px auto 80px;
+    display: grid;
+    gap: 12px;
 }
 
-.hub-contenido-intermedio h2,
+.hub-comunidad-tarjeta {
+    padding: clamp(28px, 7vw, 56px) clamp(20px, 5vw, 40px);
+    background: var(--color-comunidad, #133463);
+    color: var(--texto-comunidad, #ffffff);
+    transition: background-color 100ms linear;
+}
+
+.hub-comunidad h2,
+.hub-comunidad h3,
 .hub-capas > h2 {
     margin: 0 0 16px;
-    font-size: clamp(1.5rem, 5vw, 2rem);
 }
 
-.hub-contenido-intermedio p,
+.hub-comunidad p { margin: 0; }
+.hub-comunidad .hub-comunidad-tarjeta p {
+    line-height: 1.4;
+    text-align: justify;
+}
+
+.hub-comunidad p + p { margin-top: 12px; }
+.hub-comunidad .hub-comunidad-subtitulo { margin-bottom: 12px; font-weight: var(--hub-peso-medio); }
+.hub-comunidad .hub-comunidad-pendiente { margin-top: 24px; font-size: var(--hub-texto-secundario); }
+
+.hub-comunidad-guardar {
+    display: block;
+    min-height: 52px;
+    margin: 24px auto 0;
+    padding: 14px 28px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--texto-comunidad, #ffffff);
+    color: var(--color-comunidad, #133463);
+    font: inherit;
+    font-weight: var(--hub-peso-medio);
+    cursor: pointer;
+}
+
+.hub-comunidad-guardar:disabled { opacity: 0.6; cursor: wait; }
+.hub-comunidad .hub-comunidad-estado { margin-top: 16px; font-size: var(--hub-texto-secundario); }
+.hub-comunidad-link { display: inline-block; margin-top: 8px; color: inherit; overflow-wrap: anywhere; }
+
+.hub-figura-descubrir { margin: 20px auto; }
+#tarjetaFiguraCercana > .hub-figura-descubrir:last-child { margin: 20px auto 0; }
+#tarjetaFiguraCercana { overflow-anchor: none; }
+.hub-figura-resultado { margin: 20px 0; overflow: hidden; overflow-anchor: none; }
+.hub-comunidad .hub-comunidad-tarjeta p.hub-figura-reflexion { margin-top: 20px; }
+.hub-figura-lista { display: grid; gap: 12px; }
+.hub-figura-lista-empate {
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+}
+.hub-figura-lista-empate::-webkit-scrollbar { display: none; }
+.hub-figura-lista-empate .hub-figura-tarjeta { flex: 0 0 100%; scroll-snap-align: start; }
+.hub-comunidad .hub-figura-resultado p.hub-figura-indicacion { margin-bottom: 10px; font-size: var(--hub-texto-secundario); text-align: left; }
+.hub-figura-tarjeta {
+    min-width: 0;
+    padding: 8px;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #101a15;
+}
+.hub-figura-identidad {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid #d5dad6;
+    border-radius: 10px;
+    text-align: center;
+}
+.hub-figura-visual { width: min(100%, 150px); aspect-ratio: 1; }
+.hub-figura-visual svg { display: block; width: 100%; height: 100%; }
+.hub-comunidad .hub-figura-tarjeta p.hub-figura-nombre {
+    margin: 0;
+    font-weight: var(--hub-peso-medio);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+.hub-comunidad .hub-figura-tarjeta p.hub-figura-coincidencias-titulo {
+    margin: 10px 4px 8px;
+    font-size: var(--hub-texto-secundario);
+    font-weight: var(--hub-peso-medio);
+    text-align: left;
+}
+.hub-figura-coincidencias {
+    margin: 0;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    border: 1px solid #d5dad6;
+    border-radius: 10px;
+    list-style: none;
+    font-size: var(--hub-texto-secundario);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.hub-comunidad .hub-figura-aviso { padding: 14px; border-radius: 12px; background: #ffffff; color: #101a15; }
+
 .hub-capas-intro {
     margin: 0;
     color: #53615b;
@@ -641,8 +745,9 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
 .hub-capa-texto .hub-capa-explicacion-particular {
     margin-top: 8px;
     padding-left: 8px;
-    border-left: 2px solid #777777;
+    border-left: 2px solid var(--color-barra, #777777);
     color: #303a34;
+    transition: border-left-color 100ms linear;
 }
 
 .hub-capa-color {
@@ -898,7 +1003,7 @@ body {
 .mensaje-reintentar,
 .hub-efigie-tarjeta h1,
 .hub-experiencia-bloque h2,
-.hub-contenido-intermedio h2,
+.hub-comunidad h2,
 .hub-capas > h2,
 .hub-capa-dialogo-contenido h2 {
     font-size: var(--hub-titulo);
@@ -907,7 +1012,8 @@ body {
     letter-spacing: normal;
 }
 
-.hub-capa-columna-visual h3 {
+.hub-capa-columna-visual h3,
+.hub-comunidad h3 {
     font-size: var(--hub-subtitulo);
     font-weight: var(--hub-peso-medio);
     line-height: 1.3;
@@ -916,7 +1022,7 @@ body {
 .proximamente-mensaje p,
 .campo-hub input,
 .hub-experiencia-datos dd,
-.hub-contenido-intermedio p,
+.hub-comunidad p,
 .hub-capas-intro,
 .hub-capa-texto p,
 .hub-capa-dialogo-texto p,

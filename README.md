@@ -12,11 +12,15 @@ Abre PowerShell en la carpeta del proyecto y ejecuta:
 
 El iniciador ejecuta `dotnet run --no-restore` para evitar restaurar paquetes por Internet en cada arranque, espera a que el servidor esté disponible en el puerto `5500`, inicia el Quick Tunnel de Cloudflare y publica la URL del túnel en `destino.txt` dentro de `C:\Users\<usuario>\QR-REDIRECT-EFIGIE`. El túnel usa HTTP/2 sobre TCP para evitar redes que bloquean QUIC/UDP. La red debe permitir conexiones salientes al puerto `7844`. Luego crea y sube un commit a `main` en ese repositorio; necesitas tener esa copia local y permisos de `git push` configurados. El redirector de Cloudflare Workers consulta ese archivo en cada acceso y redirige al túnel activo. La URL del túnel también se muestra en la terminal. Los Quick Tunnels son temporales y su dirección puede cambiar cada vez que se inicia el script.
 
+Al preparar el proyecto o después de actualizar dependencias, ejecuta `dotnet restore` una vez antes de usar el iniciador.
+
 **Enlace estático del QR:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/). Usa esta dirección para el QR; la página redirige al Worker estable y este consulta el túnel activo. El enlace permanece igual mientras el sitio de GitHub Pages siga publicado en esa dirección.
 
 **Enlace estático del hub:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub). Es independiente del enlace general y abre una portada con una efigie aleatoria. «Ingresar» abre el login; el servidor verifica el nombre y la estación guardados en la encuesta. Tras dos intentos incorrectos, invita a conocer la experiencia en el cuarto piso del Moro. El acceso correcto abre la efigie personal, permite descargarla como JPG vertical y muestra sus capas.
 
-Por ahora, el hub se ejecuta localmente en el mismo servidor que la encuesta. El enlace `?ruta=hub` sigue siendo independiente del QR general, pero requiere que la computadora y el túnel estén activos. Las pantallas usan endpoints locales y validan el acceso con `respuestas_app.csv`; las respuestas no se sincronizan con una base ni con una API en la nube.
+Por ahora, el hub se ejecuta localmente en el mismo servidor que la encuesta. El enlace `?ruta=hub` sigue siendo independiente del QR general, pero requiere que la computadora y el túnel estén activos. Las pantallas usan endpoints locales; las respuestas no se sincronizan con una API en la nube.
+
+Al comenzar una ronda, los participantes reales se guardan en la base local `datos/comunidad.db`, con sus respuestas y efigies; los bots quedan excluidos. La base no importa las respuestas antiguas de prototipo. Si vuelve a jugar alguien con el mismo nombre, su registro reemplaza al anterior, salvo que sean distintos tanto el año de nacimiento como la etapa. La comparación ignora mayúsculas y espacios al principio o al final. Durante el prototipado, el ingreso busca primero en `respuestas_app.csv` y usa la última respuesta con nombre y contraseña coincidentes; si no existe, busca en la base. Para respaldar la comunidad, detén el servidor y copia `datos/comunidad.db`.
 
 ### Preparar el hub local
 
@@ -29,6 +33,15 @@ El pool de 50 efigies se genera una sola vez en `hub-site/efigies` y se comparte
 El diseño mantiene las pantallas separadas del almacenamiento mediante endpoints de la aplicación; si más adelante se necesita alojar el hub fuera de esta computadora, se podrá reemplazar esa capa sin cambiar el flujo visual del hub.
 
 La escala tipográfica del hub está agrupada al final de `hub.css`: prioriza Helvetica y utiliza fuentes del sistema cuando no está disponible. Ese bloque se puede retirar para volver a la escala anterior.
+
+Al bajar por el hub, las tarjetas desplazan hacia arriba el encabezado fijo con el logo; al subir, el encabezado vuelve a aparecer.
+
+La sección «Más cerca de lo que creías» presenta la comunidad y permite copiar o compartir el enlace estable del hub. Durante el prototipado, «Tu figura más cercana» compara las respuestas actuales de `respuestas_app.csv`, no las de la base de comunidad: año de nacimiento, facultad, etapa, estación, forma de trabajar o estudiar, formato de historia y rol en equipo. Excluye la propia respuesta y muestra hasta las dos primeras personas con el máximo de coincidencias; al desplazarse, la comparación se cierra. Si la participación no está en el CSV o todavía no hay otra persona, se informa en la tarjeta. Al borrar el CSV se pierden esas coincidencias provisionales, aunque la base de comunidad no se borra.
+
+Las siguientes funciones quedan pendientes:
+
+- **Puntos de encuentro:** explorar, por cada respuesta, las personas que eligieron lo mismo y mostrar «Compartís [categoría] con estas personas».
+- **Todas las efigies de la comunidad:** mostrar una galería, buscar por nombre o apodo, filtrar por unidad académica o rol y consultar las elecciones y coincidencias de cada persona.
 
 Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo. Si el puerto `5500` ya está ocupado, cierra normalmente la instancia anterior o libera el puerto antes de volver a ejecutar el iniciador.
 
@@ -76,7 +89,9 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 ## Archivos principales
 
 - `Program.cs`: servidor, endpoints, persistencia de respuestas, lobby, equipos y estado de la ronda.
-- `hub-site/`: pantallas estáticas del hub y el pool local de 50 efigies.
+- `RegistroComunidad.cs`: persistencia local de participantes y cálculo de coincidencias.
+- `hub-site/efigies/`: pool local de 50 efigies.
+- `borradores/`: pantallas antiguas conservadas como referencia; no forman parte del flujo actual ni están configuradas para funcionar desde esa carpeta.
 - `generar-efigies-hub.ps1`: generación del pool de efigies aleatorias.
 - `GeneradorEfigie.cs`: generación de las efigies SVG a partir de las respuestas.
 - `descargar-efigies.ps1`: exportación local de una lámina SVG con 30 efigies.

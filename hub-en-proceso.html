@@ -10,7 +10,7 @@
 <body>
     <main id="inicioHub" class="hub-usuario">
         <header id="encabezadoHub" class="hub-usuario-encabezado">
-            <img class="hub-usuario-logo" src="/efigie-logo.svg" alt="Efigie">
+            <span class="hub-usuario-logo" role="img" aria-label="Efigie"></span>
         </header>
         <section class="hub-efigie-tarjeta" aria-labelledby="tituloEfigieUsuario">
             <h1 id="tituloEfigieUsuario">Tu efigie</h1>
@@ -47,9 +47,35 @@
         <button id="abrirExperiencia" class="hub-experiencia-abrir" type="button" disabled>Más de tu experiencia</button>
     </section>
 
-    <section class="hub-contenido-intermedio" aria-labelledby="tituloContenidoProvisional">
-        <h2 id="tituloContenidoProvisional">Más de tu experiencia</h2>
-        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer at felis sed nisl varius posuere. Suspendisse potenti. Cras vitae neque non justo facilisis consequat. Esta sección es provisional y luego tendrá el contenido que falta entre tu efigie y su explicación.</p>
+    <section class="hub-comunidad" aria-labelledby="tituloComunidad">
+        <div class="hub-comunidad-tarjeta">
+            <h2 id="tituloComunidad">Más cerca de lo que creías.</h2>
+            <p>La experiencia en el aula terminó, pero el recorrido sigue abierto. Tu efigie ya forma parte de este registro colectivo de la universidad: guardala, explorá las figuras de todas las personas que participaron y descubrí con quiénes compartís elecciones más allá de tu ronda.</p>
+        </div>
+        <section id="tarjetaFiguraCercana" class="hub-comunidad-tarjeta" aria-labelledby="tituloFiguraCercana">
+            <h3 id="tituloFiguraCercana">Tu figura más cercana</h3>
+            <p>Entre todas las personas que participaron de Experiencia Efigie, esta es la que tomó las elecciones más parecidas a las tuyas. Quizás ya se cruzaron en algún pasillo de la facu o tal vez todavía no se conocen, pero sus figuras muestran que tienen algo en común.</p>
+            <button id="descubrirFiguraCercana" class="hub-comunidad-guardar hub-figura-descubrir" type="button" aria-controls="resultadoFiguraCercana" aria-expanded="false">Descubrir</button>
+            <div id="resultadoFiguraCercana" class="hub-figura-resultado" aria-live="polite" hidden></div>
+            <p id="reflexionFiguraCercana" class="hub-figura-reflexion" hidden>Elegir lo mismo no siempre significa tener los mismos motivos. Si te la cruzás en el campus, ya tenés una excusa para preguntar qué historia hay detrás de su figura.</p>
+        </section>
+        <section class="hub-comunidad-tarjeta" aria-labelledby="tituloPuntosEncuentro">
+            <h3 id="tituloPuntosEncuentro">Puntos de encuentro</h3>
+            <p>Cada capa de tu efigie te conecta con distintas personas de la comunidad universitaria. Deslizá entre tus respuestas para descubrir quiénes eligieron igual que vos en cada parte del recorrido y cómo esa misma elección se combinó en otras figuras.</p>
+            <p class="hub-comunidad-pendiente">Próximamente</p>
+        </section>
+        <section class="hub-comunidad-tarjeta" aria-labelledby="tituloTodasEfigies">
+            <h3 id="tituloTodasEfigies">Todas las efigies de la comunidad</h3>
+            <p class="hub-comunidad-subtitulo">Distintas figuras. Nuevas conversaciones.</p>
+            <p>Todos los días compartimos aulas, pasillos y espacios comunes con personas que todavía no conocemos. Esta galería reúne las figuras de estudiantes, docentes y personal de la universidad que dejaron su huella en la experiencia. Cada efigie nació de las preferencias cotidianas de alguien de nuestra comunidad; juntas, forman un mapa visual de lo que tenemos en común.</p>
+            <p class="hub-comunidad-pendiente">Próximamente</p>
+        </section>
+        <div class="hub-comunidad-tarjeta">
+            <p>Llevate tu efigie digital. Cada vez que un nuevo grupo participe, esta galería va a seguir creciendo con nuevas formas y posibles cruces. Volvé cuando quieras para seguir explorando quiénes están más cerca de lo que creías.</p>
+            <button id="guardarLinkHub" class="hub-comunidad-guardar" type="button">Guardar link</button>
+            <p id="estadoGuardarLinkHub" class="hub-comunidad-estado" role="status" hidden></p>
+            <a id="linkHubManual" class="hub-comunidad-link" href="https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub" hidden>Enlace al hub</a>
+        </div>
     </section>
 
     <section id="capasEfigie" class="hub-capas" aria-labelledby="tituloCapas">
@@ -131,6 +157,405 @@
             let avanceCarrusel = 0;
             let arrastreCarrusel = null;
             let posicionPagina = 0;
+            const encabezadoFijo = document.getElementById('encabezadoHub');
+            const logoFijo = encabezadoFijo.querySelector('.hub-usuario-logo');
+            const resumenExperiencia = document.getElementById('resumenExperiencia');
+            let posicionLogo = Math.max(0, window.scrollY);
+            let desplazamientoLogo = 0;
+
+            const paletaComunidad = [
+                '#6064A3', '#7C171F', '#459BDA', '#84B444', '#CE2D7B', '#F9DB52',
+                '#6EB392', '#E27646', '#85A8C8', '#133463', '#8B1C31'
+            ].map(color => [1, 3, 5].map(inicio => parseInt(color.slice(inicio, inicio + 2), 16)));
+            function elegirColores(colorActual, indiceActual) {
+                const disponibles = paletaComunidad.filter(color => color !== colorActual);
+                const colores = [];
+                const cantidadNuevos = colorActual ? 3 : 4;
+                while (colores.length < cantidadNuevos) {
+                    const indice = Math.floor(Math.random() * disponibles.length);
+                    colores.push(disponibles.splice(indice, 1)[0]);
+                }
+                if (colorActual) colores.splice(indiceActual, 0, colorActual);
+                return colores;
+            }
+
+            function asignarColores(elemento) {
+                const colores = elegirColores();
+                return { elemento, colores, colorActual: colores[0], visible: false, visto: false };
+            }
+
+            const tarjetasComunidad = [...document.querySelectorAll('.hub-comunidad-tarjeta')].map(asignarColores);
+            let barrasCapas = [];
+            let fotogramaComunidad = 0;
+
+            function colorSegunPosicion(item) {
+                const rect = item.elemento.getBoundingClientRect();
+                if (rect.bottom <= 0 || rect.top >= window.innerHeight) {
+                    item.visible = false;
+                    return item.colorActual;
+                }
+
+                const avance = (window.innerHeight - rect.top) / (window.innerHeight + rect.height);
+                const indice = Math.min(3, Math.floor(avance * 4));
+                if (!item.visible && item.visto) item.colores = elegirColores(item.colorActual, indice);
+                item.visible = true;
+                item.visto = true;
+                item.colorActual = item.colores[indice];
+                return item.colorActual;
+            }
+
+            function luminanciaColor(color) {
+                return color.map(canal => {
+                    const valor = canal / 255;
+                    return valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4;
+                }).reduce((suma, canal, indice) => suma + canal * [0.2126, 0.7152, 0.0722][indice], 0);
+            }
+
+            function actualizarColorLogo() {
+                const logo = logoFijo.getBoundingClientRect();
+                const x = logo.left + logo.width / 2;
+                const y = logo.top + logo.height / 2;
+                const tarjetas = [resumenExperiencia, ...tarjetasComunidad.map(({ elemento }) => elemento)];
+                const tarjeta = tarjetas.find(elemento => {
+                    const rect = elemento.getBoundingClientRect();
+                    return rect.left <= x && x < rect.right && rect.top <= y && y < rect.bottom;
+                });
+                if (!tarjeta) {
+                    encabezadoFijo.style.removeProperty('--color-logo');
+                    encabezadoFijo.classList.remove('logo-oscuro');
+                    return;
+                }
+                const color = tarjeta.style.getPropertyValue('--color-comunidad') ||
+                    getComputedStyle(tarjeta).backgroundColor;
+                const canales = color.match(/\d+/g).slice(0, 3).map(Number);
+                encabezadoFijo.style.setProperty('--color-logo', color);
+                encabezadoFijo.classList.toggle('logo-oscuro', luminanciaColor(canales) < 0.12);
+            }
+
+            function actualizarColoresComunidad() {
+                fotogramaComunidad = 0;
+                for (const item of tarjetasComunidad) {
+                    const color = colorSegunPosicion(item);
+                    item.elemento.style.setProperty('--color-comunidad', `rgb(${color.join(', ')})`);
+                    item.elemento.style.setProperty('--texto-comunidad', luminanciaColor(color) > 0.179 ? '#000000' : '#ffffff');
+                }
+                for (const item of barrasCapas) {
+                    const color = colorSegunPosicion(item);
+                    item.elemento.style.setProperty('--color-barra', `rgb(${color.join(', ')})`);
+                }
+                actualizarColorLogo();
+            }
+
+            function solicitarColoresComunidad() {
+                if (!fotogramaComunidad) fotogramaComunidad = requestAnimationFrame(actualizarColoresComunidad);
+            }
+
+            window.addEventListener('scroll', solicitarColoresComunidad, { passive: true });
+            window.addEventListener('resize', solicitarColoresComunidad);
+            actualizarColoresComunidad();
+
+            const descubrirFigura = document.getElementById('descubrirFiguraCercana');
+            const resultadoFigura = document.getElementById('resultadoFiguraCercana');
+            const tarjetaFigura = document.getElementById('tarjetaFiguraCercana');
+            const reflexionFigura = document.getElementById('reflexionFiguraCercana');
+            let solicitudFigura = null;
+            let posicionFigura = 0;
+            let estadoFigura = 'cerrada';
+            let secuenciaFigura = 0;
+            let figuraDescubierta = false;
+
+            function desplazarFigura(posicion) {
+                window.scrollTo({ top: Math.max(0, posicion), behavior: 'instant' });
+                posicionFigura = window.scrollY;
+                posicionLogo = Math.max(0, window.scrollY);
+            }
+
+            function centroTarjetaFigura(centrarResultado = false) {
+                const rect = tarjetaFigura.getBoundingClientRect();
+                const altoEncabezado = encabezadoFijo.offsetHeight;
+                const centroVisible = altoEncabezado + (window.innerHeight - altoEncabezado) / 2;
+                let destino = window.scrollY + rect.top + rect.height / 2 - centroVisible;
+                if (centrarResultado) {
+                    const resultado = resultadoFigura.getBoundingClientRect();
+                    const desplazamiento = destino - window.scrollY;
+                    const inferior = resultado.bottom - desplazamiento;
+                    destino += Math.max(0, inferior - (window.innerHeight - 12));
+                    const superior = resultado.top - (destino - window.scrollY);
+                    destino -= Math.max(0, altoEncabezado + 8 - superior);
+                }
+                return destino;
+            }
+
+            function animarFigura(duracion, secuencia, paso) {
+                if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    if (secuencia !== secuenciaFigura) return Promise.resolve(false);
+                    paso(1);
+                    return Promise.resolve(true);
+                }
+                return new Promise(resolve => {
+                    let inicio = null;
+                    function avanzar(tiempo) {
+                        if (secuencia !== secuenciaFigura) {
+                            resolve(false);
+                            return;
+                        }
+                        if (inicio === null) inicio = tiempo;
+                        const progreso = Math.min(1, (tiempo - inicio) / duracion);
+                        paso(1 - (1 - progreso) ** 3);
+                        if (progreso < 1) requestAnimationFrame(avanzar);
+                        else resolve(true);
+                    }
+                    requestAnimationFrame(avanzar);
+                });
+            }
+
+            async function cerrarFiguraCercana() {
+                if (solicitudFigura) solicitudFigura.abort();
+                solicitudFigura = null;
+                const secuencia = ++secuenciaFigura;
+                if (resultadoFigura.hidden) {
+                    estadoFigura = 'cerrada';
+                    descubrirFigura.disabled = false;
+                    descubrirFigura.textContent = figuraDescubierta ? 'Ver más' : 'Descubrir';
+                    return;
+                }
+
+                estadoFigura = 'cerrando';
+                const alturaResultado = resultadoFigura.getBoundingClientRect().height;
+                const estiloResultado = getComputedStyle(resultadoFigura);
+                const margenSuperior = parseFloat(estiloResultado.marginTop);
+                const margenInferior = parseFloat(estiloResultado.marginBottom);
+                const opacidad = parseFloat(estiloResultado.opacity);
+                const mostrarReflexion = reflexionFigura.hidden;
+                let alturaReflexion = 0;
+                if (mostrarReflexion) {
+                    reflexionFigura.hidden = false;
+                    alturaReflexion = reflexionFigura.scrollHeight;
+                    reflexionFigura.style.overflow = 'hidden';
+                    reflexionFigura.style.height = '0px';
+                    reflexionFigura.style.marginTop = '0px';
+                    reflexionFigura.style.opacity = '0';
+                }
+                const finalizada = await animarFigura(300, secuencia, progreso => {
+                    resultadoFigura.style.height = `${alturaResultado * (1 - progreso)}px`;
+                    resultadoFigura.style.marginTop = `${margenSuperior * (1 - progreso)}px`;
+                    resultadoFigura.style.marginBottom = `${margenInferior * (1 - progreso)}px`;
+                    resultadoFigura.style.opacity = `${opacidad * (1 - progreso)}`;
+                    if (mostrarReflexion) {
+                        reflexionFigura.style.height = `${alturaReflexion * progreso}px`;
+                        reflexionFigura.style.marginTop = `${20 * progreso}px`;
+                        reflexionFigura.style.opacity = `${progreso}`;
+                    }
+                    desplazarFigura(centroTarjetaFigura());
+                });
+                if (!finalizada) return;
+                resultadoFigura.hidden = true;
+                resultadoFigura.replaceChildren();
+                resultadoFigura.removeAttribute('style');
+                reflexionFigura.removeAttribute('style');
+                figuraDescubierta = true;
+                tarjetaFigura.append(descubrirFigura);
+                descubrirFigura.hidden = false;
+                descubrirFigura.disabled = false;
+                descubrirFigura.textContent = 'Ver más';
+                descubrirFigura.setAttribute('aria-expanded', 'false');
+                estadoFigura = 'cerrada';
+                desplazarFigura(centroTarjetaFigura());
+            }
+
+            function crearTarjetaFigura(figura) {
+                if (!figura || typeof figura.nombre !== 'string' || typeof figura.efigie !== 'string' ||
+                    !Array.isArray(figura.coincidencias) || figura.coincidencias.length > 7 ||
+                    figura.coincidencias.some(item => !item || typeof item.categoria !== 'string' || typeof item.valor !== 'string'))
+                    throw new Error('La figura cercana recibida no es válida.');
+
+                const documento = new DOMParser().parseFromString(figura.efigie, 'image/svg+xml');
+                if (documento.documentElement.localName !== 'svg' || documento.querySelector('parsererror'))
+                    throw new Error('La efigie de la figura cercana no es válida.');
+
+                const tarjeta = document.createElement('article');
+                tarjeta.className = 'hub-figura-tarjeta';
+                const identidad = document.createElement('div');
+                identidad.className = 'hub-figura-identidad';
+                const visual = document.createElement('div');
+                visual.className = 'hub-figura-visual';
+                visual.setAttribute('role', 'img');
+                visual.setAttribute('aria-label', `Efigie de ${figura.nombre}`);
+                visual.append(document.importNode(documento.documentElement, true));
+                const nombre = document.createElement('p');
+                nombre.className = 'hub-figura-nombre';
+                nombre.textContent = figura.nombre;
+                identidad.append(nombre, visual);
+
+                const titulo = document.createElement('p');
+                titulo.className = 'hub-figura-coincidencias-titulo';
+                const cantidad = figura.coincidencias.length;
+                titulo.textContent = `Coinciden en ${cantidad} de 7 elecciones`;
+                const lista = document.createElement('ul');
+                lista.className = 'hub-figura-coincidencias';
+                if (!cantidad) {
+                    const vacio = document.createElement('li');
+                    vacio.textContent = 'No hay respuestas en común.';
+                    lista.append(vacio);
+                }
+                for (const coincidencia of figura.coincidencias) {
+                    const item = document.createElement('li');
+                    let categoria = coincidencia.categoria;
+                    if (categoria === 'Forma de trabajar o estudiar') {
+                        const preferencia = coincidencia.valor.trim().toLowerCase();
+                        if (preferencia.includes('grupal')) categoria = 'Trabajar en grupo';
+                        else if (preferencia.includes('solo')) categoria = 'Trabajar solo';
+                    }
+                    item.textContent = categoria;
+                    lista.append(item);
+                }
+                tarjeta.append(identidad, titulo, lista);
+                return tarjeta;
+            }
+
+            async function mostrarFiguraCercana(contenido, secuencia) {
+                resultadoFigura.replaceChildren(...contenido);
+                descubrirFigura.hidden = true;
+                descubrirFigura.disabled = false;
+                descubrirFigura.setAttribute('aria-expanded', 'true');
+                resultadoFigura.hidden = false;
+                const altura = resultadoFigura.scrollHeight;
+                resultadoFigura.style.height = '0px';
+                resultadoFigura.style.marginTop = '0px';
+                resultadoFigura.style.marginBottom = '0px';
+                resultadoFigura.style.opacity = '0';
+                estadoFigura = 'abriendo';
+                desplazarFigura(centroTarjetaFigura(true));
+                const finalizada = await animarFigura(300, secuencia, progreso => {
+                    resultadoFigura.style.height = `${altura * progreso}px`;
+                    resultadoFigura.style.marginTop = `${20 * progreso}px`;
+                    resultadoFigura.style.marginBottom = `${20 * progreso}px`;
+                    resultadoFigura.style.opacity = `${progreso}`;
+                    desplazarFigura(centroTarjetaFigura(true));
+                });
+                if (!finalizada) return;
+                resultadoFigura.removeAttribute('style');
+                estadoFigura = 'abierta';
+                desplazarFigura(centroTarjetaFigura(true));
+            }
+
+            descubrirFigura.addEventListener('click', async () => {
+                const controlador = new AbortController();
+                solicitudFigura = controlador;
+                const secuencia = ++secuenciaFigura;
+                estadoFigura = 'centrando';
+                posicionFigura = window.scrollY;
+                descubrirFigura.disabled = true;
+                descubrirFigura.textContent = 'Buscando...';
+                const inicio = window.scrollY;
+                const destino = centroTarjetaFigura();
+                const centrado = animarFigura(300, secuencia, progreso => {
+                    desplazarFigura(inicio + (destino - inicio) * progreso);
+                });
+                try {
+                    const [, respuesta] = await Promise.all([
+                        centrado,
+                        fetch(`/api/hub/figura-cercana?responseId=${encodeURIComponent(usuario.id || '')}`,
+                            { cache: 'no-store', signal: controlador.signal })
+                    ]);
+                    if (controlador !== solicitudFigura) return;
+                    if (respuesta.status === 404) {
+                        const aviso = document.createElement('p');
+                        aviso.className = 'hub-figura-aviso';
+                        aviso.textContent = 'Tu participación no está disponible en las respuestas actuales.';
+                        await mostrarFiguraCercana([aviso], secuencia);
+                        return;
+                    }
+                    if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
+                    const datos = await respuesta.json();
+                    if (controlador !== solicitudFigura) return;
+                    if (!Array.isArray(datos.figuras) || datos.figuras.length > 2)
+                        throw new Error('La lista de figuras cercanas no es válida.');
+                    if (!datos.figuras.length) {
+                        const aviso = document.createElement('p');
+                        aviso.className = 'hub-figura-aviso';
+                        aviso.textContent = 'Todavía no hay otras personas registradas para comparar.';
+                        await mostrarFiguraCercana([aviso], secuencia);
+                        return;
+                    }
+                    const lista = document.createElement('div');
+                    lista.className = 'hub-figura-lista';
+                    lista.append(...datos.figuras.map(crearTarjetaFigura));
+                    const contenido = [lista];
+                    if (datos.figuras.length > 1) {
+                        lista.classList.add('hub-figura-lista-empate');
+                        lista.setAttribute('aria-label', 'Figuras con la misma cantidad de coincidencias');
+                        const indicacion = document.createElement('p');
+                        indicacion.className = 'hub-figura-indicacion';
+                        indicacion.textContent = 'Deslizá para ver las 2 figuras.';
+                        contenido.unshift(indicacion);
+                    }
+                    await mostrarFiguraCercana(contenido, secuencia);
+                } catch (errorCarga) {
+                    if (errorCarga.name === 'AbortError' || controlador !== solicitudFigura) return;
+                    console.error('No se pudo descubrir la figura más cercana.', errorCarga);
+                    await centrado;
+                    if (controlador !== solicitudFigura) return;
+                    const aviso = document.createElement('p');
+                    aviso.className = 'hub-figura-aviso';
+                    aviso.textContent = 'No se pudo buscar tu figura más cercana. Desplazate y volvé a intentar.';
+                    await mostrarFiguraCercana([aviso], secuencia);
+                } finally {
+                    if (controlador === solicitudFigura) solicitudFigura = null;
+                }
+            });
+
+            window.addEventListener('scroll', () => {
+                if (['centrando', 'abriendo', 'abierta'].includes(estadoFigura) &&
+                    Math.abs(window.scrollY - posicionFigura) > 1)
+                    cerrarFiguraCercana();
+            }, { passive: true });
+
+            const linkHub = document.getElementById('linkHubManual');
+            const estadoGuardarLink = document.getElementById('estadoGuardarLinkHub');
+            const botonGuardarLink = document.getElementById('guardarLinkHub');
+            botonGuardarLink.addEventListener('click', async () => {
+                botonGuardarLink.disabled = true;
+                estadoGuardarLink.hidden = true;
+                linkHub.hidden = true;
+
+                async function copiarLink() {
+                    if (!window.isSecureContext || !navigator.clipboard?.writeText) return false;
+                    try {
+                        await navigator.clipboard.writeText(linkHub.href);
+                        return true;
+                    } catch (errorCopia) {
+                        console.error('No se pudo copiar el enlace del hub.', errorCopia);
+                        return false;
+                    }
+                }
+
+                async function compartirLink() {
+                    if (!window.isSecureContext || typeof navigator.share !== 'function') return 'no-disponible';
+                    try {
+                        await navigator.share({ title: 'Efigie', url: linkHub.href });
+                        return 'compartido';
+                    } catch (errorCompartir) {
+                        if (errorCompartir.name === 'AbortError') return 'cancelado';
+                        console.error('No se pudo abrir el menú para compartir el enlace.', errorCompartir);
+                        return 'error';
+                    }
+                }
+
+                const copia = copiarLink();
+                const compartir = compartirLink();
+                const [copiado, resultadoCompartir] = await Promise.all([copia, compartir]);
+                const avisoCopia = copiado
+                    ? 'Enlace copiado.'
+                    : 'No se pudo copiar el enlace. Podés abrirlo y copiarlo desde aquí.';
+                const avisoCompartir = resultadoCompartir === 'no-disponible'
+                    ? ' El menú para compartir no está disponible en este navegador.'
+                    : resultadoCompartir === 'error' ? ' No se pudo abrir el menú para compartir.' : '';
+                estadoGuardarLink.textContent = avisoCopia + avisoCompartir;
+                linkHub.hidden = copiado;
+                estadoGuardarLink.hidden = false;
+                botonGuardarLink.disabled = false;
+            });
 
             function experienciaSimulada() {
                 const colores = [
@@ -346,6 +771,7 @@
                 document.body.classList.remove('hub-experiencia-abierta');
                 document.body.style.removeProperty('top');
                 window.scrollTo(0, posicionPagina);
+                posicionLogo = Math.max(0, window.scrollY);
                 document.documentElement.classList.remove('hub-experiencia-abierta');
             }
 
@@ -453,6 +879,7 @@
                 const resumen = document.getElementById('resumenExperiencia');
                 resumen.style.setProperty('--color-equipo', experiencia.equipo.color);
                 resumen.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
+                solicitarColoresComunidad();
                 const abrir = document.getElementById('abrirExperiencia');
                 abrir.style.setProperty('--color-equipo', experiencia.equipo.color);
                 abrir.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
@@ -504,10 +931,28 @@
                 for (const url of urlsEfigiesExperiencia) URL.revokeObjectURL(url);
             });
 
-            const encabezadoFijo = document.getElementById('encabezadoHub');
             function actualizarLogoFijo() {
                 encabezadoFijo.classList.toggle('scrolleado',
                     document.body.classList.contains('hub-experiencia-abierta') ? posicionPagina > 0 : window.scrollY > 0);
+                if (document.body.classList.contains('hub-experiencia-abierta')) return;
+
+                const posicionActual = Math.max(0, window.scrollY);
+                const avance = posicionActual - posicionLogo;
+                posicionLogo = posicionActual;
+                const alto = encabezadoFijo.offsetHeight;
+                if (avance < 0) {
+                    desplazamientoLogo = Math.max(0, desplazamientoLogo + avance);
+                } else if (avance > 0 && desplazamientoLogo < alto) {
+                    const tarjetas = document.querySelectorAll('.hub-efigie-tarjeta, .hub-experiencia-bloque, .hub-comunidad-tarjeta, .hub-capa');
+                    for (const tarjeta of tarjetas) {
+                        const superior = tarjeta.getBoundingClientRect().top;
+                        if (superior + avance > 0 && superior < alto) {
+                            desplazamientoLogo = Math.max(desplazamientoLogo, Math.min(alto, alto - superior));
+                        }
+                    }
+                }
+                if (posicionActual === 0) desplazamientoLogo = 0;
+                encabezadoFijo.style.transform = `translateY(${-desplazamientoLogo}px)`;
             }
             window.addEventListener('scroll', actualizarLogoFijo, { passive: true });
             actualizarLogoFijo();
@@ -856,6 +1301,8 @@
                 });
 
                 listaCapas.replaceChildren(...secciones);
+                barrasCapas = [...listaCapas.querySelectorAll('.hub-capa-explicacion-particular')].map(asignarColores);
+                solicitarColoresComunidad();
             }
 
             try {

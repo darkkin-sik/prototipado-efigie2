@@ -340,12 +340,14 @@ class Program
         string rutaCsv = Path.Combine(dirActual, "respuestas_app.csv");
         string rutaConfig = Path.Combine(dirActual, "config.json");
         string rutaHistorialExperiencias = Path.Combine(dirActual, "experiencias_hub.json");
+        var registroComunidad = new RegistroComunidad(Path.Combine(dirActual, "datos", "comunidad.db"));
         List<HubExperienceRecord> historialExperiencias = File.Exists(rutaHistorialExperiencias)
             ? JsonSerializer.Deserialize<List<HubExperienceRecord>>(File.ReadAllText(rutaHistorialExperiencias)) ?? new()
             : new();
 
     app.Use(async (ctx, next) => {
-        if (ctx.Request.Path.StartsWithSegments("/experiencias_hub.json") ||
+        if (ctx.Request.Path.StartsWithSegments("/datos") ||
+            ctx.Request.Path.StartsWithSegments("/experiencias_hub.json") ||
             ctx.Request.Path.StartsWithSegments("/experiencias_hub.json.tmp"))
         {
             ctx.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -2468,6 +2470,33 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Text(LeerEfigieAleatoria(dirActual), "image/svg+xml; charset=utf-8");
     });
 
+    app.MapGet("/api/hub/figura-cercana", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        if (string.IsNullOrWhiteSpace(responseId))
+            return Results.BadRequest();
+
+        var participantes = LeerUsuariosCsv(rutaCsv)
+            .Select(datos => new ParticipanteComunidad(datos, ""));
+        IReadOnlyList<FiguraCercana> figuras = RegistroComunidad.BuscarFigurasCercanas(participantes, responseId);
+        if (figuras == null)
+            return Results.NotFound(new { error = "Tu participación no está disponible en las respuestas actuales." });
+
+        ConfigEfigie config = LeerConfig(rutaConfig);
+        return Results.Json(new
+        {
+            figuras = figuras.Select(figura => new
+            {
+                nombre = figura.Participante.Datos.nombre,
+                efigie = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(figura.Participante.Datos, config, incluirMarcoYNombre: false)),
+                coincidencias = figura.Coincidencias.Select(coincidencia => new
+                {
+                    categoria = coincidencia.Categoria,
+                    valor = coincidencia.Valor
+                })
+            })
+        });
+    });
+
     app.MapGet("/api/hub/experiencia", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
         if (string.IsNullOrWhiteSpace(responseId))
@@ -2529,10 +2558,10 @@ app.MapGet("/", (HttpContext ctx) => {
         }
     });
 
-    IResult RespuestaHub(DatosRespuesta usuario)
+    IResult RespuestaHub(DatosRespuesta usuario, string efigieGuardada = null)
     {
         var config = LeerConfig(rutaConfig);
-        string efigieEstatica = GeneradorEfigie.GenerarSVG(usuario, config, incluirMarcoYNombre: false);
+        string efigieEstatica = efigieGuardada ?? GeneradorEfigie.GenerarSVG(usuario, config, incluirMarcoYNombre: false);
         return Results.Json(new
         {
             id = usuario.id,
@@ -2576,14 +2605,15 @@ app.MapGet("/", (HttpContext ctx) => {
             string.IsNullOrWhiteSpace(solicitud.contrasena))
             return Results.BadRequest();
 
-        var usuario = LeerUsuariosCsv(rutaCsv).FirstOrDefault(respuesta =>
+        var usuario = LeerUsuariosCsv(rutaCsv).LastOrDefault(respuesta =>
             string.Equals(respuesta.nombre.Trim(), solicitud.nombre.Trim(), StringComparison.OrdinalIgnoreCase) &&
             string.Equals(respuesta.estacion.Trim(), solicitud.contrasena.Trim(), StringComparison.OrdinalIgnoreCase));
 
-        if (usuario == null)
-            return Results.Unauthorized();
+        if (usuario != null)
+            return RespuestaHub(usuario);
 
-        return RespuestaHub(usuario);
+        ParticipanteComunidad registrado = registroComunidad.BuscarPorCredenciales(solicitud.nombre, solicitud.contrasena);
+        return registrado != null ? RespuestaHub(registrado.Datos, registrado.Efigie) : Results.Unauthorized();
     });
 
     app.MapGet("/api/pantuno", (HttpContext ctx) => {
@@ -2900,6 +2930,15 @@ app.MapGet("/", (HttpContext ctx) => {
             EstadosRondaDos.Clear();
             EstadosRondaTres.Clear();
             RespuestasQueVuelvenAEncuesta.Clear();
+            var ordenRespuestas = LeerUsuariosCsv(rutaCsv)
+                .Select((respuesta, indice) => new { respuesta.id, indice })
+                .GroupBy(item => item.id, StringComparer.Ordinal)
+                .ToDictionary(grupo => grupo.Key, grupo => grupo.Last().indice, StringComparer.Ordinal);
+            registroComunidad.Registrar(ParticipantesLobby.Values
+                .Where(participante => !participante.EsBot)
+                .OrderBy(participante => ordenRespuestas.GetValueOrDefault(participante.ResponseId, int.MaxValue))
+                .ThenBy(participante => participante.ResponseId, StringComparer.Ordinal)
+                .Select(participante => new ParticipanteComunidad(participante.Datos, participante.Svg)));
             RondaIniciada = true;
             EncolarAudio("audio2");
         }
