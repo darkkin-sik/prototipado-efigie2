@@ -510,8 +510,8 @@
                     tarjeta.style.setProperty('--color-equipo', equipo.color);
                     const titulo = document.createElement('h2');
                     titulo.textContent = equipo.representanteNombre
-                        ? `Equipo ${equipo.numero} · Representante: ${equipo.representanteNombre}`
-                        : `Equipo ${equipo.numero}`;
+                        ? `${equipo.nombre} · Representante: ${equipo.representanteNombre}`
+                        : equipo.nombre;
                     const puntaje = document.createElement('p');
                     puntaje.textContent = `${equipo.posibilidades}/7 posibilidades de triangulación · Puntaje ${equipo.puntaje}`;
                     const integrantes = document.createElement('ul');

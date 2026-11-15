@@ -48,7 +48,7 @@
                 fila.style.setProperty('--color-texto', equipo.colorTexto);
                 fila.querySelector('.posicion').textContent = String(indice + 1);
                 const nombre = fila.querySelector('.nombre');
-                nombre.textContent = `Equipo ${equipo.numero}`;
+                nombre.textContent = equipo.nombre;
                 const esEquipoPropio = equipo.numero === equipoPropio;
                 fila.classList.toggle('equipo-propio', esEquipoPropio);
                 let marcaPropia = fila.querySelector('.marca-propia');

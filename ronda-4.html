@@ -88,7 +88,7 @@
 
         function renderizar(estado) {
             const etiquetaEquipo = document.getElementById('equipo');
-            etiquetaEquipo.textContent = `Equipo ${estado.equipo}`;
+            etiquetaEquipo.textContent = estado.nombreEquipo;
             etiquetaEquipo.hidden = !estado.equipo;
 
             if (estado.enviado && !adminPreview) {

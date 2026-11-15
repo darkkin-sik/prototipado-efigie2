@@ -43,7 +43,7 @@
                 const respuesta = await fetch(`/api/ronda-3/preronda?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
                 if (!respuesta.ok) throw new Error('No se pudo consultar la etapa de preparación.');
                 const estado = await respuesta.json();
-                equipo.textContent = `Equipo ${estado.equipo}`;
+                equipo.textContent = estado.nombreEquipo;
                 equipo.hidden = !estado.equipo;
                 document.documentElement.style.setProperty('--equipo', estado.color);
                 document.documentElement.style.setProperty('--texto-equipo', estado.colorTexto);

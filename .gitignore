@@ -2,3 +2,5 @@ bin/
 obj/
 .vs/
 cloudflared.exe.exe
+/experiencias_hub.json
+/experiencias_hub.json.tmp

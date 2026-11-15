@@ -374,6 +374,96 @@ body {
     margin: 0;
 }
 
+.hub-experiencia {
+    width: min(100%, 960px);
+    margin: 8px auto 0;
+    display: grid;
+    gap: 0;
+}
+
+.hub-cinta {
+    width: 100vw;
+    height: clamp(88px, 12vw, 128px);
+    margin-left: calc(50% - 50vw);
+    overflow: hidden;
+}
+
+.hub-cinta-pista {
+    width: max-content;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: clamp(12px, 2vw, 24px);
+}
+
+.hub-cinta-pista-derecha { animation: efigiesHaciaDerecha 34s linear infinite; }
+.hub-cinta-pista-izquierda { animation: efigiesHaciaIzquierda 34s linear infinite; }
+
+.hub-cinta-pista img {
+    width: clamp(72px, 9vw, 108px);
+    height: clamp(72px, 9vw, 108px);
+    flex: none;
+    object-fit: contain;
+}
+
+@keyframes efigiesHaciaDerecha {
+    from { transform: translateX(-50%); }
+    to { transform: translateX(0); }
+}
+
+@keyframes efigiesHaciaIzquierda {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+.hub-experiencia-bloque {
+    padding: clamp(20px, 5vw, 40px);
+    border-radius: 12px;
+    background: var(--color-equipo, #133463);
+    color: var(--color-texto-equipo, #ffffff);
+}
+
+.hub-experiencia-bloque h2 {
+    margin: 0 0 18px;
+    font-size: clamp(1.5rem, 5vw, 2rem);
+}
+
+.hub-experiencia-aviso {
+    margin: -6px 0 20px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    opacity: 0.85;
+}
+
+.hub-experiencia-datos {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 28px;
+}
+
+.hub-experiencia-datos dt {
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+    opacity: 0.82;
+}
+
+.hub-experiencia-datos dd {
+    margin: 0;
+    font-size: clamp(1rem, 3vw, 1.2rem);
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.hub-experiencia-error {
+    margin: 18px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgb(255 255 255 / 90%);
+    color: #a12525;
+    font-size: 0.9rem;
+}
+
 .hub-contenido-intermedio,
 .hub-capas {
     width: min(100%, 900px);
@@ -403,6 +493,10 @@ body {
 .hub-capas { scroll-margin-top: 104px; }
 .hub-capas-intro { margin-bottom: 16px; }
 
+@media (max-width: 560px) {
+    .hub-experiencia-datos { grid-template-columns: 1fr; }
+}
+
 .hub-capa {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -410,8 +504,12 @@ body {
     gap: clamp(12px, 3vw, 32px);
     padding: 24px 0;
     border-top: 1px solid #d5dad6;
+    cursor: pointer;
+    transition: background-color 160ms ease;
 }
 
+.hub-capa:hover { background-color: rgb(16 26 21 / 3%); }
+.hub-capa:focus-visible { outline: 3px solid #6eb392; outline-offset: 3px; }
 .hub-capa:last-child { border-bottom: 1px solid #d5dad6; }
 
 .hub-capa-columna-visual {
@@ -463,6 +561,80 @@ body {
     border-radius: 3px;
     vertical-align: -0.08em;
 }
+
+.hub-capa-dialog {
+    width: min(820px, 94vw);
+    max-width: none;
+    max-height: 90vh;
+    max-height: 90dvh;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+.hub-capa-dialog::backdrop { background: rgb(0 0 0 / 68%); }
+
+.hub-capa-dialogo-contenido {
+    position: relative;
+    max-height: 90vh;
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: clamp(20px, 4vw, 36px);
+    border-radius: 16px;
+    background: #ffffff;
+    color: #101a15;
+    box-shadow: 0 18px 70px rgb(0 0 0 / 28%);
+}
+
+.hub-capa-dialogo-contenido h2 {
+    margin: 0 44px 12px;
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+    text-align: center;
+}
+
+.hub-capa-dialogo-cerrar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0 0 3px;
+    border: 0;
+    border-radius: 50%;
+    background: #f0f3f1;
+    color: #101a15;
+    font: inherit;
+    font-size: 2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.hub-capa-dialogo-cerrar:focus-visible { outline: 3px solid #6eb392; }
+
+.hub-capa-dialogo-visual {
+    width: min(70vw, 400px);
+    aspect-ratio: 1;
+    margin: 0 auto 16px;
+}
+
+.hub-capa-dialogo-visual svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.hub-capa-dialogo-texto p {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.6;
+    text-align: justify;
+    hyphens: auto;
+}
+
+.hub-capa-dialogo-texto p + p { margin-top: 12px; }
 
 .hub-final {
     width: min(100%, 900px);

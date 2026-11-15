@@ -145,7 +145,7 @@
                 document.documentElement.style.setProperty('--equipo', estado.color);
                 document.documentElement.style.setProperty('--tinta', estado.colorTexto);
                 document.querySelector('meta[name="theme-color"]').content = estado.color;
-                document.getElementById('equipo').textContent = `Equipo ${estado.grupo}`;
+                document.getElementById('equipo').textContent = estado.nombreEquipo;
                 if (!estadoRenderizado) renderizarCandidatos(estado.candidatosRepresentante);
                 actualizarBotones(enviandoEleccion);
                 if (estado.representanteAsignado) {

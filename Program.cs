@@ -84,6 +84,35 @@ class Program
     private sealed record RoundThreeHintRequest(string responseId, int indice);
     private sealed record AudioControlRequest(string accion, string pista, int version);
     private sealed record HubLoginRequest(string nombre, string contrasena);
+    private sealed class HubExperienceParticipant
+    {
+        public HubExperienceParticipant() { }
+        public string ResponseId { get; init; } = "";
+        public string Svg { get; init; } = "";
+        public int GroupNumber { get; init; }
+        public int IndividualPoints { get; init; }
+    }
+    private sealed class HubExperienceTeam
+    {
+        public HubExperienceTeam() { }
+        public int GroupNumber { get; init; }
+        public string Name { get; init; } = "";
+        public string Color { get; init; } = "";
+        public string TextColor { get; init; } = "";
+        public int MemberCount { get; init; }
+        public int Points { get; init; }
+        public bool Winner { get; init; }
+    }
+    private sealed class HubExperienceRecord
+    {
+        public HubExperienceRecord() { }
+        public string SessionId { get; init; } = "";
+        public DateTime StartedAtUtc { get; init; }
+        public DateTime CompletedAtUtc { get; init; }
+        public long DurationSeconds { get; init; }
+        public List<HubExperienceTeam> Teams { get; init; } = new();
+        public List<HubExperienceParticipant> Participants { get; init; } = new();
+    }
 
     private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
     private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesLobby = new(StringComparer.Ordinal);
@@ -111,14 +140,25 @@ class Program
     private static readonly ConcurrentDictionary<string, RoundFourParticipantState> EstadosRondaCuatro = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, int> PuntajesRondaCuatro = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, int> GrupoPorParticipante = new(StringComparer.Ordinal);
-    private static readonly string[] ColoresGrupo = { "#133463", "#7C171F", "#6064A3", "#84B444", "#E27646" };
-    private static readonly string[] ColoresTextoGrupo = { "#ffffff", "#ffffff", "#ffffff", "#101a15", "#101a15" };
+    private static readonly string[] ColoresGrupo = { "#7C171F", "#E27646", "#84B444", "#F9DB52", "#133463" };
+    private static readonly string[] ColoresTextoGrupo = { "#ffffff", "#101a15", "#101a15", "#101a15", "#ffffff" };
+    private static readonly Dictionary<string, string> NombresColoresGrupo = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["#7C171F"] = "Rojo",
+        ["#E27646"] = "Naranja",
+        ["#84B444"] = "Verde",
+        ["#F9DB52"] = "Amarillo",
+        ["#133463"] = "Azul"
+    };
     private static List<RoundTeam> EquiposPreRonda = new();
     private static readonly object CandadoLobby = new();
     private static volatile bool RondaIniciada;
     private static volatile bool PreviewRondaIniciada;
     private static int EtapaRondaUno;
     private static DateTime? InicioEtapaRondaUnoUtc;
+    private static string IdExperienciaActual = "";
+    private static DateTime? InicioExperienciaUtc;
+    private static bool ExperienciaActualArchivada;
     private static int SegundosExtraRondaUno;
     private static DateTime? InicioRondaTresUtc;
     private static bool AudioRondaDosBloqueada;
@@ -147,6 +187,29 @@ class Program
         "Formato de historia",
         "Forma de trabajar"
     };
+
+    private static string ObtenerNombreEquipo(RoundTeam equipo)
+    {
+        if (!NombresColoresGrupo.TryGetValue(equipo.Color, out string nombreColor))
+            throw new InvalidOperationException($"No hay un nombre configurado para el color {equipo.Color}.");
+        return $"Equipo {nombreColor}";
+    }
+
+    private static (int RondaUno, int RondaDos, int RondaTres, int Total) CalcularPuntajeFinalEquipo(RoundTeam equipo)
+    {
+        int rondaUno = equipo.ParticipantIds.Length == 0 ? 0
+            : (int)Math.Round(equipo.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id)), MidpointRounding.AwayFromZero);
+        int[] puntajesRondaDos = equipo.ParticipantIds
+            .Where(id => PuntajesRondaDos.ContainsKey(id))
+            .Select(id => PuntajesRondaDos[id])
+            .ToArray();
+        int rondaDos = puntajesRondaDos.Length == 0 ? 0
+            : (int)Math.Round(puntajesRondaDos.Average(), MidpointRounding.AwayFromZero);
+        int rondaTres = equipo.ParticipantIds
+            .Where(id => ParticipantesLobby.TryGetValue(id, out LobbyParticipant miembro) && !miembro.EsBot)
+            .Sum(id => PuntajesRondaCuatro.GetValueOrDefault(id));
+        return (rondaUno, rondaDos, rondaTres, rondaUno + rondaDos + rondaTres);
+    }
 
     [STAThread]
     static void Main(string[] args)
@@ -273,6 +336,10 @@ class Program
 
         string rutaCsv = Path.Combine(dirActual, "respuestas_app.csv");
         string rutaConfig = Path.Combine(dirActual, "config.json");
+        string rutaHistorialExperiencias = Path.Combine(dirActual, "experiencias_hub.json");
+        List<HubExperienceRecord> historialExperiencias = File.Exists(rutaHistorialExperiencias)
+            ? JsonSerializer.Deserialize<List<HubExperienceRecord>>(File.ReadAllText(rutaHistorialExperiencias)) ?? new()
+            : new();
 
     app.UseStaticFiles(new StaticFileOptions {
         FileProvider = new PhysicalFileProvider(dirActual),
@@ -819,6 +886,7 @@ app.MapGet("/", (HttpContext ctx) => {
             return new
             {
                 numero = equipo.GroupNumber,
+                nombre = ObtenerNombreEquipo(equipo),
                 color = equipo.Color,
                 colorTexto = equipo.TextColor,
                 puntos = puntuaciones.Length == 0 ? 0
@@ -835,6 +903,7 @@ app.MapGet("/", (HttpContext ctx) => {
             equipos.Add(new
             {
                 numero = equipoEspectador.GroupNumber,
+                nombre = ObtenerNombreEquipo(equipoEspectador),
                 color = equipoEspectador.Color,
                 colorTexto = equipoEspectador.TextColor,
                 puntos = puntuaciones.Length == 0 ? 0
@@ -895,6 +964,7 @@ app.MapGet("/", (HttpContext ctx) => {
         {
             etapaRondaUno = ObtenerEtapaRondaUno(),
             equipo = numeroGrupo,
+            nombreEquipo = ObtenerNombreEquipo(equipo),
             color = equipo.Color,
             colorTexto = equipo.TextColor
         });
@@ -928,6 +998,9 @@ app.MapGet("/", (HttpContext ctx) => {
             participa = true,
             enviado = estado.Submitted,
             equipo = TryObtenerEquipoRonda(responseId, out int numeroGrupo, out _) ? numeroGrupo : 0,
+            nombreEquipo = TryObtenerEquipoRonda(responseId, out _, out RoundTeam equipoParticipante)
+                ? ObtenerNombreEquipo(equipoParticipante)
+                : "",
             nombre = participante.Nombre,
             opciones = ParticipantesLobby.Values
                 .Where(opcion => opcion.ResponseId != responseId)
@@ -1059,29 +1132,20 @@ app.MapGet("/", (HttpContext ctx) => {
 
         var equipos = EquiposPreRonda.Select(equipo =>
         {
-            int puntosRondaUno = equipo.ParticipantIds.Length == 0 ? 0
-                : (int)Math.Round(equipo.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id)), MidpointRounding.AwayFromZero);
-            int[] puntosRondaDos = equipo.ParticipantIds
-                .Where(id => PuntajesRondaDos.ContainsKey(id))
-                .Select(id => PuntajesRondaDos[id])
-                .ToArray();
-            int promedioRondaDos = puntosRondaDos.Length == 0 ? 0
-                : (int)Math.Round(puntosRondaDos.Average(), MidpointRounding.AwayFromZero);
-            int puntosRondaCuatro = equipo.ParticipantIds
-                .Where(id => ParticipantesLobby.TryGetValue(id, out LobbyParticipant miembro) && !miembro.EsBot)
-                .Sum(id => PuntajesRondaCuatro.GetValueOrDefault(id));
+            var puntajes = CalcularPuntajeFinalEquipo(equipo);
             int terminaron = equipo.ParticipantIds.Count(id =>
                 EstadosRondaCuatro.TryGetValue(id, out RoundFourParticipantState estadoEquipo) &&
                 estadoEquipo.Submitted);
             return new
             {
                 numero = equipo.GroupNumber,
+                nombre = ObtenerNombreEquipo(equipo),
                 color = equipo.Color,
                 colorTexto = equipo.TextColor,
-                ronda1 = puntosRondaUno,
-                ronda2 = promedioRondaDos,
-                ronda3 = puntosRondaCuatro,
-                puntos = puntosRondaUno + promedioRondaDos + puntosRondaCuatro,
+                ronda1 = puntajes.RondaUno,
+                ronda2 = puntajes.RondaDos,
+                ronda3 = puntajes.RondaTres,
+                puntos = puntajes.Total,
                 terminaron
             };
         }).OrderByDescending(equipo => equipo.puntos).ThenBy(equipo => equipo.numero).ToArray();
@@ -1222,6 +1286,7 @@ app.MapGet("/", (HttpContext ctx) => {
             return new
             {
                 numero = equipo.GroupNumber,
+                nombre = ObtenerNombreEquipo(equipo),
                 color = equipo.Color,
                 colorTexto = equipo.TextColor,
                 cantidadPuntajes = puntuaciones.Length,
@@ -1240,6 +1305,7 @@ app.MapGet("/", (HttpContext ctx) => {
             equipos.Add(new
             {
                 numero = equipoEspectador.GroupNumber,
+                nombre = ObtenerNombreEquipo(equipoEspectador),
                 color = equipoEspectador.Color,
                 colorTexto = equipoEspectador.TextColor,
                 cantidadPuntajes = puntuaciones.Length,
@@ -1409,6 +1475,7 @@ app.MapGet("/", (HttpContext ctx) => {
         var equipos = EquiposPreRonda.Select(equipo => new
         {
             numero = equipo.GroupNumber,
+            nombre = ObtenerNombreEquipo(equipo),
             color = equipo.Color,
             posibilidades = equipo.TriangulationPossibilities,
             puntaje = equipo.FitnessScore,
@@ -1499,6 +1566,7 @@ app.MapGet("/", (HttpContext ctx) => {
             etapaRondaUno = ObtenerEtapaRondaUno(),
             ronda,
             grupo = numeroGrupo,
+            nombreEquipo = ObtenerNombreEquipo(equipo),
             color = equipo.Color,
             colorTexto = equipo.TextColor,
             candidatosRepresentante = equipo.ParticipantIds
@@ -1578,7 +1646,7 @@ app.MapGet("/", (HttpContext ctx) => {
         {
             double promedio = grupo.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id, 0));
             int puntos = (int)Math.Round(promedio, MidpointRounding.AwayFromZero);
-            return new { numero = grupo.GroupNumber, color = grupo.Color, colorTexto = grupo.TextColor, puntos };
+            return new { numero = grupo.GroupNumber, nombre = ObtenerNombreEquipo(grupo), color = grupo.Color, colorTexto = grupo.TextColor, puntos };
         }).ToList();
         if (ParticipantesEspectador.ContainsKey(responseId))
         {
@@ -1587,6 +1655,7 @@ app.MapGet("/", (HttpContext ctx) => {
             equipos.Add(new
             {
                 numero = equipoEspectador.GroupNumber,
+                nombre = ObtenerNombreEquipo(equipoEspectador),
                 color = equipoEspectador.Color,
                 colorTexto = equipoEspectador.TextColor,
                 puntos = (int)Math.Round(promedio, MidpointRounding.AwayFromZero)
@@ -1606,6 +1675,7 @@ app.MapGet("/", (HttpContext ctx) => {
             previewIniciada = PreviewRondaIniciada,
             etapaRondaUno,
             equipoPropio = numeroGrupo,
+            nombreEquipo = ObtenerNombreEquipo(equipo),
             color = equipo.Color,
             colorTexto = equipo.TextColor,
             esRepresentante,
@@ -1901,6 +1971,8 @@ app.MapGet("/", (HttpContext ctx) => {
                     NavegacionesAdmin[participante.ResponseId] =
                         $"{rutaAnterior}{Uri.EscapeDataString(participante.ResponseId)}";
 
+                if (EtapaRondaUno == 9)
+                    ExperienciaActualArchivada = false;
                 EtapaRondaUno = etapaAnterior;
                 PreviewRondaIniciada = etapaAnterior > 0;
                 InicioEtapaRondaUnoUtc = null;
@@ -1989,6 +2061,8 @@ app.MapGet("/", (HttpContext ctx) => {
             }
             if (RondaIniciada)
             {
+                if (EtapaRondaUno == 9)
+                    ArchivarExperiencia();
                 EnviarNavegacionATodos("/lobby/");
                 RondaIniciada = false;
                 PreviewRondaIniciada = false;
@@ -2041,6 +2115,8 @@ app.MapGet("/", (HttpContext ctx) => {
     app.MapPost("/api/admin/sesion/terminar-todas", () => {
         lock (CandadoLobby)
         {
+            if (EtapaRondaUno == 9)
+                ArchivarExperiencia();
             DateTime ahora = DateTime.UtcNow;
             DateTime actividadMinima = ahora.AddSeconds(-30);
             string[] participantesActivos = UltimaActividadParticipante
@@ -2361,6 +2437,48 @@ app.MapGet("/", (HttpContext ctx) => {
         return Results.Text(LeerEfigieAleatoria(dirActual), "image/svg+xml; charset=utf-8");
     });
 
+    app.MapGet("/api/hub/experiencia", (HttpContext ctx) => {
+        string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
+        if (string.IsNullOrWhiteSpace(responseId))
+            return Results.BadRequest();
+
+        lock (CandadoLobby)
+        {
+            if (EtapaRondaUno == 9)
+                ArchivarExperiencia();
+            HubExperienceRecord experiencia = historialExperiencias
+                .OrderByDescending(registro => registro.CompletedAtUtc)
+                .FirstOrDefault(registro => registro.Participants.Any(participante => participante.ResponseId == responseId));
+            if (experiencia == null)
+                return Results.NotFound();
+
+            HubExperienceParticipant participante = experiencia.Participants
+                .First(item => item.ResponseId == responseId);
+            HubExperienceTeam equipo = experiencia.Teams
+                .FirstOrDefault(item => item.GroupNumber == participante.GroupNumber);
+            if (equipo == null)
+                return Results.NotFound();
+
+            return Results.Json(new
+            {
+                esSimulada = false,
+                fechaInicio = experiencia.StartedAtUtc,
+                duracionSegundos = experiencia.DurationSeconds,
+                equipo = new
+                {
+                    nombre = equipo.Name,
+                    color = equipo.Color,
+                    colorTexto = equipo.TextColor,
+                    cantidadIntegrantes = equipo.MemberCount,
+                    puntaje = equipo.Points,
+                    aporteIndividual = participante.IndividualPoints
+                },
+                equipoGanador = experiencia.Teams.FirstOrDefault(item => item.Winner)?.Name ?? "",
+                participantes = experiencia.Participants.Select(item => new { svg = item.Svg }).ToArray()
+            });
+        }
+    });
+
     app.MapPost("/api/hub/iniciar-sesion", async (HttpContext ctx) => {
         var solicitud = await ctx.Request.ReadFromJsonAsync<HubLoginRequest>();
         if (solicitud == null ||
@@ -2665,6 +2783,9 @@ app.MapGet("/", (HttpContext ctx) => {
             if (ParticipantesLobby.Count is < 3 or > 15 || ParticipantesLobby.Count % 3 != 0)
                 return Results.Conflict();
 
+            IdExperienciaActual = Guid.NewGuid().ToString("N");
+            InicioExperienciaUtc = null;
+            ExperienciaActualArchivada = false;
             EquiposPreRonda = ConstruirEquiposOptimos(
                 ParticipantesLobby.Values.ToList(),
                 priorizarParticipantesReales: completarConBots);
@@ -2847,6 +2968,7 @@ app.MapGet("/", (HttpContext ctx) => {
     void IniciarRondaUno()
     {
         if (PreviewRondaIniciada) return;
+        InicioExperienciaUtc ??= DateTime.UtcNow;
         InicioEtapaRondaUnoUtc = null;
         EtapaRondaUno = 1;
         SegundosExtraRondaUno = 0;
@@ -3083,14 +3205,87 @@ app.MapGet("/", (HttpContext ctx) => {
         }
     }
 
+    void ArchivarExperiencia()
+    {
+        if (EtapaRondaUno != 9 || ExperienciaActualArchivada ||
+            string.IsNullOrWhiteSpace(IdExperienciaActual) || !InicioExperienciaUtc.HasValue)
+            return;
+
+        DateTime completadaUtc = DateTime.UtcNow;
+        var equiposConPuntaje = EquiposPreRonda.Select(equipo => new
+        {
+            Equipo = equipo,
+            Puntajes = CalcularPuntajeFinalEquipo(equipo),
+            IntegrantesReales = equipo.ParticipantIds.Count(id =>
+                ParticipantesLobby.TryGetValue(id, out LobbyParticipant integrante) && !integrante.EsBot)
+        }).ToArray();
+        if (equiposConPuntaje.Length == 0)
+            return;
+
+        int grupoGanador = equiposConPuntaje
+            .OrderByDescending(item => item.Puntajes.Total)
+            .ThenBy(item => item.Equipo.GroupNumber)
+            .First()
+            .Equipo.GroupNumber;
+        var participantes = new List<HubExperienceParticipant>();
+        foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(item => !item.EsBot))
+        {
+            if (!GrupoPorParticipante.TryGetValue(participante.ResponseId, out int numeroGrupo))
+                continue;
+
+            int aporteIndividual =
+                PuntajesRondaUno.GetValueOrDefault(participante.ResponseId) +
+                PuntajesRondaDos.GetValueOrDefault(participante.ResponseId) +
+                PuntajesRondaCuatro.GetValueOrDefault(participante.ResponseId);
+            participantes.Add(new HubExperienceParticipant
+            {
+                ResponseId = participante.ResponseId,
+                Svg = participante.Svg,
+                GroupNumber = numeroGrupo,
+                IndividualPoints = aporteIndividual
+            });
+        }
+
+        var experiencia = new HubExperienceRecord
+        {
+            SessionId = IdExperienciaActual,
+            StartedAtUtc = InicioExperienciaUtc.Value,
+            CompletedAtUtc = completadaUtc,
+            DurationSeconds = Math.Max(0, (long)(completadaUtc - InicioExperienciaUtc.Value).TotalSeconds),
+            Teams = equiposConPuntaje.Select(item => new HubExperienceTeam
+            {
+                GroupNumber = item.Equipo.GroupNumber,
+                Name = ObtenerNombreEquipo(item.Equipo),
+                Color = item.Equipo.Color,
+                TextColor = item.Equipo.TextColor,
+                MemberCount = item.IntegrantesReales,
+                Points = item.Puntajes.Total,
+                Winner = item.Equipo.GroupNumber == grupoGanador
+            }).ToList(),
+            Participants = participantes
+        };
+
+        historialExperiencias.RemoveAll(item => item.SessionId == IdExperienciaActual);
+        historialExperiencias.Add(experiencia);
+        string rutaTemporal = rutaHistorialExperiencias + ".tmp";
+        File.WriteAllText(rutaTemporal, JsonSerializer.Serialize(historialExperiencias));
+        File.Move(rutaTemporal, rutaHistorialExperiencias, overwrite: true);
+        ExperienciaActualArchivada = true;
+    }
+
     void FinalizarRondaTres()
     {
-        if (EtapaRondaUno == 9) return;
+        if (EtapaRondaUno == 9)
+        {
+            ArchivarExperiencia();
+            return;
+        }
         EtapaRondaUno = 9;
         InicioEtapaRondaUnoUtc = null;
         InicioRondaTresUtc = null;
         SegundosExtraRondaUno = 0;
         AudioRondaDosBloqueada = false;
+        ArchivarExperiencia();
         EncolarAudio("audio9");
         foreach (LobbyParticipant participante in ParticipantesLobby.Values.Concat(ParticipantesEspectador.Values)
             .Where(persona => !persona.EsBot)

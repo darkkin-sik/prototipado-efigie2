@@ -23,6 +23,29 @@
         </nav>
     </main>
 
+    <section class="hub-experiencia" aria-labelledby="tituloExperiencia">
+        <div class="hub-cinta hub-cinta-superior" aria-hidden="true">
+            <div id="cintaSuperiorEfigies" class="hub-cinta-pista hub-cinta-pista-derecha"></div>
+        </div>
+        <div id="resumenExperiencia" class="hub-experiencia-bloque">
+            <h2 id="tituloExperiencia">Tu experiencia</h2>
+            <p id="avisoExperienciaSimulada" class="hub-experiencia-aviso" hidden></p>
+            <dl class="hub-experiencia-datos">
+                <div><dt>Día y horario de inicio</dt><dd id="fechaExperiencia"></dd></div>
+                <div><dt>Duración</dt><dd id="duracionExperiencia"></dd></div>
+                <div><dt>Integrantes del equipo</dt><dd id="integrantesExperiencia"></dd></div>
+                <div><dt>Tu equipo</dt><dd id="equipoExperiencia"></dd></div>
+                <div><dt>Puntaje del equipo</dt><dd id="puntajeEquipoExperiencia"></dd></div>
+                <div><dt>Tu aporte al equipo</dt><dd id="aporteExperiencia"></dd></div>
+                <div><dt>Equipo ganador</dt><dd id="ganadorExperiencia"></dd></div>
+            </dl>
+            <p id="errorExperiencia" class="hub-experiencia-error" role="status" hidden></p>
+        </div>
+        <div class="hub-cinta hub-cinta-inferior" aria-hidden="true">
+            <div id="cintaInferiorEfigies" class="hub-cinta-pista hub-cinta-pista-izquierda"></div>
+        </div>
+    </section>
+
     <section class="hub-contenido-intermedio" aria-labelledby="tituloContenidoProvisional">
         <h2 id="tituloContenidoProvisional">Más de tu experiencia</h2>
         <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer at felis sed nisl varius posuere. Suspendisse potenti. Cras vitae neque non justo facilisis consequat. Esta sección es provisional y luego tendrá el contenido que falta entre tu efigie y su explicación.</p>
@@ -30,7 +53,7 @@
 
     <section id="capasEfigie" class="hub-capas" aria-labelledby="tituloCapas">
         <h2 id="tituloCapas">Las capas de tu efigie</h2>
-        <p class="hub-capas-intro">Cada capa conserva su movimiento y proporción; sus descripciones se basan en tus respuestas.</p>
+        <p class="hub-capas-intro">Cada efigie cuenta algo de quien la crea. Compartirlas abre conversaciones y encuentros: una manera de conocernos en la facultad a través de nuestras formas de expresarnos.</p>
         <div id="listaCapasEfigie" class="hub-lista-capas"></div>
     </section>
 
@@ -44,6 +67,18 @@
             <button id="cerrarDescarga" class="descarga-cerrar" type="button" aria-label="Cerrar y volver a mi efigie">×</button>
             <button id="descargarEfigie" class="boton-principal descarga-boton" type="button">Descargar</button>
             <p id="errorDescarga" class="descarga-error" role="alert" hidden></p>
+        </div>
+    </dialog>
+
+    <dialog id="dialogoDetalleCapa" class="hub-capa-dialog" aria-labelledby="tituloDetalleCapa" aria-describedby="textoSimbolicoCapa textoGeometricoCapa">
+        <div class="hub-capa-dialogo-contenido">
+            <button id="cerrarDetalleCapa" class="hub-capa-dialogo-cerrar" type="button" aria-label="Cerrar explicación de la capa">×</button>
+            <h2 id="tituloDetalleCapa"></h2>
+            <div id="visualDetalleCapa" class="hub-capa-dialogo-visual" role="img"></div>
+            <div class="hub-capa-dialogo-texto">
+                <p id="textoSimbolicoCapa"></p>
+                <p id="textoGeometricoCapa"></p>
+            </div>
         </div>
     </dialog>
 
@@ -68,8 +103,144 @@
             const botonDescargar = document.getElementById('descargarEfigie');
             const errorDescarga = document.getElementById('errorDescarga');
             const listaCapas = document.getElementById('listaCapasEfigie');
+            const dialogoDetalleCapa = document.getElementById('dialogoDetalleCapa');
+            const cerrarDetalleCapa = document.getElementById('cerrarDetalleCapa');
+            const tituloDetalleCapa = document.getElementById('tituloDetalleCapa');
+            const visualDetalleCapa = document.getElementById('visualDetalleCapa');
+            const textoSimbolicoCapa = document.getElementById('textoSimbolicoCapa');
+            const textoGeometricoCapa = document.getElementById('textoGeometricoCapa');
             let urlPrevia = null;
             let imagenDescarga = null;
+            const urlsEfigiesExperiencia = new Set();
+
+            function experienciaSimulada() {
+                const colores = [
+                    { nombre: 'Rojo', color: '#7C171F', colorTexto: '#ffffff' },
+                    { nombre: 'Naranja', color: '#E27646', colorTexto: '#101a15' },
+                    { nombre: 'Verde', color: '#84B444', colorTexto: '#101a15' },
+                    { nombre: 'Amarillo', color: '#F9DB52', colorTexto: '#101a15' },
+                    { nombre: 'Azul', color: '#133463', colorTexto: '#ffffff' }
+                ];
+                const equipo = colores[Math.floor(Math.random() * colores.length)];
+                const ganador = colores[Math.floor(Math.random() * colores.length)];
+                const fecha = new Date(Date.now() - Math.floor(Math.random() * 60) * 86400000);
+                fecha.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 4) * 15, 0, 0);
+
+                return {
+                    esSimulada: true,
+                    fechaInicio: fecha.toISOString(),
+                    duracionSegundos: (45 + Math.floor(Math.random() * 76)) * 60,
+                    cantidadParticipantes: 9 + Math.floor(Math.random() * 3) * 3,
+                    equipo: {
+                        nombre: `Equipo ${equipo.nombre}`,
+                        color: equipo.color,
+                        colorTexto: equipo.colorTexto,
+                        cantidadIntegrantes: 3,
+                        puntaje: 150 + Math.floor(Math.random() * 451),
+                        aporteIndividual: 20 + Math.floor(Math.random() * 181)
+                    },
+                    equipoGanador: `Equipo ${ganador.nombre}`
+                };
+            }
+
+            async function cargarEfigiesAleatorias(cantidad) {
+                return Promise.all(Array.from({ length: cantidad }, async () => {
+                    const respuesta = await fetch('/api/hub/efigie', { cache: 'no-store' });
+                    if (!respuesta.ok) throw new Error(`No se pudo cargar una efigie de ejemplo (${respuesta.status}).`);
+                    return respuesta.text();
+                }));
+            }
+
+            function renderizarCinta(id, efigies) {
+                if (!efigies.length) throw new Error('No hay efigies para mostrar en las cintas.');
+                const pista = document.getElementById(id);
+                const repeticiones = Math.max(2, Math.ceil(10 / efigies.length));
+                const ciclo = Array.from({ length: repeticiones }, () => efigies).flat();
+                for (const svg of [...ciclo, ...ciclo]) {
+                    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+                    urlsEfigiesExperiencia.add(url);
+                    const imagen = document.createElement('img');
+                    imagen.src = url;
+                    imagen.alt = '';
+                    imagen.draggable = false;
+                    pista.append(imagen);
+                }
+            }
+
+            function formatearDuracion(segundos) {
+                const minutos = Math.max(0, Math.round(segundos / 60));
+                const horas = Math.floor(minutos / 60);
+                const minutosRestantes = minutos % 60;
+                if (horas && minutosRestantes) return `${horas} h ${minutosRestantes} min`;
+                if (horas) return `${horas} h`;
+                return `${minutos} min`;
+            }
+
+            function renderizarExperiencia(experiencia) {
+                const fecha = new Date(experiencia.fechaInicio);
+                if (!Number.isFinite(fecha.getTime()) || !experiencia.equipo ||
+                    !Array.isArray(experiencia.participantes) && !experiencia.esSimulada) {
+                    throw new Error('El servidor devolvió datos incompletos de la experiencia.');
+                }
+
+                document.getElementById('fechaExperiencia').textContent = fecha.toLocaleString('es-AR', {
+                    dateStyle: 'long',
+                    timeStyle: 'short'
+                });
+                document.getElementById('duracionExperiencia').textContent =
+                    formatearDuracion(experiencia.duracionSegundos);
+                document.getElementById('integrantesExperiencia').textContent =
+                    String(experiencia.equipo.cantidadIntegrantes);
+                document.getElementById('equipoExperiencia').textContent = experiencia.equipo.nombre;
+                document.getElementById('puntajeEquipoExperiencia').textContent =
+                    `${experiencia.equipo.puntaje} pts`;
+                document.getElementById('aporteExperiencia').textContent =
+                    `${experiencia.equipo.aporteIndividual} pts`;
+                document.getElementById('ganadorExperiencia').textContent = experiencia.equipoGanador;
+
+                const resumen = document.getElementById('resumenExperiencia');
+                resumen.style.setProperty('--color-equipo', experiencia.equipo.color);
+                resumen.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
+                document.getElementById('avisoExperienciaSimulada').hidden = !experiencia.esSimulada;
+                if (experiencia.esSimulada) {
+                    document.getElementById('avisoExperienciaSimulada').textContent =
+                        'Datos y efigies de ejemplo; se reemplazarán por los de una experiencia real cuando estén disponibles.';
+                }
+
+                return experiencia.esSimulada
+                    ? cargarEfigiesAleatorias(experiencia.cantidadParticipantes)
+                    : Promise.resolve(experiencia.participantes.map(participante => participante.svg));
+            }
+
+            async function cargarExperiencia() {
+                const avisoError = document.getElementById('errorExperiencia');
+                try {
+                    let experiencia = null;
+                    if (typeof usuario.id === 'string' && usuario.id) {
+                        const respuesta = await fetch(
+                            `/api/hub/experiencia?responseId=${encodeURIComponent(usuario.id)}`,
+                            { cache: 'no-store' }
+                        );
+                        if (respuesta.status !== 404) {
+                            if (!respuesta.ok) throw new Error(`No se pudo cargar la experiencia (${respuesta.status}).`);
+                            experiencia = await respuesta.json();
+                        }
+                    }
+
+                    experiencia ||= experienciaSimulada();
+                    const efigies = await renderizarExperiencia(experiencia);
+                    renderizarCinta('cintaSuperiorEfigies', efigies);
+                    renderizarCinta('cintaInferiorEfigies', efigies);
+                } catch (errorCarga) {
+                    console.error('No se pudo cargar el bloque de experiencia.', errorCarga);
+                    avisoError.textContent = 'No se pudo cargar la experiencia. Recargá la página para volver a intentar.';
+                    avisoError.hidden = false;
+                }
+            }
+
+            window.addEventListener('pagehide', () => {
+                for (const url of urlsEfigiesExperiencia) URL.revokeObjectURL(url);
+            }, { once: true });
 
             const encabezadoFijo = document.getElementById('encabezadoHub');
             function actualizarLogoFijo() {
@@ -119,105 +290,232 @@
                     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             }
 
-            function obtenerExplicacionParticular(capa, colorFacultad) {
+            function obtenerDetalleCapa(capa, colorFacultad) {
                 switch (capa.id) {
                     case 'anio': {
                         const anio = Number.parseInt(String(usuario.anio || '').replace(/\D/g, ''), 10);
-                        if (!Number.isFinite(anio)) return { texto: 'Año de nacimiento no registrado.' };
+                        if (!Number.isFinite(anio)) {
+                            return {
+                                resumen: 'Año de nacimiento no registrado.',
+                                simbolico: 'El año elegido convierte un dato de tu historia en una firma visual, sin definir quién eres.',
+                                geometrico: 'La cantidad de módulos se determina con los dos últimos dígitos del año.'
+                            };
+                        }
                         const numero = ((anio % 100) + 100) % 100;
                         const digitos = String(numero).padStart(2, '0');
+                        let resumen;
+                        let geometrico;
                         if (anio < 2000) {
-                            return { texto: `Flor continua de ${numero} pétalos curvos (N=${digitos}).` };
+                            resumen = `Flor continua de ${numero} pétalos curvos (N=${digitos}).`;
+                            geometrico = `N=${digitos} puntos distribuidos en círculo forman ${numero} tramos curvos hacia afuera, que se unen como pétalos.`;
+                        } else if (anio === 2000) {
+                            resumen = 'Círculo (N=00).';
+                            geometrico = 'Al ser N=00, se dibuja un círculo base en lugar de un polígono.';
+                        } else if (anio === 2001) {
+                            resumen = 'Contorno curvo especial (N=01).';
+                            geometrico = 'El caso N=01 usa un recorrido de arco muestreado y cerrado para formar un contorno curvo.';
+                        } else if (anio === 2002) {
+                            resumen = 'Dos arcos especiales (N=02).';
+                            geometrico = 'El caso N=02 genera dos tramos de arco y los cierra para construir una forma facetada particular.';
+                        } else {
+                            resumen = `Polígono facetado de ${numero} lados (N=${digitos}).`;
+                            geometrico = `N=${digitos}, los dos últimos dígitos de ${anio}, determina la cantidad de vértices distribuidos alrededor de un círculo y unidos en un polígono.`;
                         }
-                        if (anio <= 2002) {
-                            return { texto: `Variante de arcos para ${anio} (N=${digitos}).` };
-                        }
-                        return { texto: `Polígono facetado de ${numero} lados (N=${digitos}).` };
+                        return {
+                            resumen,
+                            simbolico: 'El año convierte un dato personal en una firma visual: una manera de expresar parte de tu recorrido sin reducirte a un número.',
+                            geometrico
+                        };
                     }
                     case 'carrera': {
                         const etapa = String(usuario.etapa || '').trim();
                         const etapaNormalizada = normalizarRespuesta(etapa);
-                        let forma;
+                        let resumen;
+                        let geometrico;
                         if (etapaNormalizada.includes('no docente')) {
-                            forma = 'Estrella geométrica de 36 picos rectos.';
+                            resumen = 'Estrella geométrica de 36 picos rectos.';
+                            geometrico = 'Treinta y seis puntos alternan entre dos radios y se unen con segmentos rectos para formar el contorno dentado.';
                         } else if (etapaNormalizada.includes('docente')) {
-                            forma = 'Corona ondulada de 36 puntas suaves.';
+                            resumen = 'Corona ondulada de 36 puntas suaves.';
+                            geometrico = 'Treinta y seis puntos alternan entre radios exteriores e interiores; una curva suave los interpola para formar la corona.';
                         } else {
                             const anios = Number.parseInt(etapa, 10);
                             if (Number.isFinite(anios) && anios >= 1 && anios <= 6) {
-                                forma = `${anios} ${anios === 1 ? 'círculo concéntrico' : 'círculos concéntricos'}, uno por cada año cursado.`;
+                                resumen = `${anios} ${anios === 1 ? 'círculo concéntrico' : 'círculos concéntricos'}, uno por cada año cursado.`;
+                                geometrico = `Se trazan ${anios} circunferencias concéntricas; sus radios se distribuyen entre el borde exterior y el anillo interior.`;
                             } else {
-                                forma = `Anillo correspondiente a la etapa «${etapa || 'no registrada'}».`;
+                                resumen = `Anillo correspondiente a la etapa «${etapa || 'no registrada'}».`;
+                                geometrico = 'La forma y la cantidad de contornos dependen de la etapa académica registrada.';
                             }
                         }
                         const facultad = String(usuario.facultad || '').trim();
                         return {
-                            texto: `${forma} Color identitario de ${facultad || 'tu facultad'}.`,
+                            resumen: `${resumen} Color de ${facultad || 'tu facultad'}.`,
+                            simbolico: 'El borde exterior representa tu lugar y recorrido en la comunidad universitaria. El color de la facultad conecta esa experiencia con el espacio que comparten.',
+                            geometrico: `${geometrico} El trazo usa el color identitario de ${facultad || 'tu facultad'}.`,
                             color: colorFacultad
                         };
                     }
                     case 'estaciones': {
                         const estacion = String(usuario.estacion || '').trim();
                         const particulares = {
-                            primavera: 'Ondas suaves y redondeadas, como pétalos en brote.',
-                            verano: 'Puntas largas y curvas que evocan la energía solar.',
-                            otono: 'Contorno quebrado de picos pronunciados, como los bordes de una hoja.',
-                            invierno: 'Estrella facetada de puntas rectas, como un copo de nieve.'
+                            primavera: {
+                                resumen: 'Ondas suaves y redondeadas, como pétalos en brote.',
+                                simbolico: 'La primavera puede evocar crecimiento y apertura; sus curvas sugieren el comienzo de un nuevo ciclo.',
+                                geometrico: 'Se alternan 18 puntos con poca diferencia de radio y se interpolan en una curva suave. La silueta se replica a menor escala.'
+                            },
+                            verano: {
+                                resumen: 'Puntas largas y curvas que evocan la energía solar.',
+                                simbolico: 'El verano puede sugerir expansión y energía; las puntas llevan esa sensación de movimiento hacia afuera.',
+                                geometrico: 'Se alternan 20 puntos con una gran diferencia de radio y se interpolan en una curva pronunciada. La silueta se replica a menor escala.'
+                            },
+                            otono: {
+                                resumen: 'Contorno quebrado de picos pronunciados, como los bordes de una hoja.',
+                                simbolico: 'El otoño puede representar transformación y cambio; el contorno recuerda las formas irregulares de las hojas.',
+                                geometrico: 'Diez puntos alternan radios y se unen con segmentos rectos, formando picos dentados. La silueta se replica a menor escala.'
+                            },
+                            invierno: {
+                                resumen: 'Estrella facetada de puntas rectas, como un copo de nieve.',
+                                simbolico: 'El invierno puede evocar pausa y recogimiento; la simetría aporta una sensación de equilibrio.',
+                                geometrico: 'Se alternan 16 puntos con diferencia moderada de radio y se unen con segmentos rectos. La silueta se replica a menor escala.'
+                            }
                         };
                         const particular = particulares[normalizarRespuesta(estacion)];
                         return {
-                            texto: particular
-                                ? particular
-                                : `Forma de estación «${estacion || 'no registrada'}».`
+                            resumen: particular
+                                ? particular.resumen
+                                : `Forma de estación «${estacion || 'no registrada'}».`,
+                            simbolico: particular
+                                ? particular.simbolico
+                                : 'La estación elegida aporta una referencia a los ciclos y ritmos de la naturaleza.',
+                            geometrico: particular
+                                ? particular.geometrico
+                                : 'La estación define la cantidad de puntos, la profundidad de sus radios y la suavidad del contorno.'
                         };
                     }
                     case 'conexiones': {
                         const preferencia = String(usuario.grupal || '').trim();
                         const preferenciaNormalizada = normalizarRespuesta(preferencia);
+                        if (preferenciaNormalizada.includes('grupal')) {
+                            return {
+                                resumen: 'Anclajes alternados forman una trama diagonal entrelazada.',
+                                simbolico: 'La trama sugiere que las ideas pueden conectarse con las de otras personas: una imagen de colaboración y construcción compartida.',
+                                geometrico: 'Se trazan líneas entre ambos contornos. En cada una, el punto exterior se desplaza respecto del interior para crear el patrón diagonal.'
+                            };
+                        }
+                        if (preferenciaNormalizada.includes('solo')) {
+                            return {
+                                resumen: 'Rayos directos del centro a los bordes, para una trayectoria autónoma y enfocada.',
+                                simbolico: 'Los rayos representan un espacio propio de concentración y autonomía, sin implicar aislamiento ni impedir el encuentro con otras personas.',
+                                geometrico: 'Una serie de rayos desde el centro encuentra ambos contornos; cada línea une los puntos que comparten la misma dirección.'
+                            };
+                        }
                         return {
-                            texto: preferenciaNormalizada.includes('grupal')
-                                ? 'Anclajes alternados forman una trama diagonal entrelazada.'
-                                : preferenciaNormalizada.includes('solo')
-                                    ? 'Rayos directos del centro a los bordes, para una trayectoria autónoma y enfocada.'
-                                    : `Conexiones según la preferencia «${preferencia || 'no registrada'}».`
+                            resumen: `Conexiones según la preferencia «${preferencia || 'no registrada'}».`,
+                            simbolico: 'Las conexiones representan distintas maneras de concentrarse e intercambiar con otras personas.',
+                            geometrico: 'Las líneas unen puntos de los contornos interior y exterior siguiendo la preferencia registrada.'
                         };
                     }
                     case 'historia': {
                         const formato = String(usuario.formato || '').trim();
                         const formatoNormalizado = normalizarRespuesta(formato);
                         const particulares = [
-                            { coincide: texto => texto.includes('pelicula'), explicacion: 'Dos triángulos enfrentados, como un carrete de cine.' },
-                            { coincide: texto => texto.includes('serie'), explicacion: 'Dos rombos paralelos, como eslabones de episodios.' },
-                            { coincide: texto => texto.includes('libro'), explicacion: 'Una «V» abierta perfila un libro desplegado.' },
-                            { coincide: texto => texto.includes('videojuego'), explicacion: 'Una X geométrica evoca los botones de un mando.' },
-                            { coincide: texto => texto.includes('teatro'), explicacion: 'Doble semicírculo sobre una línea base: anfiteatro y escenario.' }
+                            {
+                                coincide: texto => texto.includes('pelicula'),
+                                resumen: 'Dos triángulos enfrentados, como un carrete de cine.',
+                                simbolico: 'La película evoca historias contadas con imágenes y secuencias; el símbolo remite a ese lenguaje visual.',
+                                geometrico: 'En cada valle se dibujan dos triángulos enfrentados por el vértice, orientados según la dirección radial.'
+                            },
+                            {
+                                coincide: texto => texto.includes('serie'),
+                                resumen: 'Dos rombos paralelos, como eslabones de episodios.',
+                                simbolico: 'La serie sugiere continuidad: episodios distintos conectados dentro de un mismo relato.',
+                                geometrico: 'En cada valle se ubican dos rombos alineados con la dirección radial y desplazados a ambos lados de su eje.'
+                            },
+                            {
+                                coincide: texto => texto.includes('libro'),
+                                resumen: 'Una «V» abierta perfila un libro desplegado.',
+                                simbolico: 'El libro puede evocar imaginación, lectura y un recorrido propio por las ideas.',
+                                geometrico: 'En cada valle, tres puntos forman una «V» abierta orientada radialmente hacia el exterior.'
+                            },
+                            {
+                                coincide: texto => texto.includes('videojuego'),
+                                resumen: 'Una X geométrica evoca los botones de un mando.',
+                                simbolico: 'El videojuego representa interacción y elección: la posibilidad de participar activamente en una historia.',
+                                geometrico: 'En cada valle, dos segmentos cruzados forman una X orientada según la dirección radial.'
+                            },
+                            {
+                                coincide: texto => texto.includes('teatro'),
+                                resumen: 'Doble semicírculo sobre una línea base: anfiteatro y escenario.',
+                                simbolico: 'El teatro evoca presencia y creación compartida: una historia que cobra vida frente a otras personas.',
+                                geometrico: 'En cada valle se dibujan una línea base y dos arcos semicirculares concéntricos, orientados radialmente.'
+                            }
                         ];
                         const opcion = particulares.find(item => item.coincide(formatoNormalizado));
                         return {
-                            texto: opcion
-                                ? opcion.explicacion
-                                : `Íconos inspirados en «${formato || 'formato no registrado'}».`
+                            resumen: opcion
+                                ? opcion.resumen
+                                : `Íconos inspirados en «${formato || 'formato no registrado'}».`,
+                            simbolico: opcion
+                                ? opcion.simbolico
+                                : 'El formato elegido aporta una referencia a las historias que disfrutas.',
+                            geometrico: `${opcion ? opcion.geometrico : 'Los íconos se ubican radialmente en los valles de la curva exterior.'} Los valles se detectan buscando los puntos más cercanos al centro en la curva exterior.`
                         };
                     }
                     case 'rol': {
                         const rol = String(usuario.rol || '').trim();
                         const rolNormalizado = normalizarRespuesta(rol);
                         const particulares = [
-                            { coincide: texto => texto.includes('proponer'), explicacion: 'Estrella curva de cuatro puntas: chispa para generar ideas.' },
-                            { coincide: texto => texto.includes('organizar'), explicacion: 'Hexágono regular: estructura modular que ordena el sistema.' },
-                            { coincide: texto => texto.includes('materializar'), explicacion: 'Triángulo ascendente: dirección y foco para llevar ideas a la acción.' },
-                            { coincide: texto => texto.includes('mejorar'), explicacion: 'Flor continua de cuatro pétalos: iteración, revisión y pulido.' }
+                            {
+                                coincide: texto => texto.includes('proponer'),
+                                resumen: 'Estrella curva de cuatro puntas: chispa para generar ideas.',
+                                simbolico: 'Proponer representa abrir posibilidades y dar el primer impulso a las ideas del equipo.',
+                                geometrico: 'Una curva de cuatro lóbulos se construye con puntos calculados mediante coseno y seno elevados al cubo, formando una estrella suave.'
+                            },
+                            {
+                                coincide: texto => texto.includes('organizar'),
+                                resumen: 'Hexágono regular: estructura modular que ordena el sistema.',
+                                simbolico: 'Organizar representa dar estructura y claridad para que el trabajo compartido pueda avanzar.',
+                                geometrico: 'Se distribuyen seis vértices a intervalos iguales alrededor del centro y se conectan para formar un hexágono.'
+                            },
+                            {
+                                coincide: texto => texto.includes('materializar'),
+                                resumen: 'Triángulo ascendente: dirección y foco para llevar ideas a la acción.',
+                                simbolico: 'Materializar representa convertir una idea en algo concreto y orientar el esfuerzo hacia su realización.',
+                                geometrico: 'Tres vértices igualmente espaciados forman un triángulo orientado con una punta hacia arriba.'
+                            },
+                            {
+                                coincide: texto => texto.includes('mejorar'),
+                                resumen: 'Flor continua de cuatro pétalos: iteración, revisión y pulido.',
+                                simbolico: 'Mejorar representa volver sobre una idea, revisar sus detalles y ayudarla a alcanzar una forma más clara.',
+                                geometrico: 'El radio varía siguiendo una curva de cuatro lóbulos; al recorrerla de manera continua aparecen los pétalos enlazados.'
+                            }
                         ];
                         const opcion = particulares.find(item => item.coincide(rolNormalizado));
                         return {
-                            texto: opcion
-                                ? opcion.explicacion
-                                : `Figura central según el rol «${rol || 'no registrado'}».`
+                            resumen: opcion
+                                ? opcion.resumen
+                                : `Figura central según el rol «${rol || 'no registrado'}».`,
+                            simbolico: opcion
+                                ? opcion.simbolico
+                                : 'La figura central representa el aporte con el que participas en un trabajo compartido.',
+                            geometrico: opcion
+                                ? `${opcion.geometrico} La forma se sitúa en el centro de la efigie.`
+                                : 'La figura elegida se sitúa en el centro de la efigie.'
                         };
                     }
                     default:
                         throw new Error(`No hay explicación para la capa ${capa.id}.`);
                 }
+            }
+
+            function mostrarDetalleCapa(capa, detalle, svg) {
+                tituloDetalleCapa.textContent = capa.titulo;
+                textoSimbolicoCapa.textContent = detalle.simbolico;
+                textoGeometricoCapa.textContent = detalle.geometrico;
+                visualDetalleCapa.setAttribute('aria-label', `Capa ${capa.titulo} ampliada en movimiento`);
+                visualDetalleCapa.replaceChildren(svg.cloneNode(true));
+                dialogoDetalleCapa.showModal();
             }
 
             function renderizarCapas() {
@@ -237,6 +535,11 @@
 
                     const elemento = document.createElement('article');
                     elemento.className = 'hub-capa';
+                    elemento.setAttribute('role', 'button');
+                    elemento.setAttribute('tabindex', '0');
+                    elemento.setAttribute('aria-label', `Ver detalles de ${capa.titulo}`);
+                    elemento.setAttribute('aria-haspopup', 'dialog');
+                    elemento.setAttribute('aria-controls', 'dialogoDetalleCapa');
                     const columnaVisual = document.createElement('div');
                     columnaVisual.className = 'hub-capa-columna-visual';
                     const titulo = document.createElement('h3');
@@ -264,14 +567,14 @@
                     explicacionGeneral.className = 'hub-capa-explicacion-general';
                     explicacionGeneral.textContent = capa.general;
 
-                    const particular = obtenerExplicacionParticular(capa, origen.getAttribute('stroke'));
+                    const detalle = obtenerDetalleCapa(capa, origen.getAttribute('stroke'));
                     const explicacionParticular = document.createElement('p');
                     explicacionParticular.className = 'hub-capa-explicacion-particular';
-                    explicacionParticular.textContent = particular.texto;
-                    if (particular.color) {
+                    explicacionParticular.textContent = detalle.resumen;
+                    if (detalle.color) {
                         const muestraColor = document.createElement('span');
                         muestraColor.className = 'hub-capa-color';
-                        muestraColor.style.backgroundColor = particular.color;
+                        muestraColor.style.backgroundColor = detalle.color;
                         muestraColor.setAttribute('role', 'img');
                         muestraColor.setAttribute('aria-label', `Color de la facultad ${usuario.facultad}`);
                         explicacionParticular.append(' ', muestraColor);
@@ -279,6 +582,13 @@
 
                     texto.append(explicacionGeneral, explicacionParticular);
                     elemento.append(columnaVisual, texto);
+                    elemento.addEventListener('click', () => mostrarDetalleCapa(capa, detalle, svg));
+                    elemento.addEventListener('keydown', evento => {
+                        if (evento.key === 'Enter' || evento.key === ' ') {
+                            evento.preventDefault();
+                            mostrarDetalleCapa(capa, detalle, svg);
+                        }
+                    });
                     return elemento;
                 });
 
@@ -292,6 +602,18 @@
                 error.textContent = 'No se pudieron cargar las capas de tu efigie.';
                 error.hidden = false;
             }
+
+            cerrarDetalleCapa.addEventListener('click', () => dialogoDetalleCapa.close());
+            dialogoDetalleCapa.addEventListener('keydown', evento => {
+                if (evento.key === 'Escape') {
+                    evento.preventDefault();
+                    dialogoDetalleCapa.close();
+                }
+            });
+            dialogoDetalleCapa.addEventListener('click', evento => {
+                if (evento.target === dialogoDetalleCapa) dialogoDetalleCapa.close();
+            });
+            dialogoDetalleCapa.addEventListener('close', () => visualDetalleCapa.replaceChildren());
 
             function leerContenidoSvg(texto) {
                 const documento = new DOMParser().parseFromString(texto, 'image/svg+xml');
@@ -415,6 +737,8 @@
                 enlace.click();
                 window.setTimeout(() => URL.revokeObjectURL(urlDescarga), 60000);
             });
+
+            cargarExperiencia();
         }
     </script>
 </body>
