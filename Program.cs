@@ -2383,6 +2383,13 @@ app.MapGet("/", (HttpContext ctx) => {
         {
             id = usuario.id,
             nombre = usuario.nombre,
+            anio = usuario.anio,
+            facultad = usuario.facultad,
+            etapa = usuario.etapa,
+            estacion = usuario.estacion,
+            grupal = usuario.grupal,
+            formato = usuario.formato,
+            rol = usuario.rol,
             efigie = efigieAnimada,
             efigieEstatica
         });

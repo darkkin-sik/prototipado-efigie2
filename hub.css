@@ -284,7 +284,7 @@ body {
     min-height: 100vh;
     min-height: 100svh;
     margin: 0 auto;
-    padding: max(24px, calc(env(safe-area-inset-top) + 24px)) 24px 24px;
+    padding: max(112px, calc(env(safe-area-inset-top) + 96px)) 24px 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -292,15 +292,31 @@ body {
 }
 
 .hub-usuario-encabezado {
-    width: 100%;
+    position: fixed;
+    z-index: 20;
+    inset: 0 0 auto;
+    height: calc(88px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 24px 0;
     display: flex;
     justify-content: center;
-    margin-bottom: 4px;
+    align-items: center;
+    background: transparent;
+    transition: background-color 240ms ease, box-shadow 240ms ease;
+}
+
+.hub-usuario-encabezado.scrolleado {
+    background: #111111;
+    box-shadow: 0 2px 12px rgb(0 0 0 / 16%);
 }
 
 .hub-usuario-logo {
     width: min(250px, 70vw);
     height: auto;
+    transition: filter 240ms ease;
+}
+
+.hub-usuario-encabezado.scrolleado .hub-usuario-logo {
+    filter: invert(1);
 }
 
 .hub-efigie-tarjeta {
@@ -384,22 +400,33 @@ body {
     line-height: 1.7;
 }
 
-.hub-capas { scroll-margin-top: 24px; }
+.hub-capas { scroll-margin-top: 104px; }
 .hub-capas-intro { margin-bottom: 16px; }
 
 .hub-capa {
     display: grid;
-    grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.3fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     align-items: center;
-    gap: clamp(16px, 4vw, 36px);
+    gap: clamp(12px, 3vw, 32px);
     padding: 24px 0;
     border-top: 1px solid #d5dad6;
 }
 
 .hub-capa:last-child { border-bottom: 1px solid #d5dad6; }
 
+.hub-capa-columna-visual {
+    min-width: 0;
+    text-align: center;
+}
+
+.hub-capa-columna-visual h3 {
+    margin: 0 0 8px;
+    font-size: clamp(1rem, 2.5vw, 1.2rem);
+    line-height: 1.25;
+}
+
 .hub-capa-visual {
-    width: min(100%, 240px);
+    width: min(100%, 360px);
     aspect-ratio: 1;
     display: grid;
     place-items: center;
@@ -411,24 +438,58 @@ body {
     height: 100%;
 }
 
-.hub-capa-texto h3 {
-    margin: 0 0 8px;
-    font-size: 1.15rem;
-}
-
 .hub-capa-texto p {
     margin: 0;
     color: #53615b;
     font-size: 0.95rem;
-    line-height: 1.6;
+    line-height: 1.45;
+    text-align: justify;
+    hyphens: auto;
 }
 
-.hub-capa-texto .hub-capa-movimiento {
-    margin-top: 10px;
-    color: #101a15;
-    font-size: 0.85rem;
-    font-weight: 600;
+.hub-capa-texto .hub-capa-explicacion-particular {
+    margin-top: 8px;
+    padding-left: 8px;
+    border-left: 2px solid #6eb392;
+    color: #303a34;
 }
+
+.hub-capa-color {
+    width: 0.9em;
+    height: 0.9em;
+    display: inline-block;
+    margin-left: 3px;
+    border: 1px solid rgb(16 26 21 / 30%);
+    border-radius: 3px;
+    vertical-align: -0.08em;
+}
+
+.hub-final {
+    width: min(100%, 900px);
+    padding: 24px 24px max(40px, env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: center;
+}
+
+.hub-volver-arriba {
+    min-width: 154px;
+    min-height: 52px;
+    padding: 14px 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: #111111;
+    box-shadow: 0 4px 15px rgb(0 0 0 / 15%);
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 200ms ease;
+}
+
+.hub-volver-arriba:hover { background: #333333; }
+.hub-volver-arriba:focus-visible { outline: 3px solid #6eb392; outline-offset: 3px; }
 
 .descarga-dialog {
     width: min(960px, 94vw, calc((100svh - 32px) * 9 / 16));
@@ -492,6 +553,20 @@ body {
     transform: none;
     opacity: 1;
     visibility: visible;
+}
+
+.descarga-error {
+    position: absolute;
+    right: 4%;
+    bottom: 14%;
+    left: 4%;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgb(255 255 255 / 92%);
+    color: #a12525;
+    font-size: 0.85rem;
+    text-align: center;
 }
 
 .descarga-boton:hover { background: #333333; }

@@ -8,8 +8,8 @@
     <link rel="stylesheet" href="/hub.css">
 </head>
 <body>
-    <main class="hub-usuario">
-        <header class="hub-usuario-encabezado">
+    <main id="inicioHub" class="hub-usuario">
+        <header id="encabezadoHub" class="hub-usuario-encabezado">
             <img class="hub-usuario-logo" src="/efigie-logo.svg" alt="Efigie">
         </header>
         <section class="hub-efigie-tarjeta" aria-labelledby="tituloEfigieUsuario">
@@ -30,15 +30,20 @@
 
     <section id="capasEfigie" class="hub-capas" aria-labelledby="tituloCapas">
         <h2 id="tituloCapas">Las capas de tu efigie</h2>
-        <p class="hub-capas-intro">Cada capa se muestra por separado y conserva su movimiento. Las explicaciones de significado son provisionales.</p>
+        <p class="hub-capas-intro">Cada capa conserva su movimiento y proporción; sus descripciones se basan en tus respuestas.</p>
         <div id="listaCapasEfigie" class="hub-lista-capas"></div>
     </section>
+
+    <footer class="hub-final">
+        <a class="hub-volver-arriba" href="#inicioHub">Volver arriba</a>
+    </footer>
 
     <dialog id="dialogoDescarga" class="descarga-dialog" aria-label="Vista previa de la efigie para descargar">
         <div class="descarga-marco">
             <img id="vistaPreviaDescarga" class="descarga-vista-previa" alt="Previsualización estática de la efigie">
             <button id="cerrarDescarga" class="descarga-cerrar" type="button" aria-label="Cerrar y volver a mi efigie">×</button>
             <button id="descargarEfigie" class="boton-principal descarga-boton" type="button">Descargar</button>
+            <p id="errorDescarga" class="descarga-error" role="alert" hidden></p>
         </div>
     </dialog>
 
@@ -61,45 +66,159 @@
             const vistaPrevia = document.getElementById('vistaPreviaDescarga');
             const abrirDescarga = document.getElementById('abrirDescarga');
             const botonDescargar = document.getElementById('descargarEfigie');
+            const errorDescarga = document.getElementById('errorDescarga');
             const listaCapas = document.getElementById('listaCapasEfigie');
             let urlPrevia = null;
             let imagenDescarga = null;
+
+            const encabezadoFijo = document.getElementById('encabezadoHub');
+            function actualizarLogoFijo() {
+                encabezadoFijo.classList.toggle('scrolleado', window.scrollY > 0);
+            }
+            window.addEventListener('scroll', actualizarLogoFijo, { passive: true });
+            actualizarLogoFijo();
 
             efigieUsuario.innerHTML = usuario.efigie;
             efigieUsuario.setAttribute('aria-label', `Efigie de ${usuario.nombre}`);
 
             const capas = [
                 {
-                    id: 'anio', titulo: 'Año', movimiento: 'Giro horario, una vuelta cada 18 segundos.',
-                    explicacion: 'Se genera una curva a partir del año que elegiste. La interpretación de lo que representa esta forma es provisional.',
+                    id: 'anio', titulo: 'Año de nacimiento',
+                    general: 'Los últimos dos dígitos de tu año determinan los módulos de la figura.',
                     rotacion: 1
                 },
                 {
-                    id: 'estaciones', titulo: 'Estaciones', movimiento: 'Giro antihorario, una vuelta cada 12 segundos.',
-                    explicacion: 'La estación que elegiste determina la geometría de esta capa, formada por curvas alrededor del centro. Su significado simbólico es provisional.',
-                    rotacion: 2
-                },
-                {
-                    id: 'carrera', titulo: 'Trayectoria', movimiento: 'Giro horario, una vuelta cada 8 segundos.',
-                    explicacion: 'La etapa que elegiste se traduce en una figura geométrica; su trazo usa el color asociado a la facultad indicada. La lectura simbólica es provisional.',
+                    id: 'carrera', titulo: 'Etapa o rol académico',
+                    general: 'El anillo perimetral representa tu etapa o rol académico; la facultad define su color.',
                     rotacion: 3
                 },
                 {
-                    id: 'rol', titulo: 'Rol', movimiento: 'Giro horario, una vuelta cada 18 segundos.',
-                    explicacion: 'La opción de rol que elegiste determina la forma dibujada en esta capa. La explicación de su significado es provisional.',
+                    id: 'estaciones', titulo: 'Estación del año favorita',
+                    general: 'Dos siluetas concéntricas reinterpretan símbolos de los ciclos de la naturaleza.',
+                    rotacion: 2
+                },
+                {
+                    id: 'conexiones', titulo: 'Preferencia de estudio o trabajo',
+                    general: 'Líneas entre los contornos interior y exterior representan tu forma de concentración e intercambio.',
+                    rotacion: 3
+                },
+                {
+                    id: 'historia', titulo: 'Formato de historia',
+                    general: 'Íconos radiales ocupan los valles de la curva exterior, los puntos más cercanos al centro.',
+                    rotacion: 2
+                },
+                {
+                    id: 'rol', titulo: 'Rol en un trabajo grupal',
+                    general: 'La figura central representa el aporte con el que impulsas al equipo.',
                     rotacion: 1
-                },
-                {
-                    id: 'historia', titulo: 'Historia', movimiento: 'Giro antihorario, una vuelta cada 12 segundos.',
-                    explicacion: 'Esta geometría se genera combinando la estación y el formato que elegiste. Su interpretación es provisional.',
-                    rotacion: 2
-                },
-                {
-                    id: 'conexiones', titulo: 'Conexiones', movimiento: 'Giro horario, una vuelta cada 8 segundos.',
-                    explicacion: 'Son líneas calculadas entre las curvas de las estaciones; el patrón depende de si la experiencia fue individual o grupal. Su significado es provisional.',
-                    rotacion: 3
                 }
             ];
+
+            function normalizarRespuesta(valor) {
+                return String(valor || '').trim().toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            }
+
+            function obtenerExplicacionParticular(capa, colorFacultad) {
+                switch (capa.id) {
+                    case 'anio': {
+                        const anio = Number.parseInt(String(usuario.anio || '').replace(/\D/g, ''), 10);
+                        if (!Number.isFinite(anio)) return { texto: 'Año de nacimiento no registrado.' };
+                        const numero = ((anio % 100) + 100) % 100;
+                        const digitos = String(numero).padStart(2, '0');
+                        if (anio < 2000) {
+                            return { texto: `Flor continua de ${numero} pétalos curvos (N=${digitos}).` };
+                        }
+                        if (anio <= 2002) {
+                            return { texto: `Variante de arcos para ${anio} (N=${digitos}).` };
+                        }
+                        return { texto: `Polígono facetado de ${numero} lados (N=${digitos}).` };
+                    }
+                    case 'carrera': {
+                        const etapa = String(usuario.etapa || '').trim();
+                        const etapaNormalizada = normalizarRespuesta(etapa);
+                        let forma;
+                        if (etapaNormalizada.includes('no docente')) {
+                            forma = 'Estrella geométrica de 36 picos rectos.';
+                        } else if (etapaNormalizada.includes('docente')) {
+                            forma = 'Corona ondulada de 36 puntas suaves.';
+                        } else {
+                            const anios = Number.parseInt(etapa, 10);
+                            if (Number.isFinite(anios) && anios >= 1 && anios <= 6) {
+                                forma = `${anios} ${anios === 1 ? 'círculo concéntrico' : 'círculos concéntricos'}, uno por cada año cursado.`;
+                            } else {
+                                forma = `Anillo correspondiente a la etapa «${etapa || 'no registrada'}».`;
+                            }
+                        }
+                        const facultad = String(usuario.facultad || '').trim();
+                        return {
+                            texto: `${forma} Color identitario de ${facultad || 'tu facultad'}.`,
+                            color: colorFacultad
+                        };
+                    }
+                    case 'estaciones': {
+                        const estacion = String(usuario.estacion || '').trim();
+                        const particulares = {
+                            primavera: 'Ondas suaves y redondeadas, como pétalos en brote.',
+                            verano: 'Puntas largas y curvas que evocan la energía solar.',
+                            otono: 'Contorno quebrado de picos pronunciados, como los bordes de una hoja.',
+                            invierno: 'Estrella facetada de puntas rectas, como un copo de nieve.'
+                        };
+                        const particular = particulares[normalizarRespuesta(estacion)];
+                        return {
+                            texto: particular
+                                ? particular
+                                : `Forma de estación «${estacion || 'no registrada'}».`
+                        };
+                    }
+                    case 'conexiones': {
+                        const preferencia = String(usuario.grupal || '').trim();
+                        const preferenciaNormalizada = normalizarRespuesta(preferencia);
+                        return {
+                            texto: preferenciaNormalizada.includes('grupal')
+                                ? 'Anclajes alternados forman una trama diagonal entrelazada.'
+                                : preferenciaNormalizada.includes('solo')
+                                    ? 'Rayos directos del centro a los bordes, para una trayectoria autónoma y enfocada.'
+                                    : `Conexiones según la preferencia «${preferencia || 'no registrada'}».`
+                        };
+                    }
+                    case 'historia': {
+                        const formato = String(usuario.formato || '').trim();
+                        const formatoNormalizado = normalizarRespuesta(formato);
+                        const particulares = [
+                            { coincide: texto => texto.includes('pelicula'), explicacion: 'Dos triángulos enfrentados, como un carrete de cine.' },
+                            { coincide: texto => texto.includes('serie'), explicacion: 'Dos rombos paralelos, como eslabones de episodios.' },
+                            { coincide: texto => texto.includes('libro'), explicacion: 'Una «V» abierta perfila un libro desplegado.' },
+                            { coincide: texto => texto.includes('videojuego'), explicacion: 'Una X geométrica evoca los botones de un mando.' },
+                            { coincide: texto => texto.includes('teatro'), explicacion: 'Doble semicírculo sobre una línea base: anfiteatro y escenario.' }
+                        ];
+                        const opcion = particulares.find(item => item.coincide(formatoNormalizado));
+                        return {
+                            texto: opcion
+                                ? opcion.explicacion
+                                : `Íconos inspirados en «${formato || 'formato no registrado'}».`
+                        };
+                    }
+                    case 'rol': {
+                        const rol = String(usuario.rol || '').trim();
+                        const rolNormalizado = normalizarRespuesta(rol);
+                        const particulares = [
+                            { coincide: texto => texto.includes('proponer'), explicacion: 'Estrella curva de cuatro puntas: chispa para generar ideas.' },
+                            { coincide: texto => texto.includes('organizar'), explicacion: 'Hexágono regular: estructura modular que ordena el sistema.' },
+                            { coincide: texto => texto.includes('materializar'), explicacion: 'Triángulo ascendente: dirección y foco para llevar ideas a la acción.' },
+                            { coincide: texto => texto.includes('mejorar'), explicacion: 'Flor continua de cuatro pétalos: iteración, revisión y pulido.' }
+                        ];
+                        const opcion = particulares.find(item => item.coincide(rolNormalizado));
+                        return {
+                            texto: opcion
+                                ? opcion.explicacion
+                                : `Figura central según el rol «${rol || 'no registrado'}».`
+                        };
+                    }
+                    default:
+                        throw new Error(`No hay explicación para la capa ${capa.id}.`);
+                }
+            }
 
             function renderizarCapas() {
                 const documento = new DOMParser().parseFromString(usuario.efigieEstatica, 'image/svg+xml');
@@ -118,6 +237,10 @@
 
                     const elemento = document.createElement('article');
                     elemento.className = 'hub-capa';
+                    const columnaVisual = document.createElement('div');
+                    columnaVisual.className = 'hub-capa-columna-visual';
+                    const titulo = document.createElement('h3');
+                    titulo.textContent = capa.titulo;
                     const visual = document.createElement('div');
                     visual.className = 'hub-capa-visual';
                     visual.setAttribute('role', 'img');
@@ -133,18 +256,29 @@
                     grupo.appendChild(forma);
                     svg.appendChild(grupo);
                     visual.appendChild(svg);
+                    columnaVisual.append(titulo, visual);
 
                     const texto = document.createElement('div');
                     texto.className = 'hub-capa-texto';
-                    const titulo = document.createElement('h3');
-                    titulo.textContent = capa.titulo;
-                    const explicacion = document.createElement('p');
-                    explicacion.textContent = capa.explicacion;
-                    const movimiento = document.createElement('p');
-                    movimiento.className = 'hub-capa-movimiento';
-                    movimiento.textContent = capa.movimiento;
-                    texto.append(titulo, explicacion, movimiento);
-                    elemento.append(visual, texto);
+                    const explicacionGeneral = document.createElement('p');
+                    explicacionGeneral.className = 'hub-capa-explicacion-general';
+                    explicacionGeneral.textContent = capa.general;
+
+                    const particular = obtenerExplicacionParticular(capa, origen.getAttribute('stroke'));
+                    const explicacionParticular = document.createElement('p');
+                    explicacionParticular.className = 'hub-capa-explicacion-particular';
+                    explicacionParticular.textContent = particular.texto;
+                    if (particular.color) {
+                        const muestraColor = document.createElement('span');
+                        muestraColor.className = 'hub-capa-color';
+                        muestraColor.style.backgroundColor = particular.color;
+                        muestraColor.setAttribute('role', 'img');
+                        muestraColor.setAttribute('aria-label', `Color de la facultad ${usuario.facultad}`);
+                        explicacionParticular.append(' ', muestraColor);
+                    }
+
+                    texto.append(explicacionGeneral, explicacionParticular);
+                    elemento.append(columnaVisual, texto);
                     return elemento;
                 });
 
@@ -188,9 +322,13 @@
                 ];
                 const svgDescarga = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600">
 <rect width="900" height="1600" fill="#ffffff"/>
-<svg x="220" y="70" width="460" height="104" viewBox="${escaparXml(logo.viewBox)}">${logo.contenido}</svg>
-<svg x="100" y="300" width="700" height="700" viewBox="${escaparXml(efigie.viewBox)}">${efigie.contenido}</svg>
-<text x="450" y="1190" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" fill="#101a15">${escaparXml(usuario.nombre)}</text>
+<svg x="220" y="135" width="460" height="104" viewBox="${escaparXml(logo.viewBox)}">${logo.contenido}</svg>
+<svg x="100" y="390" width="700" height="700" viewBox="${escaparXml(efigie.viewBox)}">${efigie.contenido}</svg>
+<text x="450" y="1220" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="#101a15">
+<tspan x="450" dy="0">Ven a crear tu propia efigie y a conocer</tspan>
+<tspan x="450" dy="44">más gente, viví la experiencia en el</tspan>
+<tspan x="450" dy="44">4to piso del Edificio Moro en el aula 409!</tspan>
+</text>
 </svg>`;
 
                 const urlSvg = URL.createObjectURL(new Blob([svgDescarga], { type: 'image/svg+xml;charset=utf-8' }));
@@ -245,14 +383,32 @@
                 urlPrevia = null;
             });
 
-            botonDescargar.addEventListener('click', () => {
+            botonDescargar.addEventListener('click', async () => {
                 if (!imagenDescarga) return;
-                const enlace = document.createElement('a');
                 const nombreArchivo = usuario.nombre.normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
                     .toLowerCase()
                     .replace(/[^a-z0-9]+/g, '-')
                     .replace(/^-|-$/g, '') || 'efigie';
+
+                const archivo = new File([imagenDescarga], `efigie-${nombreArchivo}.jpg`, { type: 'image/jpeg' });
+                if (window.isSecureContext &&
+                    typeof navigator.share === 'function' &&
+                    typeof navigator.canShare === 'function' &&
+                    navigator.canShare({ files: [archivo] })) {
+                    errorDescarga.hidden = true;
+                    try {
+                        await navigator.share({ files: [archivo], title: 'Tu efigie' });
+                    } catch (errorCompartir) {
+                        if (errorCompartir.name === 'AbortError') return;
+                        console.error('No se pudo abrir la opción para guardar la efigie.', errorCompartir);
+                        errorDescarga.textContent = 'No se pudo abrir el menú para guardar la imagen. Intentá nuevamente.';
+                        errorDescarga.hidden = false;
+                    }
+                    return;
+                }
+
+                const enlace = document.createElement('a');
                 const urlDescarga = URL.createObjectURL(imagenDescarga);
                 enlace.href = urlDescarga;
                 enlace.download = `efigie-${nombreArchivo}.jpg`;
