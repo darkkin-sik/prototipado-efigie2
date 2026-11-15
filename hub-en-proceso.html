@@ -83,10 +83,11 @@
         </div>
     </dialog>
 
-    <dialog id="dialogoExperiencia" class="hub-capa-dialog hub-experiencia-dialog" aria-label="Efigies agrupadas por equipo. Tocá fuera de la franja o presioná Escape para cerrar.">
+    <dialog id="dialogoExperiencia" class="hub-capa-dialog hub-experiencia-dialog" aria-label="Efigies agrupadas por equipo. Tocá fuera de las tarjetas o presioná Escape para cerrar.">
         <div id="carruselExperiencia" class="hub-experiencia-carrusel" tabindex="0" aria-label="Efigies agrupadas por equipo">
             <div id="equiposExperiencia" class="hub-experiencia-equipos"></div>
         </div>
+        <button id="cerrarExperiencia" class="hub-experiencia-cerrar" type="button" autofocus>Cerrar</button>
     </dialog>
 
     <script>
@@ -122,12 +123,14 @@
             const dialogoExperiencia = document.getElementById('dialogoExperiencia');
             const carruselExperiencia = document.getElementById('carruselExperiencia');
             const listaEquiposExperiencia = document.getElementById('equiposExperiencia');
+            const cerrarExperiencia = document.getElementById('cerrarExperiencia');
             let ultimoMovimientoManual = 0;
             let fotogramaCarrusel = 0;
             let anchoCicloCarrusel = 0;
             let tiempoFotograma = 0;
             let avanceCarrusel = 0;
             let arrastreCarrusel = null;
+            let posicionPagina = 0;
 
             function experienciaSimulada() {
                 const colores = [
@@ -140,33 +143,35 @@
                 const equipo = colores[Math.floor(Math.random() * colores.length)];
                 const cantidadEquipos = 3 + Math.floor(Math.random() * 3);
                 const otros = colores.filter(color => color !== equipo).slice(0, cantidadEquipos - 1);
-                const equipos = [equipo, ...otros];
-                const ganador = equipos[Math.floor(Math.random() * equipos.length)];
                 const nombresEjemplo = ['Juanchi Castro', 'Martín López', 'Ana García', 'Lucía Pérez', 'Tomás Ruiz', 'Sofía Díaz', 'Nicolás Rojas', 'Valentina Silva', 'Mateo Torres', 'Camila Herrera', 'Emilia Ríos', 'Julián Castro', 'Abril Vega', 'Benjamín Molina'];
                 const fecha = new Date(Date.now() - Math.floor(Math.random() * 60) * 86400000);
                 fecha.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 4) * 15, 0, 0);
+                const equipos = [equipo, ...otros].map((grupo, indice) => ({
+                    nombre: `Equipo ${grupo.nombre}`,
+                    color: grupo.color,
+                    colorTexto: grupo.colorTexto,
+                    puntaje: 150 + Math.floor(Math.random() * 451),
+                    integrantes: Array.from({ length: 3 }, (_, numero) => ({
+                        nombre: indice === 0 && numero === 0 ? usuario.nombre : nombresEjemplo[indice * 3 + numero - 1],
+                        esUsuario: indice === 0 && numero === 0
+                    }))
+                }));
+                const ganador = [...equipos].sort((a, b) => b.puntaje - a.puntaje)[0];
 
                 return {
                     esSimulada: true,
                     fechaInicio: fecha.toISOString(),
                     duracionSegundos: (45 + Math.floor(Math.random() * 76)) * 60,
-                    equipos: equipos.map((grupo, indice) => ({
-                        nombre: `Equipo ${grupo.nombre}`,
-                        color: grupo.color,
-                        integrantes: Array.from({ length: 3 }, (_, numero) => ({
-                            nombre: indice === 0 && numero === 0 ? usuario.nombre : nombresEjemplo[indice * 3 + numero - 1],
-                            esUsuario: indice === 0 && numero === 0
-                        }))
-                    })),
+                    equipos,
                     equipo: {
                         nombre: `Equipo ${equipo.nombre}`,
                         color: equipo.color,
                         colorTexto: equipo.colorTexto,
                         cantidadIntegrantes: 3,
-                        puntaje: 150 + Math.floor(Math.random() * 451),
+                        puntaje: equipos[0].puntaje,
                         aporteIndividual: 20 + Math.floor(Math.random() * 181)
                     },
-                    equipoGanador: `Equipo ${ganador.nombre}`
+                    equipoGanador: ganador.nombre
                 };
             }
 
@@ -226,11 +231,15 @@
                 listaEquiposExperiencia.replaceChildren();
                 const ciclo = document.createElement('div');
                 ciclo.className = 'hub-experiencia-ciclo';
+                const posiciones = [...equipos].sort((a, b) => b.puntaje - a.puntaje);
                 for (const equipo of equipos) {
                     if (!equipo.integrantes.length) continue;
+                    if (!/^#[0-9a-f]{6}$/i.test(equipo.color))
+                        throw new Error(`El color de ${equipo.nombre} no es válido.`);
                     const grupo = document.createElement('section');
                     grupo.className = 'hub-experiencia-equipo';
                     grupo.style.setProperty('--color-grupo', equipo.color);
+                    grupo.style.setProperty('--color-texto-grupo', equipo.colorTexto);
                     grupo.setAttribute('aria-label', equipo.nombre);
                     const integrantes = document.createElement('div');
                     integrantes.className = 'hub-experiencia-integrantes';
@@ -238,14 +247,24 @@
                         const figura = document.createElement('figure');
                         const imagen = document.createElement('img');
                         imagen.src = participante.url;
-                        imagen.alt = '';
+                        imagen.alt = participante.esUsuario ? 'Tu efigie' : `Efigie de ${participante.nombre}`;
                         imagen.draggable = false;
-                        const nombre = document.createElement('figcaption');
-                        nombre.textContent = participante.esUsuario ? 'Tú' : nombreCorto(participante.nombre);
-                        figura.append(imagen, nombre);
+                        figura.append(imagen);
                         integrantes.append(figura);
                     }
-                    grupo.append(integrantes);
+                    const datos = document.createElement('div');
+                    datos.className = 'hub-experiencia-equipo-datos';
+                    for (const texto of [
+                        equipo.nombre,
+                        `${posiciones.indexOf(equipo) + 1}.º puesto`,
+                        `Puntaje: ${equipo.puntaje} pts`,
+                        equipo.integrantes.map(participante => participante.nombre).join(', ')
+                    ]) {
+                        const linea = document.createElement('p');
+                        linea.textContent = texto;
+                        datos.append(linea);
+                    }
+                    grupo.append(integrantes, datos);
                     ciclo.append(grupo);
                 }
                 listaEquiposExperiencia.append(ciclo);
@@ -271,7 +290,8 @@
                     copia.setAttribute('aria-hidden', 'true');
                     listaEquiposExperiencia.append(copia);
                 }
-                carruselExperiencia.scrollLeft = anchoCicloCarrusel;
+                carruselExperiencia.scrollLeft = anchoCicloCarrusel +
+                    (ciclo.firstElementChild.getBoundingClientRect().width - carruselExperiencia.clientWidth) / 2;
             }
 
             function ajustarBucleCarrusel() {
@@ -285,6 +305,55 @@
                 }
             }
 
+            function actualizarColorCerrar() {
+                const centro = carruselExperiencia.getBoundingClientRect().left + carruselExperiencia.clientWidth / 2;
+                let anterior = null;
+                let siguiente = null;
+                for (const grupo of listaEquiposExperiencia.querySelectorAll('.hub-experiencia-equipo')) {
+                    const limites = grupo.getBoundingClientRect();
+                    const posicion = (limites.left + limites.right) / 2;
+                    if (posicion <= centro) anterior = { grupo, posicion };
+                    else {
+                        siguiente = { grupo, posicion };
+                        break;
+                    }
+                }
+                if (!anterior && !siguiente) return;
+                anterior ||= siguiente;
+                siguiente ||= anterior;
+                const distancia = siguiente.posicion - anterior.posicion;
+                const avance = distancia ? (centro - anterior.posicion) / distancia : 0;
+                // Mantener el color durante el 60% central de cada tarjeta.
+                const mezcla = Math.max(0, Math.min(1, (avance - 0.3) / 0.4));
+                const colorAnterior = anterior.grupo.style.getPropertyValue('--color-grupo');
+                const colorSiguiente = siguiente.grupo.style.getPropertyValue('--color-grupo');
+                const rgb = [0, 1, 2].map(indice => {
+                    const inicio = parseInt(colorAnterior.slice(1 + indice * 2, 3 + indice * 2), 16);
+                    const fin = parseInt(colorSiguiente.slice(1 + indice * 2, 3 + indice * 2), 16);
+                    return Math.round(inicio + (fin - inicio) * mezcla);
+                });
+                const luminancia = rgb.map(valor => {
+                    const canal = valor / 255;
+                    return canal <= 0.04045 ? canal / 12.92 : ((canal + 0.055) / 1.055) ** 2.4;
+                }).reduce((total, canal, indice) => total + canal * [0.2126, 0.7152, 0.0722][indice], 0);
+                cerrarExperiencia.style.backgroundColor = `rgb(${rgb.join(', ')})`;
+                cerrarExperiencia.style.color = luminancia > 0.179 ? '#000000' : '#ffffff';
+            }
+
+            function restaurarPagina() {
+                if (!document.body.classList.contains('hub-experiencia-abierta')) return;
+                cancelAnimationFrame(fotogramaCarrusel);
+                document.body.classList.remove('hub-experiencia-abierta');
+                document.body.style.removeProperty('top');
+                window.scrollTo(0, posicionPagina);
+                document.documentElement.classList.remove('hub-experiencia-abierta');
+            }
+
+            function cerrarCarrusel() {
+                dialogoExperiencia.close();
+                restaurarPagina();
+            }
+
             function animarCarrusel(tiempo) {
                 if (!dialogoExperiencia.open) return;
                 if (tiempo - ultimoMovimientoManual > 2500 &&
@@ -295,6 +364,7 @@
                         avanceCarrusel -= desplazamiento;
                         carruselExperiencia.scrollLeft += desplazamiento;
                         ajustarBucleCarrusel();
+                        actualizarColorCerrar();
                     }
                 }
                 tiempoFotograma = tiempo;
@@ -303,7 +373,10 @@
 
             for (const evento of ['pointerdown', 'touchstart', 'touchmove', 'wheel', 'keydown'])
                 carruselExperiencia.addEventListener(evento, () => { ultimoMovimientoManual = performance.now(); }, { passive: true });
-            carruselExperiencia.addEventListener('scroll', ajustarBucleCarrusel, { passive: true });
+            carruselExperiencia.addEventListener('scroll', () => {
+                ajustarBucleCarrusel();
+                actualizarColorCerrar();
+            }, { passive: true });
             carruselExperiencia.addEventListener('pointerdown', evento => {
                 if (evento.pointerType !== 'mouse') return;
                 arrastreCarrusel = { x: evento.clientX, scroll: carruselExperiencia.scrollLeft };
@@ -317,8 +390,13 @@
             carruselExperiencia.addEventListener('pointerup', () => { arrastreCarrusel = null; });
             carruselExperiencia.addEventListener('pointercancel', () => { arrastreCarrusel = null; });
             document.getElementById('abrirExperiencia').addEventListener('click', () => {
+                posicionPagina = window.scrollY;
+                document.body.style.top = `-${posicionPagina}px`;
+                document.documentElement.classList.add('hub-experiencia-abierta');
+                document.body.classList.add('hub-experiencia-abierta');
                 dialogoExperiencia.showModal();
                 prepararCarrusel();
+                actualizarColorCerrar();
                 ultimoMovimientoManual = performance.now();
                 tiempoFotograma = ultimoMovimientoManual;
                 avanceCarrusel = 0;
@@ -327,13 +405,16 @@
             dialogoExperiencia.addEventListener('keydown', evento => {
                 if (evento.key === 'Escape') {
                     evento.preventDefault();
-                    dialogoExperiencia.close();
+                    cerrarCarrusel();
                 }
             });
             dialogoExperiencia.addEventListener('click', evento => {
-                if (evento.target === dialogoExperiencia) dialogoExperiencia.close();
+                if (evento.target === dialogoExperiencia) cerrarCarrusel();
             });
-            dialogoExperiencia.addEventListener('close', () => cancelAnimationFrame(fotogramaCarrusel));
+            cerrarExperiencia.addEventListener('click', cerrarCarrusel);
+            dialogoExperiencia.addEventListener('close', () => {
+                if (!dialogoExperiencia.open) restaurarPagina();
+            });
 
             function formatearDuracion(segundos) {
                 const minutos = Math.max(0, Math.round(segundos / 60));
@@ -425,7 +506,8 @@
 
             const encabezadoFijo = document.getElementById('encabezadoHub');
             function actualizarLogoFijo() {
-                encabezadoFijo.classList.toggle('scrolleado', window.scrollY > 0);
+                encabezadoFijo.classList.toggle('scrolleado',
+                    document.body.classList.contains('hub-experiencia-abierta') ? posicionPagina > 0 : window.scrollY > 0);
             }
             window.addEventListener('scroll', actualizarLogoFijo, { passive: true });
             actualizarLogoFijo();

@@ -2512,6 +2512,8 @@ app.MapGet("/", (HttpContext ctx) => {
                 {
                     nombre = grupo.Name,
                     color = grupo.Color,
+                    colorTexto = grupo.TextColor,
+                    puntaje = grupo.Points,
                     integrantes = experiencia.Participants
                         .Where(item => item.GroupNumber == grupo.GroupNumber)
                         .Select(item => new
