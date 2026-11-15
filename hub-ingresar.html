@@ -35,6 +35,10 @@
         const avanzar = document.getElementById('btnAvanzar');
         const errorIngresar = document.getElementById('errorIngresar');
         let intentosFallidos = 0;
+        if (new URLSearchParams(location.search).get('sesion') === 'expirada') {
+            errorIngresar.textContent = 'No se pudo verificar tu sesión anterior. Ingresá con tu nombre y contraseña.';
+            errorIngresar.hidden = false;
+        }
 
         function actualizarAcceso() {
             avanzar.hidden = nombre.value.trim().length === 0 || contrasena.value.length === 0;

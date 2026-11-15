@@ -44,6 +44,7 @@
         <div class="hub-cinta hub-cinta-inferior" aria-hidden="true">
             <div id="cintaInferiorEfigies" class="hub-cinta-pista hub-cinta-pista-izquierda"></div>
         </div>
+        <button id="abrirExperiencia" class="hub-experiencia-abrir" type="button" disabled>Más de tu experiencia</button>
     </section>
 
     <section class="hub-contenido-intermedio" aria-labelledby="tituloContenidoProvisional">
@@ -82,6 +83,12 @@
         </div>
     </dialog>
 
+    <dialog id="dialogoExperiencia" class="hub-capa-dialog hub-experiencia-dialog" aria-label="Efigies agrupadas por equipo. Tocá fuera de la franja o presioná Escape para cerrar.">
+        <div id="carruselExperiencia" class="hub-experiencia-carrusel" tabindex="0" aria-label="Efigies agrupadas por equipo">
+            <div id="equiposExperiencia" class="hub-experiencia-equipos"></div>
+        </div>
+    </dialog>
+
     <script>
         const usuarioGuardado = sessionStorage.getItem('efigieHubUsuario');
         let usuario;
@@ -112,6 +119,15 @@
             let urlPrevia = null;
             let imagenDescarga = null;
             const urlsEfigiesExperiencia = new Set();
+            const dialogoExperiencia = document.getElementById('dialogoExperiencia');
+            const carruselExperiencia = document.getElementById('carruselExperiencia');
+            const listaEquiposExperiencia = document.getElementById('equiposExperiencia');
+            let ultimoMovimientoManual = 0;
+            let fotogramaCarrusel = 0;
+            let anchoCicloCarrusel = 0;
+            let tiempoFotograma = 0;
+            let avanceCarrusel = 0;
+            let arrastreCarrusel = null;
 
             function experienciaSimulada() {
                 const colores = [
@@ -122,7 +138,11 @@
                     { nombre: 'Azul', color: '#133463', colorTexto: '#ffffff' }
                 ];
                 const equipo = colores[Math.floor(Math.random() * colores.length)];
-                const ganador = colores[Math.floor(Math.random() * colores.length)];
+                const cantidadEquipos = 3 + Math.floor(Math.random() * 3);
+                const otros = colores.filter(color => color !== equipo).slice(0, cantidadEquipos - 1);
+                const equipos = [equipo, ...otros];
+                const ganador = equipos[Math.floor(Math.random() * equipos.length)];
+                const nombresEjemplo = ['Juanchi Castro', 'Martín López', 'Ana García', 'Lucía Pérez', 'Tomás Ruiz', 'Sofía Díaz', 'Nicolás Rojas', 'Valentina Silva', 'Mateo Torres', 'Camila Herrera', 'Emilia Ríos', 'Julián Castro', 'Abril Vega', 'Benjamín Molina'];
                 const fecha = new Date(Date.now() - Math.floor(Math.random() * 60) * 86400000);
                 fecha.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 4) * 15, 0, 0);
 
@@ -130,7 +150,14 @@
                     esSimulada: true,
                     fechaInicio: fecha.toISOString(),
                     duracionSegundos: (45 + Math.floor(Math.random() * 76)) * 60,
-                    cantidadParticipantes: 9 + Math.floor(Math.random() * 3) * 3,
+                    equipos: equipos.map((grupo, indice) => ({
+                        nombre: `Equipo ${grupo.nombre}`,
+                        color: grupo.color,
+                        integrantes: Array.from({ length: 3 }, (_, numero) => ({
+                            nombre: indice === 0 && numero === 0 ? usuario.nombre : nombresEjemplo[indice * 3 + numero - 1],
+                            esUsuario: indice === 0 && numero === 0
+                        }))
+                    })),
                     equipo: {
                         nombre: `Equipo ${equipo.nombre}`,
                         color: equipo.color,
@@ -151,21 +178,162 @@
                 }));
             }
 
-            function renderizarCinta(id, efigies) {
-                if (!efigies.length) throw new Error('No hay efigies para mostrar en las cintas.');
+            function crearUrlEfigie(svg) {
+                const documento = new DOMParser().parseFromString(svg, 'image/svg+xml');
+                if (documento.documentElement.localName !== 'svg' || documento.querySelector('parsererror'))
+                    throw new Error('La efigie de un participante no es válida.');
+                const capas = { anio: 1, rol: 1, estaciones: 2, historia: 2, carrera: 3, conexiones: 3 };
+                for (const grupo of documento.querySelectorAll('g[data-capa]')) {
+                    const numero = capas[grupo.getAttribute('data-capa')];
+                    if (numero) grupo.classList.add(`rotar-capa-${numero}`);
+                }
+                const estilo = documento.createElementNS('http://www.w3.org/2000/svg', 'style');
+                estilo.textContent = `
+                    @keyframes horario { to { transform: rotate(360deg); } }
+                    @keyframes antihorario { to { transform: rotate(-360deg); } }
+                    .rotar-capa-1,.rotar-capa-2,.rotar-capa-3 { transform-origin: 0 0; transform-box: view-box; animation-timing-function: linear; animation-iteration-count: infinite; }
+                    .rotar-capa-1 { animation-name: horario; animation-duration: 18s; }
+                    .rotar-capa-2 { animation-name: antihorario; animation-duration: 12s; }
+                    .rotar-capa-3 { animation-name: horario; animation-duration: 8s; }
+                    @media (prefers-reduced-motion: reduce) { .rotar-capa-1,.rotar-capa-2,.rotar-capa-3 { animation: none; } }
+                `;
+                documento.documentElement.prepend(estilo);
+                const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(documento)], { type: 'image/svg+xml;charset=utf-8' }));
+                urlsEfigiesExperiencia.add(url);
+                return url;
+            }
+
+            function renderizarCinta(id, participantes) {
+                if (!participantes.length) throw new Error('No hay efigies para mostrar en las cintas.');
                 const pista = document.getElementById(id);
-                const repeticiones = Math.max(2, Math.ceil(10 / efigies.length));
-                const ciclo = Array.from({ length: repeticiones }, () => efigies).flat();
-                for (const svg of [...ciclo, ...ciclo]) {
-                    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-                    urlsEfigiesExperiencia.add(url);
+                const repeticiones = Math.max(2, Math.ceil(window.innerWidth / 84 / participantes.length));
+                const ciclo = Array.from({ length: repeticiones }, () => participantes).flat();
+                for (const participante of [...ciclo, ...ciclo]) {
                     const imagen = document.createElement('img');
-                    imagen.src = url;
+                    imagen.src = participante.url;
                     imagen.alt = '';
                     imagen.draggable = false;
                     pista.append(imagen);
                 }
             }
+
+            function nombreCorto(nombre) {
+                const partes = nombre.trim().split(/\s+/);
+                return partes.length > 1 ? `${partes[0]} ${partes[partes.length - 1][0]}.` : partes[0];
+            }
+
+            function renderizarEquipos(equipos) {
+                listaEquiposExperiencia.replaceChildren();
+                const ciclo = document.createElement('div');
+                ciclo.className = 'hub-experiencia-ciclo';
+                for (const equipo of equipos) {
+                    if (!equipo.integrantes.length) continue;
+                    const grupo = document.createElement('section');
+                    grupo.className = 'hub-experiencia-equipo';
+                    grupo.style.setProperty('--color-grupo', equipo.color);
+                    grupo.setAttribute('aria-label', equipo.nombre);
+                    const integrantes = document.createElement('div');
+                    integrantes.className = 'hub-experiencia-integrantes';
+                    for (const participante of equipo.integrantes) {
+                        const figura = document.createElement('figure');
+                        const imagen = document.createElement('img');
+                        imagen.src = participante.url;
+                        imagen.alt = '';
+                        imagen.draggable = false;
+                        const nombre = document.createElement('figcaption');
+                        nombre.textContent = participante.esUsuario ? 'Tú' : nombreCorto(participante.nombre);
+                        figura.append(imagen, nombre);
+                        integrantes.append(figura);
+                    }
+                    grupo.append(integrantes);
+                    ciclo.append(grupo);
+                }
+                listaEquiposExperiencia.append(ciclo);
+            }
+
+            function prepararCarrusel() {
+                const ciclo = listaEquiposExperiencia.firstElementChild;
+                while (listaEquiposExperiencia.children.length > 1)
+                    listaEquiposExperiencia.lastElementChild.remove();
+                ciclo.querySelectorAll('[data-repetido]').forEach(elemento => elemento.remove());
+                const originales = [...ciclo.children];
+                while (ciclo.offsetWidth < carruselExperiencia.clientWidth + 300) {
+                    for (const grupo of originales) {
+                        const copia = grupo.cloneNode(true);
+                        copia.dataset.repetido = '1';
+                        copia.setAttribute('aria-hidden', 'true');
+                        ciclo.append(copia);
+                    }
+                }
+                anchoCicloCarrusel = ciclo.offsetWidth;
+                for (let i = 0; i < 2; i++) {
+                    const copia = ciclo.cloneNode(true);
+                    copia.setAttribute('aria-hidden', 'true');
+                    listaEquiposExperiencia.append(copia);
+                }
+                carruselExperiencia.scrollLeft = anchoCicloCarrusel;
+            }
+
+            function ajustarBucleCarrusel() {
+                if (!anchoCicloCarrusel) return;
+                if (carruselExperiencia.scrollLeft < anchoCicloCarrusel) {
+                    carruselExperiencia.scrollLeft += anchoCicloCarrusel;
+                    if (arrastreCarrusel) arrastreCarrusel.scroll += anchoCicloCarrusel;
+                } else if (carruselExperiencia.scrollLeft >= anchoCicloCarrusel * 2) {
+                    carruselExperiencia.scrollLeft -= anchoCicloCarrusel;
+                    if (arrastreCarrusel) arrastreCarrusel.scroll -= anchoCicloCarrusel;
+                }
+            }
+
+            function animarCarrusel(tiempo) {
+                if (!dialogoExperiencia.open) return;
+                if (tiempo - ultimoMovimientoManual > 2500 &&
+                    !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    avanceCarrusel += Math.min(tiempo - tiempoFotograma, 50) * 0.035;
+                    if (avanceCarrusel >= 1) {
+                        const desplazamiento = Math.floor(avanceCarrusel);
+                        avanceCarrusel -= desplazamiento;
+                        carruselExperiencia.scrollLeft += desplazamiento;
+                        ajustarBucleCarrusel();
+                    }
+                }
+                tiempoFotograma = tiempo;
+                fotogramaCarrusel = requestAnimationFrame(animarCarrusel);
+            }
+
+            for (const evento of ['pointerdown', 'touchstart', 'touchmove', 'wheel', 'keydown'])
+                carruselExperiencia.addEventListener(evento, () => { ultimoMovimientoManual = performance.now(); }, { passive: true });
+            carruselExperiencia.addEventListener('scroll', ajustarBucleCarrusel, { passive: true });
+            carruselExperiencia.addEventListener('pointerdown', evento => {
+                if (evento.pointerType !== 'mouse') return;
+                arrastreCarrusel = { x: evento.clientX, scroll: carruselExperiencia.scrollLeft };
+                carruselExperiencia.setPointerCapture(evento.pointerId);
+            });
+            carruselExperiencia.addEventListener('pointermove', evento => {
+                if (!arrastreCarrusel) return;
+                carruselExperiencia.scrollLeft = arrastreCarrusel.scroll - (evento.clientX - arrastreCarrusel.x);
+                ultimoMovimientoManual = performance.now();
+            });
+            carruselExperiencia.addEventListener('pointerup', () => { arrastreCarrusel = null; });
+            carruselExperiencia.addEventListener('pointercancel', () => { arrastreCarrusel = null; });
+            document.getElementById('abrirExperiencia').addEventListener('click', () => {
+                dialogoExperiencia.showModal();
+                prepararCarrusel();
+                ultimoMovimientoManual = performance.now();
+                tiempoFotograma = ultimoMovimientoManual;
+                avanceCarrusel = 0;
+                fotogramaCarrusel = requestAnimationFrame(animarCarrusel);
+            });
+            dialogoExperiencia.addEventListener('keydown', evento => {
+                if (evento.key === 'Escape') {
+                    evento.preventDefault();
+                    dialogoExperiencia.close();
+                }
+            });
+            dialogoExperiencia.addEventListener('click', evento => {
+                if (evento.target === dialogoExperiencia) dialogoExperiencia.close();
+            });
+            dialogoExperiencia.addEventListener('close', () => cancelAnimationFrame(fotogramaCarrusel));
 
             function formatearDuracion(segundos) {
                 const minutos = Math.max(0, Math.round(segundos / 60));
@@ -179,7 +347,7 @@
             function renderizarExperiencia(experiencia) {
                 const fecha = new Date(experiencia.fechaInicio);
                 if (!Number.isFinite(fecha.getTime()) || !experiencia.equipo ||
-                    !Array.isArray(experiencia.participantes) && !experiencia.esSimulada) {
+                    !Array.isArray(experiencia.equipos)) {
                     throw new Error('El servidor devolvió datos incompletos de la experiencia.');
                 }
 
@@ -189,8 +357,11 @@
                 });
                 document.getElementById('duracionExperiencia').textContent =
                     formatearDuracion(experiencia.duracionSegundos);
-                document.getElementById('integrantesExperiencia').textContent =
-                    String(experiencia.equipo.cantidadIntegrantes);
+                const propio = experiencia.equipos.find(equipo => equipo.integrantes.some(integrante => integrante.esUsuario));
+                if (!propio) throw new Error('No se encontró el equipo del participante.');
+                const companeros = propio.integrantes.filter(integrante => !integrante.esUsuario)
+                    .map(integrante => nombreCorto(integrante.nombre));
+                document.getElementById('integrantesExperiencia').textContent = [...companeros, 'Tú'].join(', ');
                 document.getElementById('equipoExperiencia').textContent = experiencia.equipo.nombre;
                 document.getElementById('puntajeEquipoExperiencia').textContent =
                     `${experiencia.equipo.puntaje} pts`;
@@ -201,15 +372,16 @@
                 const resumen = document.getElementById('resumenExperiencia');
                 resumen.style.setProperty('--color-equipo', experiencia.equipo.color);
                 resumen.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
+                const abrir = document.getElementById('abrirExperiencia');
+                abrir.style.setProperty('--color-equipo', experiencia.equipo.color);
+                abrir.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
                 document.getElementById('avisoExperienciaSimulada').hidden = !experiencia.esSimulada;
                 if (experiencia.esSimulada) {
                     document.getElementById('avisoExperienciaSimulada').textContent =
                         'Datos y efigies de ejemplo; se reemplazarán por los de una experiencia real cuando estén disponibles.';
                 }
 
-                return experiencia.esSimulada
-                    ? cargarEfigiesAleatorias(experiencia.cantidadParticipantes)
-                    : Promise.resolve(experiencia.participantes.map(participante => participante.svg));
+                return experiencia.equipos;
             }
 
             async function cargarExperiencia() {
@@ -228,9 +400,17 @@
                     }
 
                     experiencia ||= experienciaSimulada();
-                    const efigies = await renderizarExperiencia(experiencia);
-                    renderizarCinta('cintaSuperiorEfigies', efigies);
-                    renderizarCinta('cintaInferiorEfigies', efigies);
+                    const equipos = renderizarExperiencia(experiencia);
+                    const participantes = equipos.flatMap(equipo => equipo.integrantes);
+                    if (experiencia.esSimulada) {
+                        const efigies = await cargarEfigiesAleatorias(participantes.length);
+                        participantes.forEach((participante, indice) => { participante.svg = efigies[indice]; });
+                    }
+                    participantes.forEach(participante => { participante.url = crearUrlEfigie(participante.svg); });
+                    renderizarCinta('cintaSuperiorEfigies', participantes);
+                    renderizarCinta('cintaInferiorEfigies', participantes);
+                    renderizarEquipos(equipos);
+                    document.getElementById('abrirExperiencia').disabled = false;
                 } catch (errorCarga) {
                     console.error('No se pudo cargar el bloque de experiencia.', errorCarga);
                     avisoError.textContent = 'No se pudo cargar la experiencia. Recargá la página para volver a intentar.';
@@ -238,9 +418,10 @@
                 }
             }
 
-            window.addEventListener('pagehide', () => {
+            window.addEventListener('pagehide', evento => {
+                if (evento.persisted) return;
                 for (const url of urlsEfigiesExperiencia) URL.revokeObjectURL(url);
-            }, { once: true });
+            });
 
             const encabezadoFijo = document.getElementById('encabezadoHub');
             function actualizarLogoFijo() {

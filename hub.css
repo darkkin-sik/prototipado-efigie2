@@ -37,6 +37,19 @@ body {
     overflow: hidden;
 }
 
+.espera-hub h1 {
+    max-width: 24rem;
+    font-size: clamp(1.6rem, 6vw, 2.4rem);
+    text-align: center;
+    text-wrap: balance;
+}
+
+.espera-hub-logo {
+    position: absolute;
+    top: max(6vh, calc(env(safe-area-inset-top) + 12px));
+    width: min(177px, 54vw);
+}
+
 .portada-logo {
     position: absolute;
     top: max(6vh, calc(env(safe-area-inset-top) + 12px));
@@ -417,8 +430,8 @@ body {
 }
 
 .hub-experiencia-bloque {
-    padding: clamp(20px, 5vw, 40px);
-    border-radius: 12px;
+    padding: clamp(36px, 8vw, 64px) clamp(20px, 5vw, 40px);
+    border-radius: 0;
     background: var(--color-equipo, #133463);
     color: var(--color-texto-equipo, #ffffff);
 }
@@ -463,6 +476,52 @@ body {
     color: #a12525;
     font-size: 0.9rem;
 }
+
+.hub-experiencia-abrir {
+    justify-self: center;
+    margin: 12px 24px 0;
+    padding: 14px 28px;
+    min-height: 52px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--color-equipo, #133463);
+    color: var(--color-texto-equipo, #ffffff);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.hub-experiencia-abrir:disabled { opacity: 0.6; cursor: wait; }
+.hub-experiencia-abrir:focus-visible,
+.hub-experiencia-carrusel:focus-visible { outline: 3px solid #6eb392; outline-offset: 3px; }
+.hub-capa-dialog.hub-experiencia-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    background: #ffffff;
+    overflow: hidden;
+}
+.hub-experiencia-carrusel {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-behavior: auto;
+    touch-action: pan-x;
+    cursor: grab;
+}
+.hub-experiencia-carrusel:active { cursor: grabbing; }
+.hub-experiencia-equipos,
+.hub-experiencia-ciclo { display: flex; width: max-content; }
+.hub-experiencia-equipo {
+    width: min(100vw, 720px, calc((90vh - 60px) * 3));
+    width: min(100vw, 720px, calc((90dvh - 60px) * 3));
+    padding: 8px;
+    border: 3px solid var(--color-grupo);
+    text-align: center;
+}
+.hub-experiencia-integrantes { display: flex; justify-content: center; }
+.hub-experiencia-integrantes figure { flex: 1 1 0; min-width: 0; margin: 0; }
+.hub-experiencia-integrantes img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+.hub-experiencia-integrantes figcaption { margin-top: 6px; overflow-wrap: anywhere; font-size: 0.9rem; }
 
 .hub-contenido-intermedio,
 .hub-capas {

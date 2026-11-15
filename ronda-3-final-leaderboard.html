@@ -9,6 +9,8 @@
     <style>
         .avance { min-height: 1.5em; margin: -12px 0 18px; color: var(--muted); text-align: center; }
         .nota { margin: 18px 0 0; color: var(--muted); font-size: .85rem; line-height: 1.5; text-align: center; }
+        #continuarFinal { display: inline-flex; align-items: center; justify-content: center; min-height: 54px; padding: 12px 28px; border-radius: 5px; background: #133463; color: #fff; font-weight: 700; text-decoration: none; }
+        #continuarFinal[hidden] { display: none; }
     </style>
 </head>
 <body>
@@ -18,6 +20,7 @@
         <p class="avance" id="avance" aria-live="polite"></p>
         <section class="equipos" id="equipos" aria-label="Tabla de posiciones" aria-live="polite"></section>
         <p class="nota">El puntaje de la ronda 3 se asigna por orden de finalización y suma al equipo. Solo cuentan respuestas de participantes reales.</p>
+        <div class="acciones"><a id="continuarFinal" href="#" hidden>Continuar</a></div>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
     </main>
     <script>
@@ -88,6 +91,9 @@
                 if (!respuesta.ok) throw new Error('No se pudieron consultar los resultados finales.');
                 const resultados = await respuesta.json();
                 renderizar(resultados.equipos, resultados.equipoPropio);
+                const continuarFinal = document.getElementById('continuarFinal');
+                continuarFinal.hidden = !resultados.rondaCompletada || adminPreview;
+                continuarFinal.href = `/espera-hub.html?id=${encodeURIComponent(responseId)}`;
                 avance.textContent = resultados.rondaCompletada
                     ? `Desafío completado por todos los participantes (${resultados.participantesRespondidos}/${resultados.totalParticipantes}).`
                     : `Desafío completado por ${resultados.participantesRespondidos} de ${resultados.totalParticipantes} participantes.`;

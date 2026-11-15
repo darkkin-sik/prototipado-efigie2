@@ -105,7 +105,8 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 7. **Ronda 2 — interpretar las capas:** cada integrante identifica las seis capas de la efigie desde su propio dispositivo. El representante controla el cambio de pregunta; puede avanzar cuando los integrantes reales del equipo coinciden en la respuesta. También puede volver a la pregunta anterior sin esperar consenso. Si solicita una pista, esta aparece en un dispositivo real de otro integrante y la pregunta vale la mitad de puntos. Cada acierto suma 100 puntos, o 50 si se usó la pista.
 8. **Leaderboard de la Ronda 2:** se presentan los puntajes. Cuando todos confirman que están listos, o administración fuerza el avance, todos pasan a la pantalla de preronda de la Ronda 3.
 9. **Ronda 3 — encontrar personas:** los tres integrantes juegan simultáneamente desde sus dispositivos, sin representante. Cada uno resuelve tres consignas buscando participantes que coincidan con características de la encuesta (año de nacimiento, facultad, etapa o rol, estación favorita, forma de trabajo, formato de historia o rol grupal). Las opciones muestran a todos los integrantes de la sala, incluidos los simulados; las consignas se generan a partir de respuestas existentes de participantes reales y priorizan personas de otros equipos. La misma persona puede servir para más de una consigna. Al completar las tres, aparece «Enviar» y se asignan puntos por orden global de finalización: 250, 200 y 150 a los tres primeros; desde el cuarto lugar, 50 puntos, restando 5 por cada posición posterior hasta llegar a cero. Solo los jugadores reales envían desafíos y suman puntos; cada puntaje individual se agrega al total de su equipo.
-10. **Leaderboard final:** se actualiza a medida que terminan los jugadores y muestra el acumulado de las tres rondas. Combina el puntaje de la Ronda 1, el promedio por equipo de la Ronda 2 y la suma de los puntos individuales reales de la Ronda 3. Al completar el desafío todos los participantes, la sesión pasa a resultados finales.
+10. **Leaderboard final:** se actualiza a medida que terminan los jugadores y muestra el acumulado de las tres rondas. Combina el puntaje de la Ronda 1, el promedio por equipo de la Ronda 2 y la suma de los puntos individuales reales de la Ronda 3. Al finalizar, cada participante puede continuar a una pantalla de espera.
+11. **Hub:** en resultados finales, administración habilita el acceso al hub. En la pantalla de espera aparece el botón para ir a la portada del hub; al continuar, el dispositivo que respondió la encuesta inicia sesión automáticamente. Si no se puede verificar la sesión, se ofrece el ingreso normal. El resumen muestra los compañeros y las efigies agrupadas por equipo; los datos anteriores que no tengan historial se muestran como ejemplo.
 
 ## Administración y soporte
 
@@ -129,6 +130,8 @@ El orden y los avances son:
 Si se recarga el panel mientras hay una pista activa, el servidor la pausa para evitar que el audio y los temporizadores queden desincronizados. El operador puede reanudarla desde el control de audio.
 
 El estado de la sesión y su etapa viven en el proceso del servidor; al reiniciar la aplicación, la sesión activa vuelve a empezar. Las respuestas de la encuesta se almacenan aparte en `respuestas_app.csv`.
+
+Los resúmenes de rondas terminadas se guardan localmente en `experiencias_hub.json`, excluido de Git; conservá una copia junto con `respuestas_app.csv`. Los registros antiguos pueden no contener todos los nombres o integrantes simulados.
 
 **Problema conocido:** las sesiones espectadoras (`ESP`) y su navegación todavía pueden fallar en algunos dispositivos Android.
 

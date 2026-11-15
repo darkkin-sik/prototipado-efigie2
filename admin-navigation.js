@@ -80,6 +80,7 @@
                         return;
                     }
                 }
+                if (window.location.pathname === '/espera-hub.html') return;
                 const respuesta = await fetch(`/api/espectador/estado?responseId=${encodeURIComponent(responseId)}`, { cache: 'no-store' });
                 if (!respuesta.ok) throw new Error('No se pudo consultar la sesión de espectador.');
                 const sesion = await respuesta.json();

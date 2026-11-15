@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Una cosa más - Efigie</title>
+    <link rel="stylesheet" href="/hub.css">
+</head>
+<body>
+    <main class="portada-contenido espera-hub">
+        <img class="espera-hub-logo" src="/efigie-logo.svg" alt="Efigie">
+        <h1>¡Todavía no cierres esta pestaña, queda una cosa más!</h1>
+        <p id="estadoEsperaHub" class="hub-error" role="status" hidden></p>
+        <a id="continuarHub" class="boton-principal" href="/hub.html?sesion=actual" aria-hidden="true" tabindex="-1">Continuar</a>
+    </main>
+    <script>
+        const responseId = new URLSearchParams(location.search).get('id') || localStorage.getItem('mi_efigie_id');
+        const boton = document.getElementById('continuarHub');
+        const estado = document.getElementById('estadoEsperaHub');
+        let consultando = false;
+        if (responseId) {
+            sessionStorage.setItem('efigieHubSesionActual', responseId);
+            async function consultarAcceso() {
+                if (consultando) return;
+                consultando = true;
+                try {
+                    const respuesta = await fetch('/api/hub/acceso', { cache: 'no-store' });
+                    if (!respuesta.ok) throw new Error('No se pudo consultar el acceso.');
+                    const acceso = await respuesta.json();
+                    if (acceso.habilitado) {
+                        boton.classList.add('visible');
+                        boton.removeAttribute('aria-hidden');
+                        boton.removeAttribute('tabindex');
+                    } else {
+                        boton.classList.remove('visible');
+                        boton.setAttribute('aria-hidden', 'true');
+                        boton.setAttribute('tabindex', '-1');
+                    }
+                    estado.hidden = true;
+                } catch (error) {
+                    console.error(error);
+                    estado.textContent = 'No se pudo consultar el acceso. Revisá tu conexión.';
+                    estado.hidden = false;
+                } finally {
+                    consultando = false;
+                }
+            }
+            consultarAcceso();
+            const intervalo = setInterval(consultarAcceso, 2000);
+            window.addEventListener('pagehide', () => clearInterval(intervalo));
+        } else {
+            estado.textContent = 'No se encontró tu sesión. Ingresá al hub con tu nombre y contraseña.';
+            estado.hidden = false;
+            boton.href = '/hub.html';
+            boton.classList.add('visible');
+            boton.removeAttribute('aria-hidden');
+            boton.removeAttribute('tabindex');
+        }
+    </script>
+    <script src="/admin-navigation.js" defer></script>
+</body>
+</html>

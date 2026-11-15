@@ -20,6 +20,40 @@
             const error = document.getElementById('errorHub');
             const logo = document.getElementById('logoHub');
             const boton = document.getElementById('btnIngresar');
+            const sesionActual = new URLSearchParams(location.search).get('sesion') === 'actual'
+                ? sessionStorage.getItem('efigieHubSesionActual') : null;
+
+            if (sesionActual) {
+                boton.textContent = 'Continuar';
+                boton.href = '/hub-ingresar.html';
+                boton.addEventListener('click', async evento => {
+                    evento.preventDefault();
+                    if (boton.getAttribute('aria-disabled') === 'true') return;
+                    boton.setAttribute('aria-disabled', 'true');
+                    try {
+                        const respuesta = await fetch('/api/hub/iniciar-sesion-actual', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ responseId: sesionActual })
+                        });
+                        if (respuesta.status === 401) {
+                            sessionStorage.removeItem('efigieHubSesionActual');
+                            location.href = '/hub-ingresar.html?sesion=expirada';
+                            return;
+                        }
+                        if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
+                        sessionStorage.setItem('efigieHubUsuario', JSON.stringify(await respuesta.json()));
+                        sessionStorage.removeItem('efigieHubSesionActual');
+                        location.href = '/hub-en-proceso.html';
+                    } catch (errorCarga) {
+                        console.error('No se pudo iniciar sesión automáticamente.', errorCarga);
+                        error.textContent = 'No se pudo iniciar sesión. Revisá tu conexión e intentá nuevamente.';
+                        error.hidden = false;
+                    } finally {
+                        boton.removeAttribute('aria-disabled');
+                    }
+                });
+            }
 
             try {
                 const respuesta = await fetch('/api/hub/efigie', { cache: 'no-store' });

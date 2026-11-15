@@ -86,6 +86,7 @@
             <button type="button" class="accion" id="saltarTiempo" hidden>Saltar tiempo</button>
             <button type="button" class="accion" id="forzarLeaderboard" hidden>Forzar leaderboard (simular bots)</button>
             <button type="button" class="accion" id="forzarSiguiente" hidden>Forzar avance desde leaderboard</button>
+            <button type="button" class="accion" id="habilitarHub" hidden>Habilitar acceso al hub</button>
             <button type="button" class="accion accion-volver" id="volver">Forzar retroceso</button>
             <button type="button" class="accion accion-terminar" id="terminarSesiones">Kill all active sessions</button>
         </footer>
@@ -123,6 +124,7 @@
         const botonSaltarTiempo = document.getElementById('saltarTiempo');
         const botonForzarLeaderboard = document.getElementById('forzarLeaderboard');
         const botonForzarSiguiente = document.getElementById('forzarSiguiente');
+        const botonHabilitarHub = document.getElementById('habilitarHub');
         const contadorForzar = document.getElementById('contadorForzar');
         const contadorLeaderboard = document.getElementById('contadorLeaderboard');
         const botonVolver = document.getElementById('volver');
@@ -479,6 +481,9 @@
                 botonSaltarTiempo.hidden = !['memoria', 'adivinanza'].includes(sesion.etapaRondaUno);
                 botonForzarLeaderboard.hidden = sesion.etapaRondaUno !== 'adivinanza';
                 botonForzarSiguiente.hidden = !['leaderboard', 'ronda-2-representante', 'ronda-2-identificacion', 'ronda-2-leaderboard', 'ronda-3'].includes(sesion.etapaRondaUno);
+                botonHabilitarHub.hidden = sesion.etapaRondaUno !== 'ronda-3-leaderboard';
+                botonHabilitarHub.disabled = sesion.accesoHubHabilitado;
+                botonHabilitarHub.textContent = sesion.accesoHubHabilitado ? 'Acceso al hub habilitado' : 'Habilitar acceso al hub';
                 const nombresForzar = {
                     leaderboard: 'Forzar avance a ronda 2',
                     'ronda-2-representante': 'Forzar avance a identificación',
@@ -647,6 +652,20 @@
             '¿Forzar el avance desde la etapa actual?',
             'Se forzó el avance de todos los participantes.'
         ));
+
+        botonHabilitarHub.addEventListener('click', async () => {
+            botonHabilitarHub.disabled = true;
+            try {
+                const respuesta = await fetch('/api/admin/hub/habilitar', { method: 'POST' });
+                if (!respuesta.ok) throw new Error('No se pudo habilitar el acceso al hub.');
+                mensaje.textContent = 'Acceso al hub habilitado.';
+                await cargarEstado();
+            } catch (error) {
+                console.error(error);
+                mensaje.textContent = error.message;
+                botonHabilitarHub.disabled = false;
+            }
+        });
 
         botonVolver.addEventListener('click', async () => {
             botonVolver.disabled = true;

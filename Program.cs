@@ -88,6 +88,8 @@ class Program
     {
         public HubExperienceParticipant() { }
         public string ResponseId { get; init; } = "";
+        public string Name { get; init; } = "";
+        public bool IsBot { get; init; }
         public string Svg { get; init; } = "";
         public int GroupNumber { get; init; }
         public int IndividualPoints { get; init; }
@@ -159,6 +161,7 @@ class Program
     private static string IdExperienciaActual = "";
     private static DateTime? InicioExperienciaUtc;
     private static bool ExperienciaActualArchivada;
+    private static bool AccesoHubHabilitado;
     private static int SegundosExtraRondaUno;
     private static DateTime? InicioRondaTresUtc;
     private static bool AudioRondaDosBloqueada;
@@ -340,6 +343,16 @@ class Program
         List<HubExperienceRecord> historialExperiencias = File.Exists(rutaHistorialExperiencias)
             ? JsonSerializer.Deserialize<List<HubExperienceRecord>>(File.ReadAllText(rutaHistorialExperiencias)) ?? new()
             : new();
+
+    app.Use(async (ctx, next) => {
+        if (ctx.Request.Path.StartsWithSegments("/experiencias_hub.json") ||
+            ctx.Request.Path.StartsWithSegments("/experiencias_hub.json.tmp"))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        await next();
+    });
 
     app.UseStaticFiles(new StaticFileOptions {
         FileProvider = new PhysicalFileProvider(dirActual),
@@ -1524,6 +1537,7 @@ app.MapGet("/", (HttpContext ctx) => {
             preRondaActiva = RondaIniciada && !PreviewRondaIniciada,
             previewIniciada = PreviewRondaIniciada,
             etapaRondaUno = ObtenerEtapaRondaUno(),
+            accesoHubHabilitado = AccesoHubHabilitado && EtapaRondaUno == 9,
             segundosRestantesRondaUno = ObtenerSegundosRestantesRondaUno(),
             segundosRestantesRondaTres = ObtenerSegundosRestantesRondaTres(),
             totalParticipantesReales = participantesReales.Length,
@@ -1535,6 +1549,20 @@ app.MapGet("/", (HttpContext ctx) => {
     });
 
     app.MapGet("/api/lobby/estado", () => Results.Json(new { rondaIniciada = RondaIniciada, previewIniciada = PreviewRondaIniciada, etapaRondaUno = ObtenerEtapaRondaUno() }));
+
+    app.MapPost("/api/admin/hub/habilitar", () => {
+        lock (CandadoLobby)
+        {
+            if (!RondaIniciada || EtapaRondaUno != 9) return Results.Conflict();
+            AccesoHubHabilitado = true;
+            return Results.Ok();
+        }
+    });
+
+    app.MapGet("/api/hub/acceso", () => {
+        lock (CandadoLobby)
+            return Results.Json(new { habilitado = RondaIniciada && EtapaRondaUno == 9 && AccesoHubHabilitado });
+    });
 
     app.MapGet("/api/preronda/estado", (HttpContext ctx) => {
         string responseId = ctx.Request.Query["responseId"].FirstOrDefault() ?? "";
@@ -1972,7 +2000,10 @@ app.MapGet("/", (HttpContext ctx) => {
                         $"{rutaAnterior}{Uri.EscapeDataString(participante.ResponseId)}";
 
                 if (EtapaRondaUno == 9)
+                {
                     ExperienciaActualArchivada = false;
+                    AccesoHubHabilitado = false;
+                }
                 EtapaRondaUno = etapaAnterior;
                 PreviewRondaIniciada = etapaAnterior > 0;
                 InicioEtapaRondaUnoUtc = null;
@@ -2459,6 +2490,9 @@ app.MapGet("/", (HttpContext ctx) => {
             if (equipo == null)
                 return Results.NotFound();
 
+            var nombresGuardados = LeerUsuariosCsv(rutaCsv)
+                .GroupBy(item => item.id, StringComparer.Ordinal)
+                .ToDictionary(grupo => grupo.Key, grupo => grupo.Last().nombre, StringComparer.Ordinal);
             return Results.Json(new
             {
                 esSimulada = false,
@@ -2474,8 +2508,62 @@ app.MapGet("/", (HttpContext ctx) => {
                     aporteIndividual = participante.IndividualPoints
                 },
                 equipoGanador = experiencia.Teams.FirstOrDefault(item => item.Winner)?.Name ?? "",
-                participantes = experiencia.Participants.Select(item => new { svg = item.Svg }).ToArray()
+                equipos = experiencia.Teams.OrderBy(item => item.GroupNumber).Select(grupo => new
+                {
+                    nombre = grupo.Name,
+                    color = grupo.Color,
+                    integrantes = experiencia.Participants
+                        .Where(item => item.GroupNumber == grupo.GroupNumber)
+                        .Select(item => new
+                        {
+                            nombre = !string.IsNullOrWhiteSpace(item.Name) ? item.Name
+                                : nombresGuardados.GetValueOrDefault(item.ResponseId, "Participante"),
+                            esUsuario = item.ResponseId == responseId,
+                            esBot = item.IsBot,
+                            svg = item.Svg
+                        }).ToArray()
+                }).ToArray()
             });
+        }
+    });
+
+    IResult RespuestaHub(DatosRespuesta usuario)
+    {
+        var config = LeerConfig(rutaConfig);
+        string efigieEstatica = GeneradorEfigie.GenerarSVG(usuario, config, incluirMarcoYNombre: false);
+        return Results.Json(new
+        {
+            id = usuario.id,
+            nombre = usuario.nombre,
+            anio = usuario.anio,
+            facultad = usuario.facultad,
+            etapa = usuario.etapa,
+            estacion = usuario.estacion,
+            grupal = usuario.grupal,
+            formato = usuario.formato,
+            rol = usuario.rol,
+            efigie = InyectarAnimacionRotacionSvg(efigieEstatica),
+            efigieEstatica
+        });
+    }
+
+    app.MapPost("/api/hub/iniciar-sesion-actual", async (HttpContext ctx) => {
+        var solicitud = await ctx.Request.ReadFromJsonAsync<SessionHeartbeat>();
+        if (solicitud == null || string.IsNullOrWhiteSpace(solicitud.responseId))
+            return Results.BadRequest();
+
+        lock (CandadoLobby)
+        {
+            if (!RondaIniciada || EtapaRondaUno != 9 || !AccesoHubHabilitado ||
+                !ParticipantesLobby.TryGetValue(solicitud.responseId, out LobbyParticipant participante) ||
+                participante.EsBot)
+                return Results.Unauthorized();
+            if (!ctx.Request.Cookies.TryGetValue("efigie_device_id", out string deviceId) ||
+                string.IsNullOrWhiteSpace(participante.Datos.deviceId) ||
+                !string.Equals(deviceId, participante.Datos.deviceId, StringComparison.Ordinal))
+                return Results.Unauthorized();
+
+            return RespuestaHub(participante.Datos);
         }
     });
 
@@ -2493,24 +2581,7 @@ app.MapGet("/", (HttpContext ctx) => {
         if (usuario == null)
             return Results.Unauthorized();
 
-        var config = LeerConfig(rutaConfig);
-        string efigieEstatica = GeneradorEfigie.GenerarSVG(usuario, config, incluirMarcoYNombre: false);
-        string efigieAnimada = InyectarAnimacionRotacionSvg(efigieEstatica);
-
-        return Results.Json(new
-        {
-            id = usuario.id,
-            nombre = usuario.nombre,
-            anio = usuario.anio,
-            facultad = usuario.facultad,
-            etapa = usuario.etapa,
-            estacion = usuario.estacion,
-            grupal = usuario.grupal,
-            formato = usuario.formato,
-            rol = usuario.rol,
-            efigie = efigieAnimada,
-            efigieEstatica
-        });
+        return RespuestaHub(usuario);
     });
 
     app.MapGet("/api/pantuno", (HttpContext ctx) => {
@@ -2786,6 +2857,7 @@ app.MapGet("/", (HttpContext ctx) => {
             IdExperienciaActual = Guid.NewGuid().ToString("N");
             InicioExperienciaUtc = null;
             ExperienciaActualArchivada = false;
+            AccesoHubHabilitado = false;
             EquiposPreRonda = ConstruirEquiposOptimos(
                 ParticipantesLobby.Values.ToList(),
                 priorizarParticipantesReales: completarConBots);
@@ -3228,7 +3300,7 @@ app.MapGet("/", (HttpContext ctx) => {
             .First()
             .Equipo.GroupNumber;
         var participantes = new List<HubExperienceParticipant>();
-        foreach (LobbyParticipant participante in ParticipantesLobby.Values.Where(item => !item.EsBot))
+        foreach (LobbyParticipant participante in ParticipantesLobby.Values)
         {
             if (!GrupoPorParticipante.TryGetValue(participante.ResponseId, out int numeroGrupo))
                 continue;
@@ -3240,6 +3312,8 @@ app.MapGet("/", (HttpContext ctx) => {
             participantes.Add(new HubExperienceParticipant
             {
                 ResponseId = participante.ResponseId,
+                Name = participante.Nombre,
+                IsBot = participante.EsBot,
                 Svg = participante.Svg,
                 GroupNumber = numeroGrupo,
                 IndividualPoints = aporteIndividual
