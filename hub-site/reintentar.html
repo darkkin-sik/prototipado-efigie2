@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Conocé la Experiencia Efigie</title>
+    <link rel="stylesheet" href="../hub.css">
+</head>
+<body>
+    <main class="portada-contenido">
+        <img class="portada-logo visible" src="../efigie-logo.svg" alt="Efigie">
+        <p class="mensaje-reintentar">Parece que todavía no viviste la Experiencia Efigie. ¡Vení a conocerla en el 4.º piso del Moro, aula 409!</p>
+        <a id="btnReintentar" class="boton-principal" href="ingresar.html" aria-hidden="true" tabindex="-1">Volver a intentar</a>
+    </main>
+    <script>
+        window.setTimeout(() => {
+            const boton = document.getElementById('btnReintentar');
+            boton.classList.add('visible');
+            boton.removeAttribute('aria-hidden');
+            boton.removeAttribute('tabindex');
+        }, 2000);
+    </script>
+</body>
+</html>

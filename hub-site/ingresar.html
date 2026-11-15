@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Ingresar al hub - Efigie</title>
+    <link rel="stylesheet" href="../hub.css">
+</head>
+<body>
+    <main class="login-contenedor">
+        <header>
+            <a class="login-logo-link" href="index.html" aria-label="Volver al inicio del hub">
+                <img class="login-logo" src="../efigie-logo.svg" alt="Efigie">
+            </a>
+        </header>
+        <form id="formIngresar" class="login-form" aria-label="Inicio de sesión" novalidate>
+            <h1 class="visualmente-oculto">Iniciar sesión</h1>
+            <label class="campo-hub" for="nombreHub">
+                Nombre
+                <input id="nombreHub" name="nombre" type="text" placeholder="Nombre" autocomplete="username" enterkeyhint="next" required>
+            </label>
+            <label class="campo-hub" for="contrasenaHub">
+                Contraseña
+                <input id="contrasenaHub" name="contrasena" type="password" placeholder="Contraseña" autocomplete="current-password" enterkeyhint="go" required>
+            </label>
+            <p id="errorIngresar" class="error-login" role="alert" hidden></p>
+            <button id="btnAvanzar" class="boton-avanzar" type="submit" hidden>Avanzar</button>
+        </form>
+    </main>
+    <script>
+        const formulario = document.getElementById('formIngresar');
+        const nombre = document.getElementById('nombreHub');
+        const contrasena = document.getElementById('contrasenaHub');
+        const avanzar = document.getElementById('btnAvanzar');
+        const errorIngresar = document.getElementById('errorIngresar');
+        const apiBase = location.hostname === 'darkkin-sik.github.io'
+            ? 'https://figie-qr-redirect.jose-sicardi-r2.workers.dev'
+            : '';
+        let intentosFallidos = 0;
+
+        function actualizarAcceso() {
+            avanzar.hidden = nombre.value.trim().length === 0 || contrasena.value.length === 0;
+        }
+
+        async function verificarAcceso(evento) {
+            evento.preventDefault();
+            actualizarAcceso();
+            if (avanzar.hidden || avanzar.disabled) return;
+
+            avanzar.disabled = true;
+            errorIngresar.hidden = true;
+
+            try {
+                const respuesta = await fetch(`${apiBase}/api/hub/iniciar-sesion`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nombre: nombre.value.trim(),
+                        contrasena: contrasena.value
+                    })
+                });
+
+                if (respuesta.status === 204) {
+                    window.location.href = 'en-proceso.html';
+                    return;
+                }
+
+                if (respuesta.status === 401) {
+                    intentosFallidos++;
+                    if (intentosFallidos >= 2) {
+                        window.location.href = 'reintentar.html';
+                        return;
+                    }
+
+                    errorIngresar.textContent = 'El nombre o la contraseña no coinciden. Te queda un intento.';
+                    errorIngresar.hidden = false;
+                    contrasena.value = '';
+                    actualizarAcceso();
+                    contrasena.focus();
+                    return;
+                }
+
+                throw new Error(`El servidor respondió ${respuesta.status}.`);
+            } catch (error) {
+                console.error('No se pudo verificar el acceso al hub.', error);
+                errorIngresar.textContent = 'No se pudo verificar el acceso. Revisá tu conexión e intentá nuevamente.';
+                errorIngresar.hidden = false;
+            } finally {
+                avanzar.disabled = false;
+            }
+        }
+
+        function actualizarFormulario() {
+            errorIngresar.hidden = true;
+            actualizarAcceso();
+        }
+
+        nombre.addEventListener('input', actualizarFormulario);
+        contrasena.addEventListener('input', actualizarFormulario);
+        formulario.addEventListener('submit', verificarAcceso);
+    </script>
+</body>
+</html>

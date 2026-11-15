@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Mi Efigie - Efigie</title>
+    <link rel="stylesheet" href="/hub.css">
+</head>
+<body>
+    <main class="hub-usuario">
+        <header class="hub-usuario-encabezado">
+            <img class="hub-usuario-logo" src="/efigie-logo.svg" alt="Efigie">
+        </header>
+        <section class="hub-efigie-tarjeta" aria-labelledby="tituloEfigieUsuario">
+            <h1 id="tituloEfigieUsuario">Tu efigie</h1>
+            <div id="efigieUsuario" class="hub-usuario-efigie" role="img"></div>
+        </section>
+        <p id="errorUsuarioHub" class="hub-error" role="alert" hidden></p>
+        <nav class="hub-usuario-acciones" aria-label="Acciones de tu efigie">
+            <button id="abrirDescarga" class="boton-principal visible" type="button">Descargar</button>
+            <a class="boton-principal visible" href="#capasEfigie">Conocer más</a>
+        </nav>
+    </main>
+
+    <section class="hub-contenido-intermedio" aria-labelledby="tituloContenidoProvisional">
+        <h2 id="tituloContenidoProvisional">Más de tu experiencia</h2>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer at felis sed nisl varius posuere. Suspendisse potenti. Cras vitae neque non justo facilisis consequat. Esta sección es provisional y luego tendrá el contenido que falta entre tu efigie y su explicación.</p>
+    </section>
+
+    <section id="capasEfigie" class="hub-capas" aria-labelledby="tituloCapas">
+        <h2 id="tituloCapas">Las capas de tu efigie</h2>
+        <p class="hub-capas-intro">Cada capa se muestra por separado y conserva su movimiento. Las explicaciones de significado son provisionales.</p>
+        <div id="listaCapasEfigie" class="hub-lista-capas"></div>
+    </section>
+
+    <dialog id="dialogoDescarga" class="descarga-dialog" aria-label="Vista previa de la efigie para descargar">
+        <div class="descarga-marco">
+            <img id="vistaPreviaDescarga" class="descarga-vista-previa" alt="Previsualización estática de la efigie">
+            <button id="cerrarDescarga" class="descarga-cerrar" type="button" aria-label="Cerrar y volver a mi efigie">×</button>
+            <button id="descargarEfigie" class="boton-principal descarga-boton" type="button">Descargar</button>
+        </div>
+    </dialog>
+
+    <script>
+        const usuarioGuardado = sessionStorage.getItem('efigieHubUsuario');
+        let usuario;
+        try {
+            usuario = usuarioGuardado ? JSON.parse(usuarioGuardado) : null;
+        } catch {
+            usuario = null;
+        }
+
+        if (!usuario || typeof usuario.nombre !== 'string' ||
+            typeof usuario.efigie !== 'string' || typeof usuario.efigieEstatica !== 'string') {
+            window.location.replace('/hub-ingresar.html');
+        } else {
+            const efigieUsuario = document.getElementById('efigieUsuario');
+            const error = document.getElementById('errorUsuarioHub');
+            const dialogo = document.getElementById('dialogoDescarga');
+            const vistaPrevia = document.getElementById('vistaPreviaDescarga');
+            const abrirDescarga = document.getElementById('abrirDescarga');
+            const botonDescargar = document.getElementById('descargarEfigie');
+            const listaCapas = document.getElementById('listaCapasEfigie');
+            let urlPrevia = null;
+            let imagenDescarga = null;
+
+            efigieUsuario.innerHTML = usuario.efigie;
+            efigieUsuario.setAttribute('aria-label', `Efigie de ${usuario.nombre}`);
+
+            const capas = [
+                {
+                    id: 'anio', titulo: 'Año', movimiento: 'Giro horario, una vuelta cada 18 segundos.',
+                    explicacion: 'Se genera una curva a partir del año que elegiste. La interpretación de lo que representa esta forma es provisional.',
+                    rotacion: 1
+                },
+                {
+                    id: 'estaciones', titulo: 'Estaciones', movimiento: 'Giro antihorario, una vuelta cada 12 segundos.',
+                    explicacion: 'La estación que elegiste determina la geometría de esta capa, formada por curvas alrededor del centro. Su significado simbólico es provisional.',
+                    rotacion: 2
+                },
+                {
+                    id: 'carrera', titulo: 'Trayectoria', movimiento: 'Giro horario, una vuelta cada 8 segundos.',
+                    explicacion: 'La etapa que elegiste se traduce en una figura geométrica; su trazo usa el color asociado a la facultad indicada. La lectura simbólica es provisional.',
+                    rotacion: 3
+                },
+                {
+                    id: 'rol', titulo: 'Rol', movimiento: 'Giro horario, una vuelta cada 18 segundos.',
+                    explicacion: 'La opción de rol que elegiste determina la forma dibujada en esta capa. La explicación de su significado es provisional.',
+                    rotacion: 1
+                },
+                {
+                    id: 'historia', titulo: 'Historia', movimiento: 'Giro antihorario, una vuelta cada 12 segundos.',
+                    explicacion: 'Esta geometría se genera combinando la estación y el formato que elegiste. Su interpretación es provisional.',
+                    rotacion: 2
+                },
+                {
+                    id: 'conexiones', titulo: 'Conexiones', movimiento: 'Giro horario, una vuelta cada 8 segundos.',
+                    explicacion: 'Son líneas calculadas entre las curvas de las estaciones; el patrón depende de si la experiencia fue individual o grupal. Su significado es provisional.',
+                    rotacion: 3
+                }
+            ];
+
+            function renderizarCapas() {
+                const documento = new DOMParser().parseFromString(usuario.efigieEstatica, 'image/svg+xml');
+                const raizOriginal = documento.documentElement;
+                if (raizOriginal.localName !== 'svg' || documento.querySelector('parsererror')) {
+                    throw new Error('No se pudieron leer las capas de la efigie.');
+                }
+
+                const grupoConEstilo = raizOriginal.querySelector('g');
+                if (!grupoConEstilo) throw new Error('La efigie no contiene capas para mostrar.');
+
+                const secciones = capas.map(capa => {
+                    const origen = Array.from(raizOriginal.querySelectorAll('[data-capa]'))
+                        .find(elemento => elemento.getAttribute('data-capa') === capa.id);
+                    if (!origen) throw new Error(`No se encontró la capa ${capa.id} de la efigie.`);
+
+                    const elemento = document.createElement('article');
+                    elemento.className = 'hub-capa';
+                    const visual = document.createElement('div');
+                    visual.className = 'hub-capa-visual';
+                    visual.setAttribute('role', 'img');
+                    visual.setAttribute('aria-label', `Capa ${capa.titulo} en movimiento`);
+
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('viewBox', raizOriginal.getAttribute('viewBox') || '-50 -50 100 100');
+                    svg.setAttribute('aria-hidden', 'true');
+                    const grupo = grupoConEstilo.cloneNode(false);
+                    const forma = document.importNode(origen, true);
+                    forma.removeAttribute('data-capa');
+                    forma.setAttribute('class', `rotar-capa-${capa.rotacion}`);
+                    grupo.appendChild(forma);
+                    svg.appendChild(grupo);
+                    visual.appendChild(svg);
+
+                    const texto = document.createElement('div');
+                    texto.className = 'hub-capa-texto';
+                    const titulo = document.createElement('h3');
+                    titulo.textContent = capa.titulo;
+                    const explicacion = document.createElement('p');
+                    explicacion.textContent = capa.explicacion;
+                    const movimiento = document.createElement('p');
+                    movimiento.className = 'hub-capa-movimiento';
+                    movimiento.textContent = capa.movimiento;
+                    texto.append(titulo, explicacion, movimiento);
+                    elemento.append(visual, texto);
+                    return elemento;
+                });
+
+                listaCapas.replaceChildren(...secciones);
+            }
+
+            try {
+                renderizarCapas();
+            } catch (errorCarga) {
+                console.error('No se pudieron mostrar las capas de la efigie.', errorCarga);
+                error.textContent = 'No se pudieron cargar las capas de tu efigie.';
+                error.hidden = false;
+            }
+
+            function leerContenidoSvg(texto) {
+                const documento = new DOMParser().parseFromString(texto, 'image/svg+xml');
+                const raiz = documento.documentElement;
+                if (raiz.localName !== 'svg' || documento.querySelector('parsererror')) {
+                    throw new Error('El servidor devolvió un SVG inválido.');
+                }
+
+                return {
+                    viewBox: raiz.getAttribute('viewBox') || '0 0 100 100',
+                    contenido: raiz.innerHTML
+                };
+            }
+
+            function escaparXml(texto) {
+                return texto.replace(/[<>&"']/g, caracter => ({
+                    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;'
+                })[caracter]);
+            }
+
+            async function crearImagenDescarga() {
+                const respuestaLogo = await fetch('/efigie-logo.svg', { cache: 'no-store' });
+                if (!respuestaLogo.ok) throw new Error(`No se pudo cargar el logo (${respuestaLogo.status}).`);
+
+                const [logo, efigie] = [
+                    leerContenidoSvg(await respuestaLogo.text()),
+                    leerContenidoSvg(usuario.efigieEstatica)
+                ];
+                const svgDescarga = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600">
+<rect width="900" height="1600" fill="#ffffff"/>
+<svg x="220" y="70" width="460" height="104" viewBox="${escaparXml(logo.viewBox)}">${logo.contenido}</svg>
+<svg x="100" y="300" width="700" height="700" viewBox="${escaparXml(efigie.viewBox)}">${efigie.contenido}</svg>
+<text x="450" y="1190" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" fill="#101a15">${escaparXml(usuario.nombre)}</text>
+</svg>`;
+
+                const urlSvg = URL.createObjectURL(new Blob([svgDescarga], { type: 'image/svg+xml;charset=utf-8' }));
+                try {
+                    const imagen = await new Promise((resolve, reject) => {
+                        const elemento = new Image();
+                        elemento.onload = () => resolve(elemento);
+                        elemento.onerror = () => reject(new Error('No se pudo renderizar la imagen de la efigie.'));
+                        elemento.src = urlSvg;
+                    });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 900;
+                    canvas.height = 1600;
+                    const contexto = canvas.getContext('2d');
+                    if (!contexto) throw new Error('El navegador no pudo preparar la descarga JPG.');
+                    contexto.fillStyle = '#ffffff';
+                    contexto.fillRect(0, 0, canvas.width, canvas.height);
+                    contexto.drawImage(imagen, 0, 0, canvas.width, canvas.height);
+
+                    imagenDescarga = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                    if (!imagenDescarga) throw new Error('No se pudo codificar la descarga JPG.');
+                } finally {
+                    URL.revokeObjectURL(urlSvg);
+                }
+
+                if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+                urlPrevia = URL.createObjectURL(imagenDescarga);
+                vistaPrevia.src = urlPrevia;
+            }
+
+            abrirDescarga.addEventListener('click', async () => {
+                abrirDescarga.disabled = true;
+                error.hidden = true;
+                try {
+                    await crearImagenDescarga();
+                    dialogo.showModal();
+                } catch (errorCarga) {
+                    console.error('No se pudo preparar la descarga de la efigie.', errorCarga);
+                    error.textContent = 'No se pudo preparar la imagen. Intentá nuevamente.';
+                    error.hidden = false;
+                } finally {
+                    abrirDescarga.disabled = false;
+                }
+            });
+
+            document.getElementById('cerrarDescarga').addEventListener('click', () => dialogo.close());
+            dialogo.addEventListener('click', evento => {
+                if (evento.target === dialogo) dialogo.close();
+            });
+            dialogo.addEventListener('close', () => {
+                if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+                urlPrevia = null;
+            });
+
+            botonDescargar.addEventListener('click', () => {
+                if (!imagenDescarga) return;
+                const enlace = document.createElement('a');
+                const nombreArchivo = usuario.nombre.normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-|-$/g, '') || 'efigie';
+                const urlDescarga = URL.createObjectURL(imagenDescarga);
+                enlace.href = urlDescarga;
+                enlace.download = `efigie-${nombreArchivo}.jpg`;
+                enlace.click();
+                window.setTimeout(() => URL.revokeObjectURL(urlDescarga), 60000);
+            });
+        }
+    </script>
+</body>
+</html>

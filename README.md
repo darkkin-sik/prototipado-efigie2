@@ -14,16 +14,29 @@ El iniciador ejecuta `dotnet run --no-restore` para evitar restaurar paquetes po
 
 **Enlace estático del QR:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/). Usa esta dirección para el QR; la página redirige al Worker estable y este consulta el túnel activo. El enlace permanece igual mientras el sitio de GitHub Pages siga publicado en esa dirección.
 
-**Enlace estático del hub:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub). Es independiente del enlace general y va directamente a `/hub.html`, que por ahora muestra «Futuro hub».
+**Enlace estático del hub:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub). Es independiente del enlace general y abre una portada con una efigie aleatoria. «Ingresar» abre el login; el servidor verifica el nombre y la estación guardados en la encuesta. Tras dos intentos incorrectos, invita a conocer la experiencia en el cuarto piso del Moro. El acceso correcto abre la efigie personal, permite descargarla como JPG vertical y muestra sus capas.
 
-Antes del primer uso, despliega el Worker gratuito `figie-qr-redirect.jose-sicardi-r2.workers.dev` con el código de `worker.js` en la copia local de `QR-REDIRECT-EFIGIE`. El script publica los archivos del redirector y el destino del túnel en ese repositorio; necesitas permisos para hacer `git push` a `main`.
+Por ahora, el hub se ejecuta localmente en el mismo servidor que la encuesta. El enlace `?ruta=hub` sigue siendo independiente del QR general, pero requiere que la computadora y el túnel estén activos. Las pantallas usan endpoints locales y validan el acceso con `respuestas_app.csv`; las respuestas no se sincronizan con una base ni con una API en la nube.
+
+### Preparar el hub local
+
+El pool de 50 efigies se genera una sola vez en `hub-site/efigies` y se comparte entre la bienvenida de la encuesta y el hub. Para generarlo o renovarlo, ejecuta desde PowerShell:
+
+```powershell
+.\generar-efigies-hub.ps1
+```
+
+El diseño mantiene las pantallas separadas del almacenamiento mediante endpoints de la aplicación; si más adelante se necesita alojar el hub fuera de esta computadora, se podrá reemplazar esa capa sin cambiar el flujo visual del hub.
 
 Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo. Si el puerto `5500` ya está ocupado, cierra normalmente la instancia anterior o libera el puerto antes de volver a ejecutar el iniciador.
+
+La consola omite los registros HTTP repetitivos; conserva advertencias, errores, mensajes de inicio y un aviso por cada nuevo participante que se incorpora al lobby.
 
 Direcciones locales:
 
 - Bienvenida y animación: `http://localhost:5500/`
 - Encuesta: `http://localhost:5500/encuesta`
+- Hub: `http://localhost:5500/hub.html`
 - Pantalla grande Pantuno: `http://localhost:5500/pantuno`
 - Administración: `http://localhost:5500/admin-sesion`
 
@@ -61,6 +74,8 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 ## Archivos principales
 
 - `Program.cs`: servidor, endpoints, persistencia de respuestas, lobby, equipos y estado de la ronda.
+- `hub-site/`: pantallas estáticas del hub y el pool local de 50 efigies.
+- `generar-efigies-hub.ps1`: generación del pool de efigies aleatorias.
 - `GeneradorEfigie.cs`: generación de las efigies SVG a partir de las respuestas.
 - `descargar-efigies.ps1`: exportación local de una lámina SVG con 30 efigies.
 - `index.html`: encuesta.

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>Inicio del hub - Efigie</title>
+    <link rel="stylesheet" href="../hub.css">
+</head>
+<body>
+    <main class="portada-contenido">
+        <img id="logoHub" class="portada-logo" src="../efigie-logo.svg" alt="Efigie" aria-hidden="true">
+        <div id="efigieHub" class="portada-efigie" role="img" aria-label="Efigie aleatoria de bienvenida"></div>
+        <p id="errorHub" class="hub-error" role="alert" hidden></p>
+        <a id="btnIngresar" class="boton-principal" href="ingresar.html" aria-hidden="true" tabindex="-1">Ingresar</a>
+    </main>
+    <script>
+        async function cargarPortada() {
+            const efigie = document.getElementById('efigieHub');
+            const error = document.getElementById('errorHub');
+            const logo = document.getElementById('logoHub');
+            const boton = document.getElementById('btnIngresar');
+            const numero = Math.floor(Math.random() * 50) + 1;
+            const rutaEfigie = `efigies/efigie-${String(numero).padStart(2, '0')}.svg`;
+
+            try {
+                const respuesta = await fetch(rutaEfigie, { cache: 'force-cache' });
+                if (!respuesta.ok) throw new Error(`El servidor respondió ${respuesta.status}.`);
+
+                const svg = await respuesta.text();
+                if (!svg.includes('<svg')) throw new Error('El archivo no contiene una efigie válida.');
+                efigie.innerHTML = svg;
+
+                window.setTimeout(() => {
+                    logo.classList.add('visible');
+                    logo.removeAttribute('aria-hidden');
+                    boton.classList.add('visible');
+                    boton.removeAttribute('aria-hidden');
+                    boton.removeAttribute('tabindex');
+                }, 2000);
+            } catch (errorCarga) {
+                console.error('No se pudo cargar la efigie de bienvenida del hub.', errorCarga);
+                error.textContent = 'No se pudo cargar la efigie. Recargá la página para volver a intentar.';
+                error.hidden = false;
+            }
+        }
+
+        cargarPortada();
+    </script>
+</body>
+</html>

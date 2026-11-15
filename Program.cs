@@ -12,6 +12,7 @@ using Microsoft.Extensions.FileProviders;
 class Program
 {
     private const int PuertoServidor = 5500;
+    private const int CantidadEfigiesPool = 50;
 
     private sealed class ActiveTabSession
     {
@@ -82,6 +83,7 @@ class Program
     private sealed record RoundThreeNavigationRequest(string responseId, string accion);
     private sealed record RoundThreeHintRequest(string responseId, int indice);
     private sealed record AudioControlRequest(string accion, string pista, int version);
+    private sealed record HubLoginRequest(string nombre, string contrasena);
 
     private static readonly ConcurrentDictionary<string, ActiveTabSession> SesionesActivas = new();
     private static readonly ConcurrentDictionary<string, LobbyParticipant> ParticipantesLobby = new(StringComparer.Ordinal);
@@ -171,6 +173,12 @@ class Program
             return;
         }
 
+        if (args.Contains("--generar-efigies-hub", StringComparer.Ordinal))
+        {
+            GenerarEfigiesHub();
+            return;
+        }
+
         if (!PuertoDisponible(PuertoServidor))
         {
             Console.Error.WriteLine($"ERROR: El puerto {PuertoServidor} ya está ocupado. Efigie no se inició.");
@@ -198,6 +206,30 @@ class Program
         File.WriteAllText(rutaSvg, CrearLaminaSvg(respuestas, LeerConfig(Path.Combine(dirActual, "config.json"))), new UTF8Encoding(false));
         Console.WriteLine($"SVG generado correctamente: {rutaSvg}");
         // Rhino's in-process runtime can keep native worker threads alive after a one-shot export.
+        Environment.Exit(0);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void GenerarEfigiesHub()
+    {
+        string dirActual = Directory.GetCurrentDirectory();
+        using var rhinoCore = new Rhino.Runtime.InProcess.RhinoCore(new string[] { "/netcore", "/nosplash" }, Rhino.Runtime.InProcess.WindowStyle.Hidden);
+        Directory.SetCurrentDirectory(dirActual);
+
+        string directorioEfigies = Path.Combine(dirActual, "hub-site", "efigies");
+        Directory.CreateDirectory(directorioEfigies);
+        ConfigEfigie config = LeerConfig(Path.Combine(dirActual, "config.json"));
+
+        for (int indice = 1; indice <= CantidadEfigiesPool; indice++)
+        {
+            DatosRespuesta datos = CrearDatosRespuestaAleatoria(Random.Shared);
+            string svg = InyectarAnimacionRotacionSvg(
+                GeneradorEfigie.GenerarSVG(datos, config, incluirMarcoYNombre: false));
+            string rutaSvg = Path.Combine(directorioEfigies, $"efigie-{indice:D2}.svg");
+            File.WriteAllText(rutaSvg, svg, new UTF8Encoding(false));
+        }
+
+        Console.WriteLine($"Pool de {CantidadEfigiesPool} efigies generado en {directorioEfigies}.");
         Environment.Exit(0);
     }
 
@@ -232,6 +264,10 @@ class Program
             Args = args,
             ContentRootPath = dirActual
         });
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole();
+        builder.Logging.SetMinimumLevel(LogLevel.Warning);
+        builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Information);
         builder.WebHost.UseUrls($"http://0.0.0.0:{PuertoServidor}");
         var app = builder.Build();
 
@@ -249,30 +285,7 @@ app.MapGet("/", (HttpContext ctx) => {
     if (!conservarRespuesta)
         EliminarRespuestasAnteriores(rutaCsv, deviceId);
 
-    var random = new Random();
-    string[] nombres = { "Estudiante Anónimo", "Diseñador Creativo", "Explorador UCA", "Innovador Visual", "Arquitecto Digital" };
-    string[] facultades = { "Arquitectura y Diseño", "Ciencias Económicas", "Ingeniería y Ciencias Agrarias", "Psicología y Psicopedagogía" };
-    string[] etapas = { "1 (Ingresante / Primer año)", "3", "5", "Docente" };
-    string[] estaciones = { "Primavera", "Verano", "Otoño", "Invierno" };
-    string[] grupales = { "Solo", "Grupal" };
-    string[] formatos = { "Película", "Serie", "Libro", "Videojuego", "Teatro" };
-    string[] roles = { "Proponer (Generar ideas iniciales)", "Organizar (Estructurar y planificar)", "Materializar (Llevar a la práctica)", "Mejorar (Revisar y pulir detalles)" };
-
-    var datosAleatorios = new DatosRespuesta {
-        id = "random_" + random.Next(1000, 9999),
-        nombre = nombres[random.Next(nombres.Length)],
-        anio = random.Next(1995, 2007).ToString(),
-        facultad = facultades[random.Next(facultades.Length)],
-        etapa = etapas[random.Next(etapas.Length)],
-        estacion = estaciones[random.Next(estaciones.Length)],
-        grupal = grupales[random.Next(grupales.Length)],
-        formato = formatos[random.Next(formatos.Length)],
-        rol = roles[random.Next(roles.Length)]
-    };
-
-    var cfg = LeerConfig(rutaConfig);
-    string svgOriginal = GeneradorEfigie.GenerarSVG(datosAleatorios, cfg, incluirMarcoYNombre: false);
-    string svgAnimado = InyectarAnimacionRotacionSvg(svgOriginal);
+    string svgAnimado = LeerEfigieAleatoria(dirActual);
 
     string html = $@"<!DOCTYPE html>
 <html lang=""es"">
@@ -2109,18 +2122,25 @@ app.MapGet("/", (HttpContext ctx) => {
         if (usuario == null) return Results.NotFound();
         LimpiarParticipantesLobby();
 
+        bool nuevaConexion;
+        int cantidadParticipantes;
         lock (CandadoLobby)
         {
             if (!ParticipantesLobby.ContainsKey(usuario.id) && ParticipantesLobby.Count >= 15)
                 return Results.Json(new { salaCompleta = true, cantidad = ParticipantesLobby.Count, rondaIniciada = false, expulsado = false });
 
+            nuevaConexion = !ParticipantesLobby.ContainsKey(usuario.id);
             ParticipantesLobby.AddOrUpdate(
                 usuario.id,
                 _ => new LobbyParticipant(usuario.id, heartbeat.sessionId, usuario.nombre, GeneradorEfigie.GenerarSVG(usuario, LeerConfig(rutaConfig), incluirMarcoYNombre: false), ahora, false, usuario),
                 (_, existente) => existente with { SessionId = heartbeat.sessionId, LastSeenUtc = ahora });
+            cantidadParticipantes = ParticipantesLobby.Count;
         }
 
-        return Results.Json(new { cantidad = ParticipantesLobby.Count, rondaIniciada = false, expulsado = false, salaCompleta = false });
+        if (nuevaConexion)
+            app.Logger.LogInformation("Nuevo participante conectado al lobby ({Cantidad}/15).", cantidadParticipantes);
+
+        return Results.Json(new { cantidad = cantidadParticipantes, rondaIniciada = false, expulsado = false, salaCompleta = false });
     });
 
     app.MapPost("/api/lobby/desconectar", (SessionHeartbeat heartbeat) => {
@@ -2336,6 +2356,37 @@ app.MapGet("/", (HttpContext ctx) => {
 
     // --- API DATOS Y CONFIGURACIÓN ---
     app.MapGet("/api/datos", () => Results.Json(LeerUsuariosCsv(rutaCsv)));
+
+    app.MapGet("/api/hub/efigie", () => {
+        return Results.Text(LeerEfigieAleatoria(dirActual), "image/svg+xml; charset=utf-8");
+    });
+
+    app.MapPost("/api/hub/iniciar-sesion", async (HttpContext ctx) => {
+        var solicitud = await ctx.Request.ReadFromJsonAsync<HubLoginRequest>();
+        if (solicitud == null ||
+            string.IsNullOrWhiteSpace(solicitud.nombre) ||
+            string.IsNullOrWhiteSpace(solicitud.contrasena))
+            return Results.BadRequest();
+
+        var usuario = LeerUsuariosCsv(rutaCsv).FirstOrDefault(respuesta =>
+            string.Equals(respuesta.nombre.Trim(), solicitud.nombre.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(respuesta.estacion.Trim(), solicitud.contrasena.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (usuario == null)
+            return Results.Unauthorized();
+
+        var config = LeerConfig(rutaConfig);
+        string efigieEstatica = GeneradorEfigie.GenerarSVG(usuario, config, incluirMarcoYNombre: false);
+        string efigieAnimada = InyectarAnimacionRotacionSvg(efigieEstatica);
+
+        return Results.Json(new
+        {
+            id = usuario.id,
+            nombre = usuario.nombre,
+            efigie = efigieAnimada,
+            efigieEstatica
+        });
+    });
 
     app.MapGet("/api/pantuno", (HttpContext ctx) => {
         var respuestas = LeerUsuariosCsv(rutaCsv);
@@ -3438,6 +3489,40 @@ static ConfigEfigie LeerConfig(string ruta)
         catch { }
     }
     return new ConfigEfigie();
+}
+
+static DatosRespuesta CrearDatosRespuestaAleatoria(Random random)
+{
+    string[] nombres = { "Estudiante Anónimo", "Diseñador Creativo", "Explorador UCA", "Innovador Visual", "Arquitecto Digital" };
+    string[] facultades = { "Arquitectura y Diseño", "Ciencias Económicas", "Ingeniería y Ciencias Agrarias", "Psicología y Psicopedagogía" };
+    string[] etapas = { "1 (Ingresante / Primer año)", "3", "5", "Docente" };
+    string[] estaciones = { "Primavera", "Verano", "Otoño", "Invierno" };
+    string[] grupales = { "Solo", "Grupal" };
+    string[] formatos = { "Película", "Serie", "Libro", "Videojuego", "Teatro" };
+    string[] roles = { "Proponer (Generar ideas iniciales)", "Organizar (Estructurar y planificar)", "Materializar (Llevar a la práctica)", "Mejorar (Revisar y pulir detalles)" };
+
+    return new DatosRespuesta {
+        id = "random_" + random.Next(1000, 9999),
+        nombre = nombres[random.Next(nombres.Length)],
+        anio = random.Next(1995, 2007).ToString(),
+        facultad = facultades[random.Next(facultades.Length)],
+        etapa = etapas[random.Next(etapas.Length)],
+        estacion = estaciones[random.Next(estaciones.Length)],
+        grupal = grupales[random.Next(grupales.Length)],
+        formato = formatos[random.Next(formatos.Length)],
+        rol = roles[random.Next(roles.Length)]
+    };
+}
+
+static string LeerEfigieAleatoria(string dirActual)
+{
+    string directorioEfigies = Path.Combine(dirActual, "hub-site", "efigies");
+    string[] rutasEfigies = Directory.GetFiles(directorioEfigies, "efigie-*.svg");
+    if (rutasEfigies.Length != CantidadEfigiesPool)
+        throw new InvalidOperationException(
+            $"Se esperaban {CantidadEfigiesPool} efigies en {directorioEfigies}, pero hay {rutasEfigies.Length}. Ejecuta --generar-efigies-hub.");
+
+    return File.ReadAllText(rutasEfigies[Random.Shared.Next(rutasEfigies.Length)]);
 }
 
 static List<DatosRespuesta> LeerUsuariosCsv(string ruta)
