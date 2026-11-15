@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#ffffff">
     <title>Mi Efigie - Efigie</title>
     <link rel="stylesheet" href="/hub.css">
+    <script type="module" src="/hub-parrafos.js"></script>
 </head>
 <body>
     <main id="inicioHub" class="hub-usuario">
@@ -40,11 +41,11 @@
                 <div><dt>Equipo ganador</dt><dd id="ganadorExperiencia"></dd></div>
             </dl>
             <p id="errorExperiencia" class="hub-experiencia-error" role="status" hidden></p>
+            <button id="abrirExperiencia" class="hub-experiencia-abrir" type="button" disabled>Más de tu experiencia</button>
         </div>
         <div class="hub-cinta hub-cinta-inferior" aria-hidden="true">
             <div id="cintaInferiorEfigies" class="hub-cinta-pista hub-cinta-pista-izquierda"></div>
         </div>
-        <button id="abrirExperiencia" class="hub-experiencia-abrir" type="button" disabled>Más de tu experiencia</button>
     </section>
 
     <section class="hub-comunidad" aria-labelledby="tituloComunidad">
@@ -880,9 +881,6 @@
                 resumen.style.setProperty('--color-equipo', experiencia.equipo.color);
                 resumen.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
                 solicitarColoresComunidad();
-                const abrir = document.getElementById('abrirExperiencia');
-                abrir.style.setProperty('--color-equipo', experiencia.equipo.color);
-                abrir.style.setProperty('--color-texto-equipo', experiencia.equipo.colorTexto);
                 document.getElementById('avisoExperienciaSimulada').hidden = !experiencia.esSimulada;
                 if (experiencia.esSimulada) {
                     document.getElementById('avisoExperienciaSimulada').textContent =

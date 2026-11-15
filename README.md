@@ -34,6 +34,8 @@ El diseño mantiene las pantallas separadas del almacenamiento mediante endpoint
 
 La escala tipográfica del hub está agrupada al final de `hub.css`: prioriza Helvetica y utiliza fuentes del sistema cuando no está disponible. Ese bloque se puede retirar para volver a la escala anterior.
 
+Los párrafos del hub incorporan cortes opcionales en palabras de más de dos sílabas mediante Silabea 1.0.0, incluido en `vendor/silabea` con su licencia MIT.
+
 Al bajar por el hub, las tarjetas desplazan hacia arriba el encabezado fijo con el logo; al subir, el encabezado vuelve a aparecer.
 
 La sección «Más cerca de lo que creías» presenta la comunidad y permite copiar o compartir el enlace estable del hub. Durante el prototipado, «Tu figura más cercana» compara las respuestas actuales de `respuestas_app.csv`, no las de la base de comunidad: año de nacimiento, facultad, etapa, estación, forma de trabajar o estudiar, formato de historia y rol en equipo. Excluye la propia respuesta y muestra hasta las dos primeras personas con el máximo de coincidencias; al desplazarse, la comparación se cierra. Si la participación no está en el CSV o todavía no hay otra persona, se informa en la tarjeta. Al borrar el CSV se pierden esas coincidencias provisionales, aunque la base de comunidad no se borra.

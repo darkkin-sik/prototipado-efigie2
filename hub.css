@@ -19,6 +19,11 @@ html, body {
 
 html { scroll-behavior: smooth; }
 
+p {
+    -webkit-hyphens: manual;
+    hyphens: manual;
+}
+
 body {
     min-height: 100vh;
     min-height: 100svh;
@@ -296,8 +301,6 @@ body {
 
 .hub-usuario {
     width: min(100%, 760px);
-    min-height: 100vh;
-    min-height: 100svh;
     margin: 0 auto;
     padding: max(112px, calc(env(safe-area-inset-top) + 96px)) 24px 24px;
     display: flex;
@@ -439,7 +442,7 @@ body {
 }
 
 .hub-experiencia-bloque {
-    padding: clamp(36px, 8vw, 64px) clamp(20px, 5vw, 40px);
+    padding: clamp(36px, 8vw, 64px) clamp(24px, 6vw, 40px);
     border-radius: 0;
     background: var(--color-equipo, #133463);
     color: var(--color-texto-equipo, #ffffff);
@@ -448,6 +451,7 @@ body {
 .hub-experiencia-bloque h2 {
     margin: 0 0 18px;
     font-size: clamp(1.5rem, 5vw, 2rem);
+    text-align: center;
 }
 
 .hub-experiencia-aviso {
@@ -461,8 +465,11 @@ body {
     margin: 0;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 28px;
+    gap: 18px 16px;
 }
+
+.hub-experiencia-datos > div:first-child { grid-column: 1 / -1; }
+.hub-experiencia-datos > div { min-width: 0; overflow-wrap: break-word; }
 
 .hub-experiencia-datos dt {
     margin-bottom: 4px;
@@ -487,14 +494,14 @@ body {
 }
 
 .hub-experiencia-abrir {
-    justify-self: center;
-    margin: 12px 24px 0;
+    display: block;
+    margin: 24px auto 0;
     padding: 14px 28px;
     min-height: 52px;
     border: 0;
     border-radius: 12px;
-    background: var(--color-equipo, #133463);
-    color: var(--color-texto-equipo, #ffffff);
+    background: var(--color-texto-equipo, #ffffff);
+    color: var(--color-equipo, #133463);
     font: inherit;
     font-weight: 600;
     cursor: pointer;
@@ -690,10 +697,6 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
 .hub-capas { scroll-margin-top: 104px; }
 .hub-capas-intro { margin-bottom: 16px; }
 
-@media (max-width: 560px) {
-    .hub-experiencia-datos { grid-template-columns: 1fr; }
-}
-
 .hub-capa {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -739,7 +742,6 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
     font-size: 0.95rem;
     line-height: 1.45;
     text-align: justify;
-    hyphens: auto;
 }
 
 .hub-capa-texto .hub-capa-explicacion-particular {
@@ -829,7 +831,6 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
     font-size: 1rem;
     line-height: 1.6;
     text-align: justify;
-    hyphens: auto;
 }
 
 .hub-capa-dialogo-texto p + p { margin-top: 12px; }
