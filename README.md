@@ -14,6 +14,8 @@ El iniciador ejecuta `dotnet run --no-restore` para evitar restaurar paquetes po
 
 **Enlace estático del QR:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/). Usa esta dirección para el QR; la página redirige al Worker estable y este consulta el túnel activo. El enlace permanece igual mientras el sitio de GitHub Pages siga publicado en esa dirección.
 
+**Enlace estático del hub:** [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=hub). Es independiente del enlace general y va directamente a `/hub.html`, que por ahora muestra «Futuro hub».
+
 Antes del primer uso, despliega el Worker gratuito `figie-qr-redirect.jose-sicardi-r2.workers.dev` con el código de `worker.js` en la copia local de `QR-REDIRECT-EFIGIE`. El script publica los archivos del redirector y el destino del túnel en ese repositorio; necesitas permisos para hacer `git push` a `main`.
 
 Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo. Si el puerto `5500` ya está ocupado, cierra normalmente la instancia anterior o libera el puerto antes de volver a ejecutar el iniciador.
