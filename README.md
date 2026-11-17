@@ -10,7 +10,11 @@ Abre PowerShell en la carpeta del proyecto y ejecuta:
 .\iniciar.ps1
 ```
 
-El iniciador ejecuta `dotnet run --no-restore` para evitar restaurar paquetes por Internet en cada arranque, espera a que el servidor esté disponible en el puerto `5500`, inicia el Quick Tunnel de Cloudflare y publica la URL del túnel en `destino.txt` dentro de `C:\Users\<usuario>\QR-REDIRECT-EFIGIE`. El túnel usa HTTP/2 sobre TCP para evitar redes que bloquean QUIC/UDP. La red debe permitir conexiones salientes al puerto `7844`. Luego crea y sube un commit a `main` en ese repositorio; necesitas tener esa copia local y permisos de `git push` configurados. El redirector de Cloudflare Workers consulta ese archivo en cada acceso y redirige al túnel activo. La URL del túnel también se muestra en la terminal. Los Quick Tunnels son temporales y su dirección puede cambiar cada vez que se inicia el script.
+El iniciador ejecuta `dotnet run --no-restore` para evitar restaurar paquetes por Internet en cada arranque, espera a que el servidor esté disponible en el puerto `5500`, inicia el Quick Tunnel de Cloudflare y publica la URL del túnel en `destino.txt` dentro de `C:\Users\<usuario>\QR-REDIRECT-EFIGIE`. El túnel usa HTTP/2 sobre TCP para evitar redes que bloquean QUIC/UDP. La red debe permitir conexiones salientes al puerto `7844`. Luego crea y sube un commit a `main` en ese repositorio; necesitas tener esa copia local y permisos de `git push` configurados. El redirector de Cloudflare Workers consulta ese archivo en cada acceso y redirige al túnel activo. Al finalizar el inicio, la terminal muestra los enlaces permanentes de la encuesta de la experiencia, el hub y la encuesta para agregar usuarios, además de la URL directa del túnel. Los Quick Tunnels son temporales y su dirección puede cambiar cada vez que se inicia el script.
+
+Si el destino se sube pero no se puede confirmar su publicación, la consola muestra una advertencia roja y mantiene activos el servidor y el túnel. Comprueba el QR en el celular: podría seguir apuntando a un destino anterior. La confirmación en verde indica que se verificó el archivo en GitHub, pero conviene probar igualmente el QR.
+
+Para preparar un mensaje para el personal de informática con los datos de la conexión actual, ejecuta `.\mensaje-informatica.ps1` y copia la salida. El script consulta la interfaz que Windows selecciona hacia una dirección de Cloudflare; no prueba la conectividad ni envía el mensaje. Si se usa una VPN, puede mostrar su interfaz en lugar del adaptador físico. La IP puede cambiar al cambiar de red o aula.
 
 Al preparar el proyecto o después de actualizar dependencias, ejecuta `dotnet restore` una vez antes de usar el iniciador.
 
@@ -20,7 +24,19 @@ Al preparar el proyecto o después de actualizar dependencias, ejecuta `dotnet r
 
 Por ahora, el hub se ejecuta localmente en el mismo servidor que la encuesta. El enlace `?ruta=hub` sigue siendo independiente del QR general, pero requiere que la computadora y el túnel estén activos. Las pantallas usan endpoints locales; las respuestas no se sincronizan con una API en la nube.
 
-Al comenzar una ronda, los participantes reales se guardan en la base local `datos/comunidad.db`, con sus respuestas y efigies; los bots quedan excluidos. La base no importa las respuestas antiguas de prototipo. Si vuelve a jugar alguien con el mismo nombre, su registro reemplaza al anterior, salvo que sean distintos tanto el año de nacimiento como la etapa. La comparación ignora mayúsculas y espacios al principio o al final. Durante el prototipado, el ingreso busca primero en `respuestas_app.csv` y usa la última respuesta con nombre y contraseña coincidentes; si no existe, busca en la base. Para respaldar la comunidad, detén el servidor y copia `datos/comunidad.db`.
+Al comenzar una ronda, los participantes reales se guardan en la base local `datos/comunidad.db`, con sus respuestas y efigies; los bots quedan excluidos. Completar la encuesta de la ronda sin iniciarla no crea un perfil permanente. Los nombres son únicos, sin distinguir mayúsculas ni espacios: si está ocupado, hay que elegir otro. Mientras se espera en el lobby el nombre se reserva temporalmente; la reserva caduca tras 90 segundos sin actividad. La base no importa ni borra las respuestas antiguas de prototipo. Si la base existente contiene nombres que ahora colisionan, el servidor informa el conflicto y no elimina registros. El ingreso del hub consulta únicamente perfiles de la base; la estación favorita es una contraseña fácil de adivinar y no ofrece seguridad fuerte. Para respaldar la comunidad, detén el servidor y copia `datos/comunidad.db`.
+
+La **encuesta independiente de comunidad** está en `http://localhost:5500/encuesta-comunidad` y comienza con la misma portada de la encuesta de la experiencia. Al completarla registra inmediatamente el perfil y la efigie, sin participar en una ronda ni modificar las respuestas de la encuesta de juego. El enlace permanente para compartirla es [https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=comunidad](https://darkkin-sik.github.io/QR-REDIRECT-EFIGIE/?ruta=comunidad). Requiere desplegar primero el `worker.js` actualizado del repositorio QR en Cloudflare; actualizar `destino.txt` no despliega el Worker. También requiere que el servidor, el túnel y la red funcionen.
+
+Los perfiles comparten la misma base y se clasifican por origen: `prueba` para la encuesta independiente, `experiencia` para la ronda y `sin_clasificar` para registros antiguos cuyo origen no se conoce. Todos pueden ingresar y aparecer en las coincidencias, y los nombres siguen siendo únicos entre categorías. Para consultar localmente los nombres y sus etiquetas, ejecuta desde la carpeta del proyecto:
+
+```powershell
+dotnet run --no-build --no-restore -- --listar-comunidad
+```
+
+La lista no se publica como una página ni una API. Los respaldos de la base se guardan en `datos`, que está excluido de Git y bloqueado para descargas desde el servidor; trátalos igualmente como datos personales.
+
+Los nombres que comienzan con `prueba` (sin distinguir mayúsculas ni espacios) sirven para ensayar la experiencia, pero no se registran en la base de comunidad ni permiten ingresar al hub. La encuesta independiente avisa que esos perfiles no se guardan. Las respuestas provisionales de la experiencia siguen almacenándose en `respuestas_app.csv`.
 
 ### Preparar el hub local
 
@@ -38,14 +54,14 @@ Los párrafos del hub incorporan cortes opcionales en palabras de más de dos s�
 
 Al bajar por el hub, las tarjetas desplazan hacia arriba el encabezado fijo con el logo; al subir, el encabezado vuelve a aparecer.
 
-La sección «Más cerca de lo que creías» presenta la comunidad y permite copiar o compartir el enlace estable del hub. Durante el prototipado, «Tu figura más cercana» compara las respuestas actuales de `respuestas_app.csv`, no las de la base de comunidad: año de nacimiento, facultad, etapa, estación, forma de trabajar o estudiar, formato de historia y rol en equipo. Excluye la propia respuesta y muestra hasta las dos primeras personas con el máximo de coincidencias; al desplazarse, la comparación se cierra. Si la participación no está en el CSV o todavía no hay otra persona, se informa en la tarjeta. Al borrar el CSV se pierden esas coincidencias provisionales, aunque la base de comunidad no se borra.
+La sección «Más cerca de lo que creías» presenta la comunidad y permite copiar o compartir el enlace estable del hub. «Tu figura más cercana» compara los perfiles guardados en la base: año de nacimiento, facultad, etapa, estación, forma de trabajar o estudiar, formato de historia y rol en equipo. Excluye al usuario, muestra hasta las dos primeras personas con el máximo de coincidencias y reutiliza sus SVG guardados, sin volver a generarlos con Rhino. Al desplazarse, la comparación se cierra. Si todavía no hay otra persona, se informa en la tarjeta. La variante con marco y nombre se genera la primera vez que se necesita y luego se guarda para reutilizarla. Las respuestas provisionales y las efigies modificadas para desafíos pueden requerir generación adicional.
 
 Las siguientes funciones quedan pendientes:
 
 - **Puntos de encuentro:** explorar, por cada respuesta, las personas que eligieron lo mismo y mostrar «Compartís [categoría] con estas personas».
 - **Todas las efigies de la comunidad:** mostrar una galería, buscar por nombre o apodo, filtrar por unidad académica o rol y consultar las elecciones y coincidencias de cada persona.
 
-Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo. Si el puerto `5500` ya está ocupado, cierra normalmente la instancia anterior o libera el puerto antes de volver a ejecutar el iniciador.
+Mantén abierta la terminal del iniciador mientras uses Efigie. Para detener el servidor y el túnel, presiona **Ctrl+C** en esa terminal. Al volver a ejecutar el iniciador, este cierra la instancia anterior de Efigie de este proyecto que ocupe el puerto `5500` e inicia una nueva; el estado de la sesión activa se pierde al reiniciar. Si otro programa ocupa el puerto, no lo cierra y muestra un error. No inicies otra instancia con `dotnet run` ni desde Visual Studio mientras el script esté activo.
 
 La consola omite los registros HTTP repetitivos; conserva advertencias, errores, mensajes de inicio y un aviso por cada nuevo participante que se incorpora al lobby.
 
@@ -53,11 +69,12 @@ Direcciones locales:
 
 - Bienvenida y animación: `http://localhost:5500/`
 - Encuesta: `http://localhost:5500/encuesta`
+- Encuesta independiente de comunidad: `http://localhost:5500/encuesta-comunidad`
 - Hub: `http://localhost:5500/hub.html`
 - Pantalla grande Pantuno: `http://localhost:5500/pantuno`
 - Administración: `http://localhost:5500/admin-sesion`
 
-En la encuesta, escribir **pantuno** como nombre y pulsar **Siguiente** también abre esa pantalla. Pantuno muestra la efigie más reciente, recorre en columnas las últimas 36 efigies y actualiza la galería cuando se generan nuevas. El pequeño control con el QR alterna la efigie destacada y el código QR local `qr.svg`; el control contiguo activa o desactiva pantalla completa.
+En la encuesta, escribir **pantuno** como nombre y pulsar **Siguiente** también abre esa pantalla. Pantuno muestra la efigie más reciente, recorre en columnas las últimas 36 efigies y actualiza la galería cuando se generan nuevas. Los controles de QR muestran la encuesta (`qr.svg`) o el hub (`qr hub.svg`) en lugar de la efigie destacada; el control entre ellos activa o desactiva pantalla completa.
 
 ## Requisitos
 
@@ -129,7 +146,7 @@ El script compila y ejecuta el generador local usando Rhino 8 y las primeras 30 
 
 ## Administración y soporte
 
-El panel de administración está en `/admin-sesion`. Permite observar el lobby, expulsar participantes antes de iniciar, comenzar o simular una sesión, inspeccionar etapas y controlar avances. Las vistas de prueba con `adminPreview=1` no alteran la etapa compartida ni los puntajes reales. «Forzar retroceso» vuelve a la etapa anterior; «Kill all active sessions» devuelve los dispositivos activos a la pantalla de bienvenida anterior a la encuesta.
+El panel de administración está en `/admin-sesion`. Permite observar el lobby, expulsar participantes antes de iniciar, comenzar o simular una sesión, inspeccionar etapas y controlar avances. Al finalizar muestra el puntaje acumulado de cada equipo y señala a los ganadores, incluidos los empates. Las vistas de prueba con `adminPreview=1` no alteran la etapa compartida ni los puntajes reales. «Forzar retroceso» vuelve a la etapa anterior; «Kill all active sessions» devuelve los dispositivos activos a la pantalla de bienvenida anterior a la encuesta.
 
 Las leaderboards comparten el estilo de `leaderboard.css`, resaltan el equipo propio y actualizan los puntajes en tiempo real. Los temporizadores del panel son orientativos; el avance entre etapas depende de las reglas de cada ronda y administración puede forzarlo.
 

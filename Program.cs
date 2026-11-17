@@ -21,6 +21,7 @@ class Program
     }
 
     private sealed record LobbyParticipant(string ResponseId, string SessionId, string Nombre, string Svg, DateTime LastSeenUtc, bool EsBot, DatosRespuesta Datos);
+    private sealed record ReservaNombre(string NombreClave, string DeviceId, DateTime VenceUtc, string Svg = null, string SvgCompleta = null);
     private sealed record RoundTeam(int GroupNumber, string Color, string TextColor, string[] ParticipantIds, int TriangulationPossibilities, int FitnessScore);
     private sealed record SpectatorSession(string SessionId, string ResponseId);
     private sealed record AdminNavigationRequest(string responseId, string etapa);
@@ -174,22 +175,14 @@ class Program
     private static readonly string[] EtapasRondaUno = { "pre-ronda", "memoria", "adivinanza", "leaderboard", "ronda-3-preronda", "ronda-2-representante", "ronda-2-identificacion", "ronda-2-leaderboard", "ronda-3", "ronda-3-leaderboard" };
     private static readonly RoundThreeQuestion[] PreguntasRondaTres =
     {
-        new("anio", "Año de nacimiento", "No dice cuántos años tenés, pero permite calcularlos. Son cuatro números que señalan cuándo empezó tu historia."),
-        new("estaciones", "Estación favorita", "Somos cuatro y nos turnamos para transformar el año. Entre frío, flores, hojas y calor, una se lleva tu elección."),
-        new("carrera", "Etapa de la carrera", "Algunos recién empiezan, otros están por terminar."),
-        new("rol", "Rol en un trabajo grupal", "En un equipo hay quien propone, quien organiza, quien materializa y quien mejora."),
-        new("historia", "Formato de historia", "Una misma historia puede llegar de muchas maneras: con páginas, pantallas, escenarios o decisiones que la cambian."),
-        new("conexiones", "Forma de trabajar", "Una tarea por resolver, distintas formas de empezar.")
+        new("anio", "Año de nacimiento", "Mientras que vos cambiás, este dato sigue exactamente donde lo dejaste.\n\nEs una coordenada que nunca cambia, aunque cada vez estás más lejos de ella."),
+        new("estaciones", "Estación del año favorita", "Tiene su lugar reservado en cada vuelta, pero en tus preferencias puede ocupar el primero."),
+        new("carrera", "Etapa de la carrera", "No dice cuánto sabés ni qué tan rápido avanzás. Ubica dónde estás dentro de un recorrido."),
+        new("rol", "Rol en un trabajo grupal", "Se hace notar cuando hay algo que resolver entre varios: cada uno encuentra un lugar desde el que aportar y hacer avanzar al resto."),
+        new("historia", "Formato de historia favorito", "Los personajes podrían ser los mismos. Lo que cambia es la manera en que llegan hasta vos."),
+        new("conexiones", "Trabajar solo/en grupo", "Hay quienes avanzan mejor siguiendo su propio hilo y quienes necesitan cruzarlo con el de alguien más.")
     };
-    private static readonly string[] OpcionesRondaTres =
-    {
-        "Año de nacimiento",
-        "Estación favorita",
-        "Etapa de la carrera",
-        "Rol en un trabajo grupal",
-        "Formato de historia",
-        "Forma de trabajar"
-    };
+    private static readonly string[] OpcionesRondaTres = PreguntasRondaTres.Select(pregunta => pregunta.Answer).ToArray();
 
     private static string ObtenerNombreEquipo(RoundTeam equipo)
     {
@@ -198,13 +191,27 @@ class Program
         return $"Equipo {nombreColor}";
     }
 
+    private static string FormatearEtapaRondaCuatro(string valor) =>
+        valor.Trim().ToUpperInvariant() switch
+        {
+            "1" or "1 (INGRESANTE / PRIMER AÑO)" => "Encontrá a alguien que esté en primer año de la carrera.",
+            "2" => "Encontrá a alguien que esté en segundo año de la carrera.",
+            "3" => "Encontrá a alguien que esté en tercer año de la carrera.",
+            "4" => "Encontrá a alguien que esté en cuarto año de la carrera.",
+            "5" => "Encontrá a alguien que esté en quinto año de la carrera.",
+            "6" or "6 (SEXTO AÑO O MÁS)" => "Encontrá a alguien que esté en sexto año o más de la carrera.",
+            "DOCENTE" => "Encontrá a alguien que sea docente.",
+            "NO DOCENTE" => "Encontrá a alguien que trabaje como no docente.",
+            _ => $"Encontrá a alguien cuya etapa de carrera o rol académico sea «{valor}»."
+        };
+
     private static (int RondaUno, int RondaDos, int RondaTres, int Total) CalcularPuntajeFinalEquipo(RoundTeam equipo)
     {
         int rondaUno = equipo.ParticipantIds.Length == 0 ? 0
             : (int)Math.Round(equipo.ParticipantIds.Average(id => PuntajesRondaUno.GetValueOrDefault(id)), MidpointRounding.AwayFromZero);
         int[] puntajesRondaDos = equipo.ParticipantIds
-            .Where(id => PuntajesRondaDos.ContainsKey(id))
-            .Select(id => PuntajesRondaDos[id])
+            .Where(id => PuntajesRondaTres.ContainsKey(id))
+            .Select(id => PuntajesRondaTres[id])
             .ToArray();
         int rondaDos = puntajesRondaDos.Length == 0 ? 0
             : (int)Math.Round(puntajesRondaDos.Average(), MidpointRounding.AwayFromZero);
@@ -232,6 +239,14 @@ class Program
 
             return null;
         };
+
+        if (args.Contains("--listar-comunidad", StringComparer.Ordinal))
+        {
+            var registro = new RegistroComunidad(Path.Combine(Directory.GetCurrentDirectory(), "datos", "comunidad.db"));
+            foreach (var participante in registro.ListarOrigenes())
+                Console.WriteLine($"{participante.Origen}: {participante.Nombre}");
+            return;
+        }
 
         if (args.Contains("--exportar-efigies-svg", StringComparer.Ordinal))
         {
@@ -341,6 +356,45 @@ class Program
         string rutaConfig = Path.Combine(dirActual, "config.json");
         string rutaHistorialExperiencias = Path.Combine(dirActual, "experiencias_hub.json");
         var registroComunidad = new RegistroComunidad(Path.Combine(dirActual, "datos", "comunidad.db"));
+        var reservasNombre = new Dictionary<string, ReservaNombre>(StringComparer.Ordinal);
+
+        void LimpiarReservasNombre()
+        {
+            DateTime ahora = DateTime.UtcNow;
+            foreach (string id in reservasNombre.Where(reserva => reserva.Value.VenceUtc <= ahora).Select(reserva => reserva.Key).ToArray())
+                reservasNombre.Remove(id);
+        }
+
+        bool NombreNoDisponible(string nombre, string reservaExcluida = "")
+        {
+            LimpiarReservasNombre();
+            string clave = RegistroComunidad.NormalizarNombre(nombre);
+            return registroComunidad.NombreOcupado(nombre) ||
+                reservasNombre.Any(reserva => reserva.Key != reservaExcluida && reserva.Value.NombreClave == clave);
+        }
+
+        string ObtenerEfigie(DatosRespuesta datos, bool incluirMarcoYNombre = false)
+        {
+            lock (CandadoLobby)
+            {
+                ParticipanteComunidad guardado = registroComunidad.BuscarPorId(datos.id);
+                if (guardado != null)
+                {
+                    if (!incluirMarcoYNombre) return guardado.Efigie;
+                    if (!string.IsNullOrEmpty(guardado.EfigieCompleta)) return guardado.EfigieCompleta;
+                    string completa = GeneradorEfigie.GenerarSVG(guardado.Datos, LeerConfig(rutaConfig), incluirMarcoYNombre: true);
+                    registroComunidad.GuardarEfigieCompleta(datos.id, completa);
+                    return completa;
+                }
+                reservasNombre.TryGetValue(datos.id, out ReservaNombre reserva);
+                string svgGuardado = incluirMarcoYNombre ? reserva?.SvgCompleta : reserva?.Svg;
+                if (svgGuardado != null) return svgGuardado;
+                string svg = GeneradorEfigie.GenerarSVG(datos, LeerConfig(rutaConfig), incluirMarcoYNombre);
+                if (reserva != null)
+                    reservasNombre[datos.id] = incluirMarcoYNombre ? reserva with { SvgCompleta = svg } : reserva with { Svg = svg };
+                return svg;
+            }
+        }
         List<HubExperienceRecord> historialExperiencias = File.Exists(rutaHistorialExperiencias)
             ? JsonSerializer.Deserialize<List<HubExperienceRecord>>(File.ReadAllText(rutaHistorialExperiencias)) ?? new()
             : new();
@@ -361,11 +415,18 @@ class Program
         RequestPath = ""
     });
 
-app.MapGet("/", (HttpContext ctx) => {
-    string deviceId = EnsureDeviceId(ctx);
-    bool conservarRespuesta = ctx.Request.Query["reinicioSesion"] == "1";
+IResult MostrarPortadaEncuesta(HttpContext ctx, bool comunidad) {
+    string deviceId = comunidad ? null : EnsureDeviceId(ctx);
+    bool conservarRespuesta = comunidad || ctx.Request.Query["reinicioSesion"] == "1";
     if (!conservarRespuesta)
-        EliminarRespuestasAnteriores(rutaCsv, deviceId);
+    {
+        lock (CandadoLobby)
+        {
+            EliminarRespuestasAnteriores(rutaCsv, deviceId);
+            foreach (string id in reservasNombre.Where(reserva => reserva.Value.DeviceId == deviceId).Select(reserva => reserva.Key).ToArray())
+                reservasNombre.Remove(id);
+        }
+    }
 
     string svgAnimado = LeerEfigieAleatoria(dirActual);
 
@@ -453,7 +514,7 @@ app.MapGet("/", (HttpContext ctx) => {
     <div class=""contenedor-efigie"">
         {svgAnimado}
     </div>
-    <a href=""/encuesta?nueva=1"" id=""btnGenerar"" class=""btn-generar"">Generá tu Efigie</a>
+    <a href=""{(comunidad ? "/encuesta-comunidad?iniciar=1" : "/encuesta?nueva=1")}"" id=""btnGenerar"" class=""btn-generar"">Generá tu Efigie</a>
     <script>
         const respuestaAnterior = localStorage.getItem('mi_efigie_id');
         if (respuestaAnterior && !{conservarRespuesta.ToString().ToLowerInvariant()}) {{
@@ -467,36 +528,64 @@ app.MapGet("/", (HttpContext ctx) => {
             document.getElementById('btnGenerar').classList.add('visible');
         }}, 1000);
     </script>
-    <script src=""/admin-navigation.js"" defer></script>
+    {(comunidad ? "" : @"<script src=""/admin-navigation.js"" defer></script>")}
 </body>
 </html>";
 
     return Results.Content(html, "text/html; charset=utf-8");
-});
+}
+app.MapGet("/", (HttpContext ctx) => MostrarPortadaEncuesta(ctx, false));
     app.MapGet("/resultados", () => Results.File(Path.Combine(dirActual, "resultados.html"), "text/html"));
     app.MapGet("/ajustes", () => Results.File(Path.Combine(dirActual, "ajustes.html"), "text/html"));
     app.MapGet("/encuesta", () => Results.File(Path.Combine(dirActual, "index.html"), "text/html"));
+    app.MapGet("/encuesta-comunidad", (HttpContext ctx) =>
+        ctx.Request.Query["iniciar"] == "1"
+            ? Results.File(Path.Combine(dirActual, "index.html"), "text/html")
+            : MostrarPortadaEncuesta(ctx, true));
+
+    app.MapGet("/api/nombre-disponible", (HttpContext ctx) => {
+        string nombre = ctx.Request.Query["nombre"].FirstOrDefault() ?? "";
+        if (string.IsNullOrWhiteSpace(nombre)) return Results.BadRequest();
+        EnsureDeviceId(ctx);
+        lock (CandadoLobby)
+            return Results.Json(new { disponible = !NombreNoDisponible(nombre) });
+    });
 
     app.MapPost("/api/iniciar", (HttpContext ctx) => {
         string deviceId = EnsureDeviceId(ctx);
         string previousId = ctx.Request.Query["id"].FirstOrDefault();
-        EliminarRespuestasAnteriores(rutaCsv, deviceId, previousId);
+        lock (CandadoLobby)
+        {
+            EliminarRespuestasAnteriores(rutaCsv, deviceId, previousId);
+            foreach (string id in reservasNombre.Where(reserva => reserva.Value.DeviceId == deviceId || reserva.Key == previousId).Select(reserva => reserva.Key).ToArray())
+                reservasNombre.Remove(id);
+        }
         return Results.NoContent();
     });
 
     // --- GUARDAR RESPUESTA Y DEVOLVER ID ÚNICO + URL DE PERMANENCIA ---
     app.MapPost("/guardar", async (HttpContext ctx) => {
         var datos = await ctx.Request.ReadFromJsonAsync<DatosRespuesta>();
-        if (datos == null) return Results.BadRequest();
+        if (datos == null || string.IsNullOrWhiteSpace(datos.nombre) || datos.nombre.Contains('\r') || datos.nombre.Contains('\n'))
+            return Results.BadRequest(new { error = "Ingresá un nombre válido." });
 
-        if (string.IsNullOrWhiteSpace(datos.id))
-            datos.id = Guid.NewGuid().ToString("N");
+        datos.id = Guid.NewGuid().ToString("N");
 
         datos.deviceId = EnsureDeviceId(ctx);
-        var respuestas = LeerUsuariosCsv(rutaCsv);
-        respuestas.RemoveAll(respuesta => respuesta.deviceId == datos.deviceId || respuesta.id == datos.id);
-        respuestas.Add(datos);
-        EscribirUsuariosCsv(rutaCsv, respuestas);
+        datos.nombre = datos.nombre.Trim();
+        lock (CandadoLobby)
+        {
+            if (NombreNoDisponible(datos.nombre))
+                return Results.Conflict(new { error = "¡Ocupado! Prueba con otro apodo." });
+
+            var respuestas = LeerUsuariosCsv(rutaCsv);
+            respuestas.RemoveAll(respuesta => respuesta.deviceId == datos.deviceId || respuesta.id == datos.id);
+            respuestas.Add(datos);
+            EscribirUsuariosCsv(rutaCsv, respuestas);
+            foreach (string id in reservasNombre.Where(reserva => reserva.Value.DeviceId == datos.deviceId).Select(reserva => reserva.Key).ToArray())
+                reservasNombre.Remove(id);
+            reservasNombre[datos.id] = new ReservaNombre(RegistroComunidad.NormalizarNombre(datos.nombre), datos.deviceId, DateTime.UtcNow.AddSeconds(90));
+        }
 
         return Results.Json(new {
             estado = "ok",
@@ -505,13 +594,43 @@ app.MapGet("/", (HttpContext ctx) => {
         });
     });
 
+    app.MapPost("/api/comunidad/registro", async (HttpContext ctx) => {
+        var datos = await ctx.Request.ReadFromJsonAsync<DatosRespuesta>();
+        if (datos == null || string.IsNullOrWhiteSpace(datos.nombre) ||
+            string.IsNullOrWhiteSpace(datos.anio) || string.IsNullOrWhiteSpace(datos.facultad) ||
+            string.IsNullOrWhiteSpace(datos.etapa) || string.IsNullOrWhiteSpace(datos.estacion) ||
+            string.IsNullOrWhiteSpace(datos.grupal) || string.IsNullOrWhiteSpace(datos.formato) ||
+            string.IsNullOrWhiteSpace(datos.rol))
+            return Results.BadRequest(new { error = "Completa todas las respuestas." });
+
+        datos.id = Guid.NewGuid().ToString("N");
+        datos.nombre = datos.nombre.Trim();
+        datos.deviceId = EnsureDeviceId(ctx);
+        lock (CandadoLobby)
+        {
+            if (NombreNoDisponible(datos.nombre))
+                return Results.Conflict(new { error = "¡Ocupado! Prueba con otro apodo." });
+            if (RegistroComunidad.EsNombreDePrueba(datos.nombre))
+                return Results.Json(new { id = datos.id, temporal = true });
+            string svg = GeneradorEfigie.GenerarSVG(datos, LeerConfig(rutaConfig), incluirMarcoYNombre: false);
+            try
+            {
+                registroComunidad.Registrar(new[] { new ParticipanteComunidad(datos, svg) }, OrigenParticipante.Prueba);
+            }
+            catch (NombreOcupadoException error)
+            {
+                return Results.Conflict(new { error = error.Message });
+            }
+            return RespuestaHub(datos, svg);
+        }
+    });
+
     app.MapGet("/lobby/{id}", (string id) => {
         var usuario = LeerUsuariosCsv(rutaCsv).FirstOrDefault(respuesta => respuesta.id == id);
         if (usuario == null)
             return Results.Content("<h2>No se encontró la efigie solicitada.</h2>", "text/html; charset=utf-8");
 
-        var cfg = LeerConfig(rutaConfig);
-        string svg = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(usuario, cfg, incluirMarcoYNombre: false));
+        string svg = InyectarAnimacionRotacionSvg(ObtenerEfigie(usuario));
         string nombre = System.Net.WebUtility.HtmlEncode(usuario.nombre);
         string efigieId = JsonSerializer.Serialize(id);
         string html = $@"<!DOCTYPE html>
@@ -555,6 +674,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 const respuesta = await fetch('/api/lobby/heartbeat', {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify({{ sessionId, responseId }}) }});
                 if (!respuesta.ok) return;
                 const estado = await respuesta.json();
+                if (estado.nombreOcupado) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/encuesta?nueva=1&nombreOcupado=1'); return; }}
                 if (estado.regresarInicio) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/?reinicioSesion=1'); return; }}
                 if (estado.regresarEncuesta) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/encuesta?nueva=1'); return; }}
                 if (estado.expulsado) {{ localStorage.removeItem('mi_efigie_id'); window.location.replace('/'); return; }}
@@ -1494,6 +1614,7 @@ app.MapGet("/", (HttpContext ctx) => {
             color = equipo.Color,
             posibilidades = equipo.TriangulationPossibilities,
             puntaje = equipo.FitnessScore,
+            puntajeFinal = EtapaRondaUno == 9 ? CalcularPuntajeFinalEquipo(equipo).Total : (int?)null,
             representanteId = TryObtenerRepresentante(equipo, out string representanteEquipo, rondaRepresentanteActual) ? representanteEquipo : null,
             representanteNombre = TryObtenerRepresentante(equipo, out string representanteParaNombre, rondaRepresentanteActual)
                 ? ObtenerParticipanteRonda(representanteParaNombre).Nombre
@@ -2235,13 +2356,20 @@ app.MapGet("/", (HttpContext ctx) => {
         int cantidadParticipantes;
         lock (CandadoLobby)
         {
+            if (!RondaIniciada && registroComunidad.BuscarPorId(usuario.id) == null)
+            {
+                if (NombreNoDisponible(usuario.nombre, usuario.id))
+                    return Results.Json(new { nombreOcupado = true });
+                reservasNombre.TryGetValue(usuario.id, out ReservaNombre reserva);
+                reservasNombre[usuario.id] = new ReservaNombre(RegistroComunidad.NormalizarNombre(usuario.nombre), usuario.deviceId, ahora.AddSeconds(90), reserva?.Svg, reserva?.SvgCompleta);
+            }
             if (!ParticipantesLobby.ContainsKey(usuario.id) && ParticipantesLobby.Count >= 15)
                 return Results.Json(new { salaCompleta = true, cantidad = ParticipantesLobby.Count, rondaIniciada = false, expulsado = false });
 
             nuevaConexion = !ParticipantesLobby.ContainsKey(usuario.id);
             ParticipantesLobby.AddOrUpdate(
                 usuario.id,
-                _ => new LobbyParticipant(usuario.id, heartbeat.sessionId, usuario.nombre, GeneradorEfigie.GenerarSVG(usuario, LeerConfig(rutaConfig), incluirMarcoYNombre: false), ahora, false, usuario),
+                _ => new LobbyParticipant(usuario.id, heartbeat.sessionId, usuario.nombre, ObtenerEfigie(usuario), ahora, false, usuario),
                 (_, existente) => existente with { SessionId = heartbeat.sessionId, LastSeenUtc = ahora });
             cantidadParticipantes = ParticipantesLobby.Count;
         }
@@ -2267,7 +2395,7 @@ app.MapGet("/", (HttpContext ctx) => {
             return Results.Content("<h2>No se encontró la efigie solicitada.</h2>", "text/html; charset=utf-8");
 
         var cfg = LeerConfig(rutaConfig);
-        string svg = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(usuario, cfg));
+        string svg = InyectarAnimacionRotacionSvg(ObtenerEfigie(usuario, incluirMarcoYNombre: true));
         double radioBaseTexto = cfg.RadioBaseTexto > 0 ? cfg.RadioBaseTexto : 15.0;
         double margenMarco = radioBaseTexto * 1.3;
         double insetMarcoPercent = (75.0 - margenMarco) / 150.0 * 100.0;
@@ -2442,14 +2570,13 @@ app.MapGet("/", (HttpContext ctx) => {
             .Where(responseId => responseId != actual.id)
             .Distinct(StringComparer.Ordinal)
             .ToHashSet(StringComparer.Ordinal);
-        var cfg = LeerConfig(rutaConfig);
         var efigiesActivas = respuestas
             .Where(respuesta => idsEfigiesActivas.Contains(respuesta.id))
             .Select(respuesta => new
             {
                 id = respuesta.id,
                 nombre = respuesta.nombre,
-                svg = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(respuesta, cfg))
+                svg = InyectarAnimacionRotacionSvg(ObtenerEfigie(respuesta, incluirMarcoYNombre: true))
             });
 
         return Results.Json(new { count = SesionesActivas.Count, efigies = efigiesActivas });
@@ -2475,19 +2602,16 @@ app.MapGet("/", (HttpContext ctx) => {
         if (string.IsNullOrWhiteSpace(responseId))
             return Results.BadRequest();
 
-        var participantes = LeerUsuariosCsv(rutaCsv)
-            .Select(datos => new ParticipanteComunidad(datos, ""));
-        IReadOnlyList<FiguraCercana> figuras = RegistroComunidad.BuscarFigurasCercanas(participantes, responseId);
+        IReadOnlyList<FiguraCercana> figuras = registroComunidad.BuscarFigurasCercanas(responseId);
         if (figuras == null)
             return Results.NotFound(new { error = "Tu participación no está disponible en las respuestas actuales." });
 
-        ConfigEfigie config = LeerConfig(rutaConfig);
         return Results.Json(new
         {
             figuras = figuras.Select(figura => new
             {
                 nombre = figura.Participante.Datos.nombre,
-                efigie = InyectarAnimacionRotacionSvg(GeneradorEfigie.GenerarSVG(figura.Participante.Datos, config, incluirMarcoYNombre: false)),
+                efigie = InyectarAnimacionRotacionSvg(figura.Participante.Efigie),
                 coincidencias = figura.Coincidencias.Select(coincidencia => new
                 {
                     categoria = coincidencia.Categoria,
@@ -2536,7 +2660,7 @@ app.MapGet("/", (HttpContext ctx) => {
                     puntaje = equipo.Points,
                     aporteIndividual = participante.IndividualPoints
                 },
-                equipoGanador = experiencia.Teams.FirstOrDefault(item => item.Winner)?.Name ?? "",
+                equipoGanador = string.Join(" y ", experiencia.Teams.Where(item => item.Winner).Select(item => item.Name)),
                 equipos = experiencia.Teams.OrderBy(item => item.GroupNumber).Select(grupo => new
                 {
                     nombre = grupo.Name,
@@ -2594,7 +2718,8 @@ app.MapGet("/", (HttpContext ctx) => {
                 !string.Equals(deviceId, participante.Datos.deviceId, StringComparison.Ordinal))
                 return Results.Unauthorized();
 
-            return RespuestaHub(participante.Datos);
+            ParticipanteComunidad registrado = registroComunidad.BuscarPorId(participante.ResponseId);
+            return registrado != null ? RespuestaHub(registrado.Datos, registrado.Efigie) : Results.NotFound();
         }
     });
 
@@ -2604,13 +2729,6 @@ app.MapGet("/", (HttpContext ctx) => {
             string.IsNullOrWhiteSpace(solicitud.nombre) ||
             string.IsNullOrWhiteSpace(solicitud.contrasena))
             return Results.BadRequest();
-
-        var usuario = LeerUsuariosCsv(rutaCsv).LastOrDefault(respuesta =>
-            string.Equals(respuesta.nombre.Trim(), solicitud.nombre.Trim(), StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(respuesta.estacion.Trim(), solicitud.contrasena.Trim(), StringComparison.OrdinalIgnoreCase));
-
-        if (usuario != null)
-            return RespuestaHub(usuario);
 
         ParticipanteComunidad registrado = registroComunidad.BuscarPorCredenciales(solicitud.nombre, solicitud.contrasena);
         return registrado != null ? RespuestaHub(registrado.Datos, registrado.Efigie) : Results.Unauthorized();
@@ -2625,13 +2743,12 @@ app.MapGet("/", (HttpContext ctx) => {
         IEnumerable<DatosRespuesta> nuevasRespuestas = indiceCursor >= 0
             ? respuestas.Skip(indiceCursor + 1)
             : respuestas.TakeLast(36);
-        var config = LeerConfig(rutaConfig);
         var efigies = nuevasRespuestas.Select(respuesta => new
         {
             id = respuesta.id,
             nombre = respuesta.nombre,
             svg = InyectarAnimacionRotacionSvg(
-                GeneradorEfigie.GenerarSVG(respuesta, config, incluirMarcoYNombre: false))
+                ObtenerEfigie(respuesta))
         });
 
         return Results.Json(new
@@ -2886,13 +3003,37 @@ app.MapGet("/", (HttpContext ctx) => {
             if (ParticipantesLobby.Count is < 3 or > 15 || ParticipantesLobby.Count % 3 != 0)
                 return Results.Conflict();
 
+            var equipos = ConstruirEquiposOptimos(
+                ParticipantesLobby.Values.ToList(),
+                priorizarParticipantesReales: completarConBots);
+            var ordenRespuestas = LeerUsuariosCsv(rutaCsv)
+                .Select((respuesta, indice) => new { respuesta.id, indice })
+                .GroupBy(item => item.id, StringComparer.Ordinal)
+                .ToDictionary(grupo => grupo.Key, grupo => grupo.Last().indice, StringComparer.Ordinal);
+            try
+            {
+                registroComunidad.Registrar(ParticipantesLobby.Values
+                    .Where(participante => !participante.EsBot &&
+                        !RegistroComunidad.EsNombreDePrueba(participante.Nombre) &&
+                        registroComunidad.BuscarPorId(participante.ResponseId) == null)
+                    .OrderBy(participante => ordenRespuestas.GetValueOrDefault(participante.ResponseId, int.MaxValue))
+                    .ThenBy(participante => participante.ResponseId, StringComparer.Ordinal)
+                    .Select(participante => new ParticipanteComunidad(participante.Datos, participante.Svg,
+                        reservasNombre.TryGetValue(participante.ResponseId, out ReservaNombre reserva) ? reserva.SvgCompleta : ""))
+                    .ToArray(), OrigenParticipante.Experiencia);
+            }
+            catch (NombreOcupadoException error)
+            {
+                return Results.Conflict(new { error = error.Message + " Un participante debe volver a la encuesta y elegir otro nombre." });
+            }
+            foreach (LobbyParticipant participante in ParticipantesLobby.Values)
+                reservasNombre.Remove(participante.ResponseId);
+
             IdExperienciaActual = Guid.NewGuid().ToString("N");
             InicioExperienciaUtc = null;
             ExperienciaActualArchivada = false;
             AccesoHubHabilitado = false;
-            EquiposPreRonda = ConstruirEquiposOptimos(
-                ParticipantesLobby.Values.ToList(),
-                priorizarParticipantesReales: completarConBots);
+            EquiposPreRonda = equipos;
             GrupoPorParticipante.Clear();
             ParticipantesListos.Clear();
             VotosRepresentanteRondaUno.Clear();
@@ -2930,15 +3071,6 @@ app.MapGet("/", (HttpContext ctx) => {
             EstadosRondaDos.Clear();
             EstadosRondaTres.Clear();
             RespuestasQueVuelvenAEncuesta.Clear();
-            var ordenRespuestas = LeerUsuariosCsv(rutaCsv)
-                .Select((respuesta, indice) => new { respuesta.id, indice })
-                .GroupBy(item => item.id, StringComparer.Ordinal)
-                .ToDictionary(grupo => grupo.Key, grupo => grupo.Last().indice, StringComparer.Ordinal);
-            registroComunidad.Registrar(ParticipantesLobby.Values
-                .Where(participante => !participante.EsBot)
-                .OrderBy(participante => ordenRespuestas.GetValueOrDefault(participante.ResponseId, int.MaxValue))
-                .ThenBy(participante => participante.ResponseId, StringComparer.Ordinal)
-                .Select(participante => new ParticipanteComunidad(participante.Datos, participante.Svg)));
             RondaIniciada = true;
             EncolarAudio("audio2");
         }
@@ -3208,7 +3340,7 @@ app.MapGet("/", (HttpContext ctx) => {
         {
             "anio" => $"Encontrá a alguien que haya nacido en {valor}.",
             "facultad" => $"Encontrá a alguien que pertenezca a la facultad «{valor}».",
-            "etapa" => $"Encontrá a alguien cuya etapa de carrera o rol sea «{valor}».",
+            "etapa" => FormatearEtapaRondaCuatro(valor),
             "estacion" => $"Encontrá a alguien cuya estación favorita sea «{valor}».",
             "grupal" => $"Encontrá a alguien que prefiera trabajar «{valor}».",
             "formato" => $"Encontrá a alguien que prefiera disfrutar historias en formato «{valor}».",
@@ -3335,11 +3467,7 @@ app.MapGet("/", (HttpContext ctx) => {
         if (equiposConPuntaje.Length == 0)
             return;
 
-        int grupoGanador = equiposConPuntaje
-            .OrderByDescending(item => item.Puntajes.Total)
-            .ThenBy(item => item.Equipo.GroupNumber)
-            .First()
-            .Equipo.GroupNumber;
+        int puntajeGanador = equiposConPuntaje.Max(item => item.Puntajes.Total);
         var participantes = new List<HubExperienceParticipant>();
         foreach (LobbyParticipant participante in ParticipantesLobby.Values)
         {
@@ -3348,7 +3476,7 @@ app.MapGet("/", (HttpContext ctx) => {
 
             int aporteIndividual =
                 PuntajesRondaUno.GetValueOrDefault(participante.ResponseId) +
-                PuntajesRondaDos.GetValueOrDefault(participante.ResponseId) +
+                PuntajesRondaTres.GetValueOrDefault(participante.ResponseId) +
                 PuntajesRondaCuatro.GetValueOrDefault(participante.ResponseId);
             participantes.Add(new HubExperienceParticipant
             {
@@ -3375,7 +3503,7 @@ app.MapGet("/", (HttpContext ctx) => {
                 TextColor = item.Equipo.TextColor,
                 MemberCount = item.IntegrantesReales,
                 Points = item.Puntajes.Total,
-                Winner = item.Equipo.GroupNumber == grupoGanador
+                Winner = item.Puntajes.Total == puntajeGanador
             }).ToList(),
             Participants = participantes
         };
@@ -3681,7 +3809,7 @@ app.MapGet("/", (HttpContext ctx) => {
             LobbyParticipant companero = companeros[indice];
             string capaCambiada = capas[Random.Shared.Next(capas.Length)];
             DatosRespuesta datosCambiados = DatosConCapaCambiada(companero.Datos, capaCambiada);
-            string svgOriginal = GeneradorEfigie.GenerarSVG(companero.Datos, LeerConfig(rutaConfig), incluirMarcoYNombre: false);
+            string svgOriginal = companero.Svg;
             string svgCambiadoMotor = GeneradorEfigie.GenerarSVG(datosCambiados, LeerConfig(rutaConfig), incluirMarcoYNombre: false);
             string grupoCambiado = ExtraerGrupoSvg(svgCambiadoMotor, capaCambiada);
             string svgCambiado = ReemplazarGrupoSvg(svgOriginal, capaCambiada, grupoCambiado);
@@ -3896,8 +4024,10 @@ static string[] AnalizarLineaCSV(string linea)
 {
     List<string> partes = new List<string>();
     bool entreComillas = false; string actual = "";
-    foreach (char c in linea) {
-        if (c == '"') entreComillas = !entreComillas;
+    for (int i = 0; i < linea.Length; i++) {
+        char c = linea[i];
+        if (c == '"' && entreComillas && i + 1 < linea.Length && linea[i + 1] == '"') { actual += '"'; i++; }
+        else if (c == '"') entreComillas = !entreComillas;
         else if (c == ',' && !entreComillas) { partes.Add(actual.Trim()); actual = ""; }
         else { actual += c; }
     }

@@ -55,6 +55,7 @@
             transition: width 300ms ease, background-color 300ms ease;
         }
         form { flex: 1; display: flex; flex-direction: column; }
+        form[hidden] { display: none; }
         .paso {
             flex: 1;
             display: none;
@@ -159,7 +160,7 @@
         (function () {
             const params = new URLSearchParams(window.location.search);
             const idGuardado = localStorage.getItem('mi_efigie_id');
-            if (idGuardado && !params.has('nueva')) {
+            if (window.location.pathname !== '/encuesta-comunidad' && idGuardado && !params.has('nueva')) {
                 window.location.replace('/efigie/' + encodeURIComponent(idGuardado));
             }
         })();
@@ -180,6 +181,7 @@
             <section class="paso activo" data-campo="nombre">
                 <h1 id="pregunta-nombre">1. Nombre completo o apodo</h1>
                 <input class="respuesta-texto" type="text" id="nombre" name="nombre" aria-labelledby="pregunta-nombre" autocomplete="name" required>
+                <p id="errorNombre" role="alert" style="color: #a00000" hidden></p>
             </section>
             <section class="paso" data-campo="anio">
                 <h1 id="pregunta-anio">2. Año de nacimiento</h1>
@@ -254,6 +256,11 @@
                 <button type="submit" id="btnEnviar" hidden>Generar Efigie</button>
             </nav>
         </form>
+        <section id="registroCompleto" hidden>
+            <h1 id="tituloRegistroCompleto">¡Tu efigie está lista!</h1>
+            <p id="mensajeRegistroCompleto">Tu perfil ya forma parte de la comunidad.</p>
+            <a id="enlaceHubRegistro" href="/hub-en-proceso.html">Ir al hub</a>
+        </section>
     </main>
 
     <script>
@@ -265,23 +272,15 @@
         const barraProgreso = document.querySelector('.progreso-valor');
         const barraAccesible = document.querySelector('.progreso-barra');
         const nombreInput = document.getElementById('nombre');
+        const errorNombre = document.getElementById('errorNombre');
+        const encuestaComunidad = window.location.pathname === '/encuesta-comunidad';
         const nombres = ['Mateo', 'Juan', 'Nicolás', 'Tomás', 'Santiago', 'Sofía', 'Martina', 'Valentina', 'Camila', 'Lucía'];
         const apellidos = ['González', 'Rodríguez', 'Gómez', 'Fernández', 'López', 'Díaz', 'Martínez', 'Pérez', 'García', 'Sánchez'];
         const nombreAleatorio = nombres[Math.floor(Math.random() * nombres.length)];
         const apellidoAleatorio = apellidos[Math.floor(Math.random() * apellidos.length)];
         nombreInput.placeholder = `Ej: ${nombreAleatorio} ${apellidoAleatorio}`;
 
-        nombreInput.addEventListener('input', () => {
-            const valor = nombreInput.value.replace(/\s+/g, ' ');
-            const primerEspacio = valor.indexOf(' ');
-            const segundoEspacio = primerEspacio === -1 ? -1 : valor.indexOf(' ', primerEspacio + 1);
-            const valorValido = segundoEspacio === -1 ? valor : valor.slice(0, segundoEspacio);
-            if (valorValido !== nombreInput.value) {
-                const posicion = Math.min(nombreInput.selectionStart, valorValido.length);
-                nombreInput.value = valorValido;
-                nombreInput.setSelectionRange(posicion, posicion);
-            }
-        });
+        nombreInput.addEventListener('input', () => { errorNombre.hidden = true; });
         const colores = ['#6064A3', '#7C171F', '#459BDA', '#84B444', '#CE2D7B', '#F9DB52', '#6EB392', '#E27646', '#85A8C8', '#133463', '#8B1C31'];
         const indicesColor = colores.map((_, index) => index);
         for (let index = indicesColor.length - 1; index > 0; index--) {
@@ -334,19 +333,45 @@
             return true;
         }
 
-        function avanzarPaso() {
+        async function avanzarPaso() {
             if (!validarPasoActual()) return;
-            if (pasoActual === 0 && document.getElementById('nombre').value.trim().toLowerCase() === 'admin') {
+            if (!encuestaComunidad && pasoActual === 0 && nombreInput.value.trim().toLowerCase() === 'admin') {
                 window.location.href = '/admin-sesion';
                 return;
             }
-            if (pasoActual === 0 && document.getElementById('nombre').value.trim().toLowerCase() === 'pantuno') {
+            if (!encuestaComunidad && pasoActual === 0 && nombreInput.value.trim().toLowerCase() === 'pantuno') {
                 window.location.href = '/pantuno';
                 return;
             }
-            if (pasoActual === 0 && document.getElementById('nombre').value.trim().toUpperCase() === 'ESP') {
+            if (!encuestaComunidad && pasoActual === 0 && nombreInput.value.trim().toUpperCase() === 'ESP') {
                 window.location.href = '/espectador';
                 return;
+            }
+            if (pasoActual === 0) {
+                if (!nombreInput.value.trim()) {
+                    errorNombre.textContent = 'Ingresá un nombre o apodo.';
+                    errorNombre.hidden = false;
+                    return;
+                }
+                btnSiguiente.disabled = true;
+                nombreInput.disabled = true;
+                try {
+                    const respuesta = await fetch('/api/nombre-disponible?nombre=' + encodeURIComponent(nombreInput.value.trim()), { cache: 'no-store' });
+                    if (!respuesta.ok) throw new Error('No se pudo comprobar el nombre.');
+                    if (!(await respuesta.json()).disponible) {
+                        errorNombre.textContent = '¡ocupado!, prueba con otro apodo!';
+                        errorNombre.hidden = false;
+                        return;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    errorNombre.textContent = 'No se pudo comprobar el nombre. Revisá tu conexión e intentá nuevamente.';
+                    errorNombre.hidden = false;
+                    return;
+                } finally {
+                    btnSiguiente.disabled = false;
+                    nombreInput.disabled = false;
+                }
             }
             mostrarPaso(pasoActual + 1);
         }
@@ -377,29 +402,54 @@
             };
 
             try {
-                const res = await fetch('/guardar', {
+                const res = await fetch(encuestaComunidad ? '/api/comunidad/registro' : '/guardar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
 
-                if (data.estado === 'ok' && data.id) {
+                if (res.status === 409) {
+                    mostrarPaso(0);
+                    errorNombre.textContent = '¡ocupado!, prueba con otro apodo!';
+                    errorNombre.hidden = false;
+                    nombreInput.focus();
+                } else if (res.ok && encuestaComunidad && data.id) {
+                    if (data.temporal) {
+                        document.getElementById('tituloRegistroCompleto').textContent = 'Encuesta de prueba completada';
+                        document.getElementById('mensajeRegistroCompleto').textContent =
+                            'Este nombre de prueba no se guardó en la comunidad y no permite ingresar al hub.';
+                        document.getElementById('enlaceHubRegistro').hidden = true;
+                    } else {
+                        sessionStorage.setItem('efigieHubUsuario', JSON.stringify(data));
+                    }
+                    form.hidden = true;
+                    document.getElementById('registroCompleto').hidden = false;
+                } else if (res.ok && data.estado === 'ok' && data.id) {
+                    sessionStorage.setItem('efigieEncuestaPendiente', JSON.stringify(payload));
                     localStorage.setItem('mi_efigie_id', data.id);
                     window.location.href = data.url;
                 } else {
-                    alert('Error al generar la efigie.');
-                    btnEnviar.disabled = false;
-                    btnEnviar.textContent = 'Generar Efigie';
+                    alert(data.error || 'Error al generar la efigie.');
                 }
             } catch (err) {
                 console.error(err);
                 alert('No se pudo conectar con el servidor.');
+            } finally {
                 btnEnviar.disabled = false;
                 btnEnviar.textContent = 'Generar Efigie';
             }
         });
 
+        if (!encuestaComunidad && new URLSearchParams(location.search).has('nombreOcupado')) {
+            const guardadas = JSON.parse(sessionStorage.getItem('efigieEncuestaPendiente') || '{}');
+            for (const [campo, valor] of Object.entries(guardadas)) {
+                const control = form.elements.namedItem(campo);
+                if (control) control.value = valor;
+            }
+            errorNombre.textContent = '¡ocupado!, prueba con otro apodo!';
+            errorNombre.hidden = false;
+        }
         mostrarPaso(0);
     </script>
     <script src="/admin-navigation.js" defer></script>

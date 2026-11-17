@@ -25,6 +25,8 @@
         select:focus-visible { outline: 3px solid #e6ad3f; outline-offset: 2px; }
         select:disabled { opacity: .8; }
         .progreso { margin: 16px 0 0; color: var(--muted); text-align: center; }
+        .enviar { display: block; width: 100%; min-height: 48px; margin: 16px 0 0; padding: 10px 12px; border: 0; border-radius: 5px; background: var(--blue); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+        .enviar:disabled { opacity: .55; cursor: default; }
         .mensaje { min-height: 1.5em; margin: 12px 0 0; color: var(--muted); text-align: center; }
         .error { color: #8c2525; }
         .tab-equipo { position: fixed; z-index: 4; top: 50%; left: 0; transform: translateY(-50%); }
@@ -48,6 +50,7 @@
         </header>
         <section class="desafios" id="desafios" aria-label="Consignas"></section>
         <p class="progreso" id="progreso" aria-live="polite"></p>
+        <button type="button" class="enviar" id="enviar" disabled hidden>Enviar respuestas</button>
         <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
     </main>
     <details class="tab-equipo" id="tabEquipo">
@@ -65,6 +68,7 @@
         const mensaje = document.getElementById('mensaje');
         const vistaEfigie = document.getElementById('vistaEfigie');
         const temporizador = document.getElementById('temporizador');
+        const botonEnviar = document.getElementById('enviar');
         let enviandoRespuesta = false;
         let selectores = [];
 
@@ -81,6 +85,7 @@
         function mostrarNoParticipante(esBot) {
             desafios.replaceChildren();
             progreso.textContent = '';
+            botonEnviar.hidden = true;
             mensaje.textContent = esBot
                 ? 'Las sesiones simuladas no participan en esta ronda.'
                 : 'Esta ronda está disponible para participantes con respuestas reales de la encuesta.';
@@ -120,12 +125,22 @@
                 }
                 selector.value = consigna.seleccionado || '';
                 selector.disabled = adminPreview || enviandoRespuesta;
-                selector.addEventListener('change', responder);
+                selector.addEventListener('change', actualizarBoton);
                 selectores.push(selector);
                 tarjeta.append(numero, texto, selector);
                 desafios.append(tarjeta);
             });
             progreso.textContent = 'Elegí una persona para cada consigna.';
+            botonEnviar.hidden = false;
+            actualizarBoton();
+        }
+
+        function actualizarBoton() {
+            botonEnviar.textContent = 'Enviar respuestas';
+            botonEnviar.disabled = adminPreview || enviandoRespuesta ||
+                selectores.length !== 3 || selectores.some(selector => !selector.value);
+            mensaje.textContent = adminPreview ? 'Vista de prueba: las respuestas no se guardan.' : '';
+            mensaje.classList.remove('error');
         }
 
         async function cargarJuego() {
@@ -182,6 +197,8 @@
 
             enviandoRespuesta = true;
             selectores.forEach(selector => { selector.disabled = true; });
+            botonEnviar.disabled = true;
+            botonEnviar.textContent = 'Comprobando...';
             mensaje.textContent = 'Comprobando las tres opciones...';
             mensaje.classList.remove('error');
             try {
@@ -196,11 +213,9 @@
                 if (!respuesta.ok) throw new Error('No se pudieron comprobar las respuestas.');
                 const resultado = await respuesta.json();
                 if (!resultado.correcto) {
-                    selectores.forEach(selector => {
-                        selector.value = '';
-                        selector.disabled = adminPreview;
-                    });
-                    mensaje.textContent = 'Una está mal. Revisá las tres opciones.';
+                    selectores.forEach(selector => { selector.disabled = adminPreview; });
+                    botonEnviar.textContent = 'Una o más respuestas están mal';
+                    mensaje.textContent = 'Una o más respuestas están mal.';
                     mensaje.classList.add('error');
                 } else {
                     location.replace(urlResultados());
@@ -210,10 +225,14 @@
                 mensaje.classList.add('error');
                 console.error(error);
                 selectores.forEach(selector => { selector.disabled = adminPreview; });
+                botonEnviar.textContent = 'Enviar respuestas';
             } finally {
                 enviandoRespuesta = false;
+                botonEnviar.disabled = adminPreview || selectores.some(selector => !selector.value);
             }
         }
+
+        botonEnviar.addEventListener('click', responder);
 
         const queryEfigie = new URLSearchParams({
             id: responseId,

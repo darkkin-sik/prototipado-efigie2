@@ -22,9 +22,14 @@
         .expulsar { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
         .expulsar:hover { background: #e6ece8; }
         .equipos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+        .equipos[hidden] { display: none; }
         .equipo { min-width: 0; padding: 12px; border-top: 4px solid var(--color-equipo); background: #ffffff; }
         .equipo h2 { margin: 0 0 6px; text-align: center; font-size: 1rem; }
         .equipo p { margin: 0 0 8px; color: var(--muted); font-size: 0.85rem; }
+        .resultados-finales { margin: 0 0 22px; padding: 14px; border: 1px solid var(--line); background: #fff; }
+        .resultados-finales h2 { margin: 0 0 10px; text-align: center; font-size: 1.05rem; }
+        .resultados-finales ol { margin: 0; padding: 0; list-style: none; }
+        .resultado-final { display: flex; justify-content: space-between; gap: 12px; padding: 10px; border-left: 4px solid var(--color-equipo); border-bottom: 1px solid var(--line); }
         .integrantes { margin: 0; padding: 0; list-style: none; }
         .integrante { display: flex; justify-content: space-between; gap: 10px; padding: 8px; border-top: 1px solid var(--line); font-size: 0.9rem; }
         .integrante[data-listo="false"] { background: #fff0ef; color: #a3211b; }
@@ -77,6 +82,10 @@
             <p class="estado-audio" id="estadoAudio" aria-live="polite">Audio 2 comienza al iniciar la experiencia, después de la bienvenida presencial.</p>
             <p class="ayuda-audio">La explicación del QR es presencial; Pantuno conserva el control para mostrarlo.</p>
         </section>
+        <section class="resultados-finales" id="resultadosFinales" aria-label="Resultados finales" hidden>
+            <h2>Resultados finales</h2>
+            <ol id="listaResultadosFinales"></ol>
+        </section>
         <div class="equipos" id="equipos" aria-label="Equipos de la pre-ronda" hidden></div>
         <footer class="acciones">
             <button type="button" class="accion" id="simular">Simular ronda</button>
@@ -110,6 +119,8 @@
     <script>
         const lista = document.getElementById('participantes');
         const listaEquipos = document.getElementById('equipos');
+        const resultadosFinales = document.getElementById('resultadosFinales');
+        const listaResultadosFinales = document.getElementById('listaResultadosFinales');
         const estado = document.getElementById('estadoSesion');
         const temporizadorGuia = document.getElementById('temporizadorGuia');
         const audioSesion = document.getElementById('audioSesion');
@@ -339,7 +350,10 @@
             let sesionIniciada = false;
             try {
                 const respuesta = await fetch('/api/admin/sesion/iniciar', { method: 'POST' });
-                if (!respuesta.ok) throw new Error('No se pudo comenzar. Verificá que haya grupos completos de tres participantes.');
+                if (!respuesta.ok) {
+                    const detalle = respuesta.headers.get('content-type')?.includes('application/json') ? await respuesta.json() : null;
+                    throw new Error(detalle?.error || 'No se pudo comenzar. Verificá que haya grupos completos de tres participantes.');
+                }
                 sesionIniciada = true;
                 const estadoRespuesta = await fetch('/api/admin/audio/estado', { cache: 'no-store' });
                 if (!estadoRespuesta.ok) throw new Error('La experiencia comenzó, pero no se pudo consultar la pista inicial.');
@@ -472,7 +486,25 @@
                         : sesion.segundosRestantesRondaUno
                 );
                 lista.hidden = participantes.length === 0;
-                listaEquipos.hidden = !preRondaActiva;
+                listaEquipos.hidden = !preRondaActiva || sesion.etapaRondaUno === 'ronda-3-leaderboard';
+                resultadosFinales.hidden = sesion.etapaRondaUno !== 'ronda-3-leaderboard';
+                listaResultadosFinales.replaceChildren();
+                if (!resultadosFinales.hidden) {
+                    const equiposOrdenados = [...sesion.equipos].sort((a, b) =>
+                        b.puntajeFinal - a.puntajeFinal || a.numero - b.numero);
+                    for (const equipo of equiposOrdenados) {
+                        const fila = document.createElement('li');
+                        fila.className = 'resultado-final';
+                        fila.style.setProperty('--color-equipo', equipo.color);
+                        const nombre = document.createElement('span');
+                        nombre.textContent = equipo.nombre +
+                            (equipo.puntajeFinal === equiposOrdenados[0].puntajeFinal ? ' · Ganador' : '');
+                        const puntos = document.createElement('strong');
+                        puntos.textContent = `${equipo.puntajeFinal} pts`;
+                        fila.append(nombre, puntos);
+                        listaResultadosFinales.append(fila);
+                    }
+                }
                 botonSimular.hidden = rondaIniciada;
                 botonComenzar.hidden = rondaIniciada;
                 botonComenzar.disabled = !cantidadValida;
@@ -579,9 +611,17 @@
 
         botonSimular.addEventListener('click', async () => {
             botonSimular.disabled = true;
-            const respuesta = await fetch('/api/admin/sesion/simular', { method: 'POST' });
-            mensaje.textContent = respuesta.ok ? 'Pre-ronda iniciada con participantes simulados.' : 'No se pudo simular la ronda.';
-            await cargarEstado();
+            try {
+                const respuesta = await fetch('/api/admin/sesion/simular', { method: 'POST' });
+                const detalle = !respuesta.ok && respuesta.headers.get('content-type')?.includes('application/json') ? await respuesta.json() : null;
+                mensaje.textContent = respuesta.ok ? 'Pre-ronda iniciada con participantes simulados.' : detalle?.error || 'No se pudo simular la ronda.';
+                await cargarEstado();
+            } catch (error) {
+                console.error(error);
+                mensaje.textContent = 'No se pudo conectar con el servidor.';
+            } finally {
+                botonSimular.disabled = false;
+            }
         });
 
         botonComenzar.addEventListener('click', iniciarExperiencia);
