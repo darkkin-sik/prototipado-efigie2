@@ -20,7 +20,7 @@
         <p id="errorUsuarioHub" class="hub-error" role="alert" hidden></p>
         <nav class="hub-usuario-acciones" aria-label="Acciones de tu efigie">
             <button id="abrirDescarga" class="boton-principal visible" type="button">Descargar</button>
-            <a class="boton-principal visible" href="#capasEfigie">Conocer más</a>
+            <a id="conocerMas" class="boton-principal visible" href="#capasEfigie">Conocer más</a>
         </nav>
     </main>
 
@@ -92,10 +92,10 @@
     <dialog id="dialogoDescarga" class="descarga-dialog" aria-label="Vista previa de la efigie para descargar">
         <div class="descarga-marco">
             <img id="vistaPreviaDescarga" class="descarga-vista-previa" alt="Previsualización estática de la efigie">
-            <button id="cerrarDescarga" class="descarga-cerrar" type="button" aria-label="Cerrar y volver a mi efigie">×</button>
-            <button id="descargarEfigie" class="boton-principal descarga-boton" type="button">Descargar</button>
-            <p id="errorDescarga" class="descarga-error" role="alert" hidden></p>
         </div>
+        <button id="cerrarDescarga" class="descarga-cerrar" type="button" aria-label="Cerrar y volver a mi efigie">×</button>
+        <button id="descargarEfigie" class="boton-principal descarga-boton" type="button">Descargar</button>
+        <p id="errorDescarga" class="descarga-error" role="alert" hidden></p>
     </dialog>
 
     <dialog id="dialogoDetalleCapa" class="hub-capa-dialog" aria-labelledby="tituloDetalleCapa" aria-describedby="textoSimbolicoCapa textoGeometricoCapa">
@@ -164,6 +164,41 @@
             let posicionLogo = Math.max(0, window.scrollY);
             let desplazamientoLogo = 0;
 
+            const conocerMas = document.getElementById('conocerMas');
+            let animacionConocerMas = 0;
+            function cancelarDesplazamientoCapas() {
+                if (animacionConocerMas) cancelAnimationFrame(animacionConocerMas);
+                animacionConocerMas = 0;
+            }
+            window.addEventListener('touchstart', cancelarDesplazamientoCapas, { passive: true });
+            window.addEventListener('wheel', cancelarDesplazamientoCapas, { passive: true });
+            conocerMas.addEventListener('click', evento => {
+                evento.preventDefault();
+                cancelarDesplazamientoCapas();
+                const capas = document.getElementById('capasEfigie');
+                const inicio = window.scrollY;
+                const margen = parseFloat(getComputedStyle(capas).scrollMarginTop);
+                const destino = Math.min(
+                    document.documentElement.scrollHeight - window.innerHeight,
+                    inicio + capas.getBoundingClientRect().top - margen
+                );
+                if (location.hash !== '#capasEfigie') history.pushState(null, '', '#capasEfigie');
+                if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    window.scrollTo({ top: destino, behavior: 'instant' });
+                    return;
+                }
+                let comienzo = null;
+                function avanzar(tiempo) {
+                    if (comienzo === null) comienzo = tiempo;
+                    const progreso = Math.min(1, (tiempo - comienzo) / 2400);
+                    const avance = progreso * progreso * (3 - 2 * progreso);
+                    window.scrollTo({ top: inicio + (destino - inicio) * avance, behavior: 'instant' });
+                    if (progreso < 1) animacionConocerMas = requestAnimationFrame(avanzar);
+                    else animacionConocerMas = 0;
+                }
+                animacionConocerMas = requestAnimationFrame(avanzar);
+            });
+
             const paletaComunidad = [
                 '#6064A3', '#7C171F', '#459BDA', '#84B444', '#CE2D7B', '#F9DB52',
                 '#6EB392', '#E27646', '#85A8C8', '#133463', '#8B1C31'
@@ -188,6 +223,21 @@
             const tarjetasComunidad = [...document.querySelectorAll('.hub-comunidad-tarjeta')].map(asignarColores);
             let barrasCapas = [];
             let fotogramaComunidad = 0;
+            const movimientoReducido = matchMedia('(prefers-reduced-motion: reduce)');
+            const lienzoColores = document.createElement('canvas');
+            lienzoColores.width = lienzoColores.height = 1;
+            const contextoColores = lienzoColores.getContext('2d', { willReadFrequently: true });
+            let mezclaColoresDisponible = !!contextoColores &&
+                typeof CSS !== 'undefined' && typeof CSS.supports === 'function' &&
+                CSS.supports('color', 'color-mix(in oklch longer hue, red, blue)');
+            if (mezclaColoresDisponible) {
+                contextoColores.fillStyle = '#000000';
+                const colorInicial = contextoColores.fillStyle;
+                contextoColores.fillStyle = 'color-mix(in oklch, red 50%, blue)';
+                mezclaColoresDisponible = contextoColores.fillStyle !== colorInicial;
+            }
+            if (!mezclaColoresDisponible)
+                console.warn('Este navegador no admite transiciones de color OKLCH; se usarán cambios directos.');
 
             function colorSegunPosicion(item) {
                 const rect = item.elemento.getBoundingClientRect();
@@ -210,6 +260,67 @@
                     const valor = canal / 255;
                     return valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4;
                 }).reduce((suma, canal, indice) => suma + canal * [0.2126, 0.7152, 0.0722][indice], 0);
+            }
+
+            function tonoOklch(color) {
+                const [r, g, b] = color.map(canal => {
+                    const valor = canal / 255;
+                    return valor <= 0.04045 ? valor / 12.92 : ((valor + 0.055) / 1.055) ** 2.4;
+                });
+                const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+                const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+                const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+                const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+                const componenteB = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+                return (Math.atan2(componenteB, a) * 180 / Math.PI + 360) % 360;
+            }
+
+            function recorridoColor(desde, hasta) {
+                const inicio = tonoOklch(desde);
+                const fin = tonoOklch(hasta);
+                // Evita cruzar la zona verde salvo que sea uno de los colores elegidos.
+                const esVerde = tono => tono >= 110 && tono <= 195;
+                if (esVerde(inicio) || esVerde(fin)) return 'shorter';
+                const distancia = (fin - inicio + 540) % 360 - 180;
+                for (let paso = 1; paso < 20; paso++) {
+                    if (esVerde((inicio + distancia * paso / 20 + 360) % 360)) return 'longer';
+                }
+                return 'shorter';
+            }
+
+            function colorVisualTarjeta(item, objetivo, ahora) {
+                if (!item.colorVisual) {
+                    item.colorVisual = objetivo;
+                    item.colorObjetivo = objetivo;
+                }
+                if (item.colorObjetivo !== objetivo) {
+                    item.colorObjetivo = objetivo;
+                    item.transicion = item.visible && mezclaColoresDisponible && !movimientoReducido.matches
+                        ? { desde: item.colorVisual, hasta: objetivo, inicio: ahora,
+                            recorrido: recorridoColor(item.colorVisual, objetivo) }
+                        : null;
+                    if (!item.transicion) item.colorVisual = objetivo;
+                }
+                if (!item.transicion) return item.colorVisual;
+                if (!item.visible || movimientoReducido.matches) {
+                    item.transicion = null;
+                    item.colorVisual = objetivo;
+                    return objetivo;
+                }
+                const progreso = Math.min(1, (ahora - item.transicion.inicio) / 450);
+                if (progreso === 1) {
+                    item.transicion = null;
+                    item.colorVisual = objetivo;
+                    return objetivo;
+                }
+                const avance = progreso * progreso * (3 - 2 * progreso);
+                const desde = `rgb(${item.transicion.desde.join(', ')})`;
+                const hasta = `rgb(${item.transicion.hasta.join(', ')})`;
+                // El píxel permite calcular el contraste del texto sobre el color mostrado.
+                contextoColores.fillStyle = `color-mix(in oklch ${item.transicion.recorrido} hue, ${desde} ${(1 - avance) * 100}%, ${hasta})`;
+                contextoColores.fillRect(0, 0, 1, 1);
+                item.colorVisual = Array.from(contextoColores.getImageData(0, 0, 1, 1).data.slice(0, 3));
+                return item.colorVisual;
             }
 
             function actualizarColorLogo() {
@@ -235,16 +346,21 @@
 
             function actualizarColoresComunidad() {
                 fotogramaComunidad = 0;
+                const ahora = performance.now();
+                let animando = false;
                 for (const item of tarjetasComunidad) {
-                    const color = colorSegunPosicion(item);
+                    const objetivo = colorSegunPosicion(item);
+                    const color = colorVisualTarjeta(item, objetivo, ahora);
                     item.elemento.style.setProperty('--color-comunidad', `rgb(${color.join(', ')})`);
                     item.elemento.style.setProperty('--texto-comunidad', luminanciaColor(color) > 0.179 ? '#000000' : '#ffffff');
+                    if (item.transicion) animando = true;
                 }
                 for (const item of barrasCapas) {
                     const color = colorSegunPosicion(item);
                     item.elemento.style.setProperty('--color-barra', `rgb(${color.join(', ')})`);
                 }
                 actualizarColorLogo();
+                if (animando) solicitarColoresComunidad();
             }
 
             function solicitarColoresComunidad() {
@@ -287,7 +403,7 @@
                 return destino;
             }
 
-            function animarFigura(duracion, secuencia, paso) {
+            function animarFigura(duracion, secuencia, paso, curva = progreso => 1 - (1 - progreso) ** 3) {
                 if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
                     if (secuencia !== secuenciaFigura) return Promise.resolve(false);
                     paso(1);
@@ -302,7 +418,7 @@
                         }
                         if (inicio === null) inicio = tiempo;
                         const progreso = Math.min(1, (tiempo - inicio) / duracion);
-                        paso(1 - (1 - progreso) ** 3);
+                        paso(curva(progreso));
                         if (progreso < 1) requestAnimationFrame(avanzar);
                         else resolve(true);
                     }
@@ -337,7 +453,23 @@
                     reflexionFigura.style.marginTop = '0px';
                     reflexionFigura.style.opacity = '0';
                 }
-                const finalizada = await animarFigura(300, secuencia, progreso => {
+                tarjetaFigura.append(descubrirFigura);
+                descubrirFigura.textContent = 'Ver más';
+                descubrirFigura.disabled = true;
+                descubrirFigura.hidden = false;
+                const alturaBoton = descubrirFigura.getBoundingClientRect().height;
+                const estiloBoton = getComputedStyle(descubrirFigura);
+                const margenBoton = parseFloat(estiloBoton.marginTop);
+                const rellenoSuperior = parseFloat(estiloBoton.paddingTop);
+                const rellenoInferior = parseFloat(estiloBoton.paddingBottom);
+                descubrirFigura.style.overflow = 'hidden';
+                descubrirFigura.style.minHeight = '0';
+                descubrirFigura.style.height = '0px';
+                descubrirFigura.style.marginTop = '0px';
+                descubrirFigura.style.paddingTop = '0px';
+                descubrirFigura.style.paddingBottom = '0px';
+                descubrirFigura.style.opacity = '0';
+                const finalizada = await animarFigura(850, secuencia, progreso => {
                     resultadoFigura.style.height = `${alturaResultado * (1 - progreso)}px`;
                     resultadoFigura.style.marginTop = `${margenSuperior * (1 - progreso)}px`;
                     resultadoFigura.style.marginBottom = `${margenInferior * (1 - progreso)}px`;
@@ -347,21 +479,22 @@
                         reflexionFigura.style.marginTop = `${20 * progreso}px`;
                         reflexionFigura.style.opacity = `${progreso}`;
                     }
-                    desplazarFigura(centroTarjetaFigura());
-                });
+                    descubrirFigura.style.height = `${alturaBoton * progreso}px`;
+                    descubrirFigura.style.marginTop = `${margenBoton * progreso}px`;
+                    descubrirFigura.style.paddingTop = `${rellenoSuperior * progreso}px`;
+                    descubrirFigura.style.paddingBottom = `${rellenoInferior * progreso}px`;
+                    descubrirFigura.style.opacity = `${progreso}`;
+                }, progreso => progreso * progreso * (3 - 2 * progreso));
                 if (!finalizada) return;
                 resultadoFigura.hidden = true;
                 resultadoFigura.replaceChildren();
                 resultadoFigura.removeAttribute('style');
                 reflexionFigura.removeAttribute('style');
+                descubrirFigura.removeAttribute('style');
                 figuraDescubierta = true;
-                tarjetaFigura.append(descubrirFigura);
-                descubrirFigura.hidden = false;
                 descubrirFigura.disabled = false;
-                descubrirFigura.textContent = 'Ver más';
                 descubrirFigura.setAttribute('aria-expanded', 'false');
                 estadoFigura = 'cerrada';
-                desplazarFigura(centroTarjetaFigura());
             }
 
             function crearTarjetaFigura(figura) {
@@ -506,10 +639,18 @@
                 }
             });
 
+            function cancelarCentradoFigura() {
+                if (estadoFigura === 'centrando') cerrarFiguraCercana();
+            }
+            window.addEventListener('touchmove', cancelarCentradoFigura, { passive: true });
+            window.addEventListener('wheel', cancelarCentradoFigura, { passive: true });
             window.addEventListener('scroll', () => {
-                if (['centrando', 'abriendo', 'abierta'].includes(estadoFigura) &&
-                    Math.abs(window.scrollY - posicionFigura) > 1)
-                    cerrarFiguraCercana();
+                if (estadoFigura === 'abierta' && window.scrollY > posicionFigura) {
+                    const siguiente = tarjetaFigura.nextElementSibling.getBoundingClientRect();
+                    if (siguiente.top + siguiente.height / 2 < window.innerHeight)
+                        cerrarFiguraCercana();
+                }
+                posicionFigura = window.scrollY;
             }, { passive: true });
 
             const linkHub = document.getElementById('linkHubManual');
@@ -1350,7 +1491,7 @@
                     leerContenidoSvg(await respuestaLogo.text()),
                     leerContenidoSvg(usuario.efigieEstatica)
                 ];
-                const svgDescarga = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600">
+                const svgDescarga = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 900 1600">
 <rect width="900" height="1600" fill="#ffffff"/>
 <svg x="220" y="135" width="460" height="104" viewBox="${escaparXml(logo.viewBox)}">${logo.contenido}</svg>
 <svg x="100" y="390" width="700" height="700" viewBox="${escaparXml(efigie.viewBox)}">${efigie.contenido}</svg>
@@ -1370,8 +1511,8 @@
                         elemento.src = urlSvg;
                     });
                     const canvas = document.createElement('canvas');
-                    canvas.width = 900;
-                    canvas.height = 1600;
+                    canvas.width = 1080;
+                    canvas.height = 1920;
                     const contexto = canvas.getContext('2d');
                     if (!contexto) throw new Error('El navegador no pudo preparar la descarga JPG.');
                     contexto.fillStyle = '#ffffff';

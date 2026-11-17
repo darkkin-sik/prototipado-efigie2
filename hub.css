@@ -394,6 +394,11 @@ body {
     text-align: center;
 }
 
+@media (hover: none) {
+    .hub-usuario-acciones a.boton-principal:hover { background: #111111; }
+    .hub-usuario-acciones a.boton-principal:active { background: #444444; }
+}
+
 .hub-usuario > .hub-error {
     position: static;
     margin: 0;
@@ -588,7 +593,6 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
     padding: clamp(28px, 7vw, 56px) clamp(20px, 5vw, 40px);
     background: var(--color-comunidad, #133463);
     color: var(--texto-comunidad, #ffffff);
-    transition: background-color 100ms linear;
 }
 
 .hub-comunidad h2,
@@ -676,7 +680,7 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
     margin: 0;
     padding: 10px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
     border: 1px solid #d5dad6;
     border-radius: 10px;
@@ -685,6 +689,7 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
     line-height: 1.35;
     overflow-wrap: anywhere;
 }
+.hub-figura-coincidencias li:only-child { grid-column: 1 / -1; }
 .hub-comunidad .hub-figura-aviso { padding: 14px; border-radius: 12px; background: #ffffff; color: #101a15; }
 
 .hub-capas-intro {
@@ -863,7 +868,7 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
 .hub-volver-arriba:focus-visible { outline: 3px solid #111111; outline-offset: 3px; }
 
 .descarga-dialog {
-    width: min(960px, 94vw, calc((100svh - 32px) * 9 / 16));
+    width: min(777.6px, 76.14vw, calc((100svh - 32px) * 7.29 / 16), calc((100svh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 8.1 / 16));
     max-width: none;
     max-height: none;
     aspect-ratio: 9 / 16;
@@ -895,8 +900,8 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
 
 .descarga-cerrar {
     position: absolute;
-    top: 10px;
-    right: 12px;
+    top: -40px;
+    right: 0;
     width: clamp(32px, 5vw, 48px);
     height: clamp(32px, 5vw, 48px);
     display: grid;
@@ -916,20 +921,19 @@ body.hub-experiencia-abierta { position: fixed; width: 100%; overflow: hidden; }
 .descarga-boton:focus-visible { outline: 3px solid #111111; outline-offset: 3px; }
 
 .descarga-dialog .descarga-boton {
-    right: 4%;
-    bottom: 4%;
-    left: auto;
+    bottom: -52px;
+    left: 50%;
     min-height: 42px;
     padding: 10px 20px;
-    transform: none;
+    transform: translateX(-50%);
     opacity: 1;
     visibility: visible;
 }
 
 .descarga-error {
-    position: absolute;
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
     right: 4%;
-    bottom: 14%;
     left: 4%;
     margin: 0;
     padding: 8px 10px;
